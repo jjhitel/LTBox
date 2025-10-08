@@ -4,9 +4,9 @@
 
 **This project is for educational purposes ONLY.**
 
-Modifying your device's boot images comes with significant risks, including the possibility of bricking your device. The author is not responsible for any damage that may occur.
+Modifying your device's boot images carries significant risks, including but not limited to, bricking your device, data loss, or voiding your warranty. The author **assumes no liability** and is not responsible for any **damage or consequence** that may occur to **your device or anyone else's device** from using these scripts.
 
-**Use this at your own risk.**
+**You are solely responsible for any consequences. Use at your own absolute risk.**
 
 This set of scripts automates the process of region code conversion for `vendor_boot.img` and re-signing the corresponding `vbmeta.img`. It also provides an option to patch the `vendor_boot.img` with **KernelSU Next** to enable root.
 
