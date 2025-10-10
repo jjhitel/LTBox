@@ -117,7 +117,7 @@ def extract_image_avb_info(image_path):
     if data_size_match:
         info['data_size'] = data_size_match.group(1)
     else:
-        desc_size_match = re.search(r"^\s*Image Size:\s*(\d+)\s*bytes", output, re.MULTILINE)
+        desc_size_match = re.search(r"^\s*Image Size:\s*(\d+)\s*bytes", output, re.MULTILILINE)
         if desc_size_match:
             info['data_size'] = desc_size_match.group(1)
 
@@ -446,7 +446,19 @@ def finalize_images(with_root):
     print("=" * 61)
 
 def show_image_info(files):
-    """Displays information about image files."""
+    """Displays information about image files, searching directories for .img files."""
+    all_files = []
+    for f in files:
+        path = Path(f)
+        if path.is_dir():
+            all_files.extend(path.rglob('*.img'))
+        elif path.is_file():
+            all_files.append(path)
+
+    if not all_files:
+        print("No .img files found in the provided paths.")
+        return
+        
     output_lines = [
         "\n" + "=" * 42,
         "  Sorted and Processing Images...",
@@ -454,8 +466,7 @@ def show_image_info(files):
     ]
     print("\n".join(output_lines))
 
-    for f in sorted(files):
-        file_path = Path(f).resolve()
+    for file_path in sorted(all_files):
         info_header = f"Processing file: {file_path.name}\n---------------------------------"
         print(info_header)
         output_lines.append(info_header)
@@ -497,8 +508,8 @@ def main():
     parser_convert = subparsers.add_parser("convert", help="Convert vendor_boot and remake vbmeta.")
     parser_convert.add_argument("--with-root", action="store_true", help="Patch boot.img with KernelSU before converting.")
 
-    parser_info = subparsers.add_parser("info", help="Display information about image files.")
-    parser_info.add_argument("files", nargs='+', help="Image file(s) to inspect.")
+    parser_info = subparsers.add_parser("info", help="Display information about image files or directories.")
+    parser_info.add_argument("files", nargs='+', help="Image file(s) or folder(s) to inspect.")
 
     args = parser.parse_args()
 
