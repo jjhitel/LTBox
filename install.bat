@@ -89,6 +89,15 @@ if errorlevel 1 (
 echo [+] cryptography installed successfully.
 
 
+echo [*] Installing requests package...
+"%PYTHON_DIR%\\python.exe" -m pip install requests
+if errorlevel 1 (
+    echo [!] Failed to install requests.
+    pause
+    exit /b
+)
+echo [+] requests installed successfully.
+
 :PythonExists
 echo [+] Python environment is ready.
 echo.
