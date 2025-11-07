@@ -77,7 +77,7 @@ echo     5. Detect Anti-Rollback from device
 echo     6. Patch rollback indices in ROM
 echo     7. Write Anti-Anti-Rollback to device
 echo     8. Convert x files to xml (WIPE DATA)
-echo     9. Convert x files to xml & Modify (NO WIPE)
+echo     9. Convert x files to xml ^& Modify (NO WIPE)
 echo     10. Flash firmware to device
 echo.
 echo     11. Clean workspace
@@ -96,7 +96,7 @@ if "%ADV_CHOICE%"=="5" call :run_task read_anti_rollback "Detect Anti-Rollback f
 if "%ADV_CHOICE%"=="6" call :run_task patch_anti_rollback "Patch rollback indices in ROM"
 if "%ADV_CHOICE%"=="7" call :run_task write_anti_rollback "Write Anti-Anti-Rollback to device"
 if "%ADV_CHOICE%"=="8" call :run_task modify_xml_wipe "Convert x files to xml (WIPE DATA)"
-if "%ADV_CHOICE%"=="9" call :run_task modify_xml "Convert & Modify x files to xml (NO WIPE)"
+if "%ADV_CHOICE%"=="9" call :run_task modify_xml "Convert ^& Modify x files to xml (NO WIPE)"
 if "%ADV_CHOICE%"=="10" call :run_task flash_edl "Flash firmware to device"
 
 if "%ADV_CHOICE%"=="11" (
