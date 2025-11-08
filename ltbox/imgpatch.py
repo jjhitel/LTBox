@@ -274,13 +274,6 @@ def modify_xml_algo(wipe=0):
         shutil.rmtree(WORKING_DIR)
         raise FileNotFoundError(f"No *.x files found in {IMAGE_DIR.name}")
 
-    contents_xml = WORKING_DIR / "contents.xml"
-    if not contents_xml.exists():
-        print(f"[!] Error: 'contents.xml' not found in '{WORKING_DIR.name}'.")
-        print("[!] This file is essential for the flashing process. Aborting.")
-        shutil.rmtree(WORKING_DIR)
-        raise FileNotFoundError(f"contents.xml not found in {WORKING_DIR.name}")
-
     rawprogram4 = WORKING_DIR / "rawprogram4.xml"
     rawprogram_unsparse4 = WORKING_DIR / "rawprogram_unsparse4.xml"
     if not rawprogram4.exists() and rawprogram_unsparse4.exists():
@@ -311,36 +304,9 @@ def modify_xml_algo(wipe=0):
     else:
         print("  > 'rawprogram_save_persist_unsparse0.xml' not found. Skipping.")
 
-    print("\n[*] Modifying 'rawprogram4.xml'...")
-    if rawprogram4.exists():
-        try:
-            with open(rawprogram4, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            if not any(IMAGE_DIR.glob("vm-bootsys*.img")):
-                print("  > 'vm-bootsys' image not found. Removing from XML...")
-                content = content.replace('filename="vm-bootsys.img"', '')
-            else:
-                print("  > 'vm-bootsys' image found. Keeping in XML.")
-
-            if not any(IMAGE_DIR.glob("vm-persist*.img")):
-                print("  > 'vm-persist' image not found. Removing from XML...")
-                content = content.replace('filename="vm-persist.img"', '')
-            else:
-                print("  > 'vm-persist' image found. Keeping in XML.")
-
-            with open(rawprogram4, 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("  > Patched 'rawprogram4.xml' successfully.")
-        except Exception as e:
-            print(f"[!] Error patching 'rawprogram4.xml': {e}", file=sys.stderr)
-    else:
-        print("  > 'rawprogram4.xml' not found. Skipping.")
-
     print("\n[*] Deleting unnecessary XML files...")
     files_to_delete = [
         WORKING_DIR / "rawprogram_unsparse0.xml",
-        WORKING_DIR / "contents.xml",
         *WORKING_DIR.glob("*_WIPE_PARTITIONS.xml"),
         *WORKING_DIR.glob("*_BLANK_GPT.xml")
     ]
