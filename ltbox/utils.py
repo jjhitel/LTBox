@@ -14,7 +14,7 @@ from ltbox.constants import *
 # --- Process Execution ---
 def run_command(command, shell=False, check=True, env=None, capture=False):
     env = env or os.environ.copy()
-    env['PATH'] = str(TOOLS_DIR) + os.pathsep + str(PLATFORM_TOOLS_DIR) + os.pathsep + env['PATH']
+    env['PATH'] = str(TOOLS_DIR) + os.pathsep + str(DOWNLOAD_DIR) + os.pathsep + env['PATH']
 
     try:
         process = subprocess.run(
@@ -52,7 +52,7 @@ def get_platform_executable(name):
     exe_name = executables.get(system)
     if not exe_name:
         raise RuntimeError(f"Unsupported operating system: {system}")
-    return TOOLS_DIR / exe_name
+    return DOWNLOAD_DIR / exe_name
 
 # --- File/Directory Waiters ---
 def wait_for_files(directory, required_files, prompt_message):
@@ -113,10 +113,13 @@ def check_dependencies():
     dependencies = {
         "Python Environment": PYTHON_EXE,
         "ADB": ADB_EXE,
-        "RSA4096 Key": AVB_DIR / "testkey_rsa4096.pem",
-        "RSA2048 Key": AVB_DIR / "testkey_rsa2048.pem",
+        "Fastboot": FASTBOOT_EXE,
+        "RSA4096 Key": KEY_MAP["2597c218aae470a130f61162feaae70afd97f011"],
+        "RSA2048 Key": KEY_MAP["cdbb77177f731920bbe0a0f94f84d9038ae0617d"],
         "avbtool": AVBTOOL_PY,
-        "fetch tool": get_platform_executable("fetch")
+        "fetch tool": get_platform_executable("fetch"),
+        "edl-ng": EDL_NG_EXE,
+        "libusb": LIBUSB_DLL
     }
     missing_deps = [name for name, path in dependencies.items() if not Path(path).exists()]
 
@@ -188,19 +191,17 @@ def show_image_info(files):
 
 def clean_workspace():
     print("--- Starting Cleanup Process ---")
-    print("This will remove all input/output folders and downloaded tools.")
-    print("The 'python3' and 'backup' folders will NOT be removed.")
+    print("This will remove all input/output folders and temporary files.")
+    print("The 'python3', 'backup', and 'tools/dl' folders will NOT be removed.")
     print("-" * 50)
 
     folders_to_remove = [
         INPUT_CURRENT_DIR, INPUT_NEW_DIR,
         OUTPUT_DIR, OUTPUT_ROOT_DIR, OUTPUT_DP_DIR, OUTPUT_ANTI_ROLLBACK_DIR,
         WORK_DIR,
-        AVB_DIR,
         IMAGE_DIR,
         WORKING_DIR,
         OUTPUT_XML_DIR,
-        PLATFORM_TOOLS_DIR
     ]
     
     print("[*] Removing directories...")
@@ -214,27 +215,25 @@ def clean_workspace():
         else:
             print(f"  > Skipping (not found): {folder.name}{os.sep}")
 
-    print("\n[*] Removing downloaded tools from 'tools' folder...")
-    tools_files_to_remove = [
-        "fetch.exe", "fetch-linux", "fetch-macos",
-        "magiskboot.exe", "magiskboot-linux", "magiskboot-macos",
-        "edl-ng.exe",
-        "magiskboot-*.zip",
-        "edl-ng-*.zip"
+    print("\n[*] Cleaning up temporary files from 'tools/dl' folder...")
+    dl_files_to_remove = [
+        "*.zip",
+        "*.tar.gz",
     ]
     
-    cleaned_tools_files = 0
-    for pattern in tools_files_to_remove:
-        for f in TOOLS_DIR.glob(pattern):
+    cleaned_dl_files = 0
+    for pattern in dl_files_to_remove:
+        for f in DOWNLOAD_DIR.glob(pattern):
             try:
                 f.unlink()
-                print(f"  > Removed tool: {f.name}")
-                cleaned_tools_files += 1
+                print(f"  > Removed temp file: {f.name}")
+                cleaned_dl_files += 1
             except OSError as e:
                 print(f"[!] Error removing {f.name}: {e}", file=sys.stderr)
-    
-    if cleaned_tools_files == 0:
-        print("  > No downloaded tools found to clean.")
+
+    if cleaned_dl_files == 0:
+        print("  > No temporary archive files found to clean in 'tools/dl'.")
+
 
     print("\n[*] Cleaning up temporary files from root directory...")
     file_patterns_to_remove = [

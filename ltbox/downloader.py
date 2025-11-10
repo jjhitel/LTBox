@@ -3,87 +3,287 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import tarfile
+import requests
+import io
+import os
+import re
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 from ltbox.constants import *
 from ltbox import utils
 
-def _ensure_magiskboot(fetch_exe, magiskboot_exe):
-    if magiskboot_exe.exists():
-        return True
+class ToolError(Exception):
+    pass
 
-    print(f"[!] '{magiskboot_exe.name}' not found. Attempting to download...")
-    if platform.system() == "Windows":
-        arch = platform.machine()
-        arch_map = {
-            'AMD64': 'x86_64',
-            'ARM64': 'arm64',
-        }
-        target_arch = arch_map.get(arch, 'i686')
-        
-        asset_pattern = f"magiskboot-.*-windows-.*-{target_arch}-standalone\\.zip"
-        
-        print(f"[*] Detected Windows architecture: {arch}. Selecting matching magiskboot binary.")
-        
-        try:
-            fetch_command = [
-                str(fetch_exe),
-                "--repo", MAGISKBOOT_REPO_URL,
-                "--tag", MAGISKBOOT_TAG,
-                "--release-asset", asset_pattern,
-                str(TOOLS_DIR)
-            ]
-            utils.run_command(fetch_command, capture=True)
+def _run_fetch_command(args):
+    fetch_exe = DOWNLOAD_DIR / "fetch.exe"
+    if not fetch_exe.exists():
+        print("[!] 'fetch.exe' not found. Cannot proceed.")
+        raise FileNotFoundError("fetch.exe not found")
+    
+    command = [str(fetch_exe)] + args
+    return utils.run_command(command, capture=True)
 
-            downloaded_zips = list(TOOLS_DIR.glob("magiskboot-*-windows-*.zip"))
+def _ensure_tool_from_github_release(tool_name, exe_name_in_zip, repo_url, tag, asset_patterns):
+    tool_exe = DOWNLOAD_DIR / f"{tool_name}.exe"
+    if tool_exe.exists():
+        return tool_exe
+
+    print(f"[!] '{tool_exe.name}' not found. Attempting to download...")
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    
+    arch = platform.machine()
+    asset_pattern = asset_patterns.get(arch)
+    if not asset_pattern:
+        print(f"[!] Unsupported architecture: {arch} for {tool_name}. Aborting.", file=sys.stderr)
+        raise ToolError(f"Unsupported architecture for {tool_name}")
+
+    print(f"[*] Detected {arch} architecture. Downloading asset matching '{asset_pattern}'...")
+
+    try:
+        fetch_command = [
+            "--repo", repo_url,
+            "--tag", tag,
+            "--release-asset", asset_pattern,
+            str(DOWNLOAD_DIR)
+        ]
+        _run_fetch_command(fetch_command)
+
+        downloaded_zips = list(DOWNLOAD_DIR.glob(f"*{tool_name}*.zip"))
+        if not downloaded_zips:
+            raise FileNotFoundError(f"Failed to find downloaded zip for {tool_name}")
+
+        downloaded_zip_path = downloaded_zips[0]
+
+        with zipfile.ZipFile(downloaded_zip_path, 'r') as zip_ref:
+            exe_info = None
+            for member in zip_ref.infolist():
+                if member.filename.endswith(exe_name_in_zip):
+                    exe_info = member
+                    break
             
-            if not downloaded_zips:
-                raise FileNotFoundError("Failed to find the downloaded magiskboot zip archive.")
+            if not exe_info:
+                raise FileNotFoundError(f"'{exe_name_in_zip}' not found inside {downloaded_zip_path.name}")
+
+            zip_ref.extract(exe_info, path=DOWNLOAD_DIR)
+            extracted_path = DOWNLOAD_DIR / exe_info.filename
             
-            downloaded_zip_path = downloaded_zips[0]
+            if extracted_path != tool_exe:
+                shutil.move(extracted_path, tool_exe)
             
-            with zipfile.ZipFile(downloaded_zip_path, 'r') as zip_ref:
-                magiskboot_info = None
-                for member in zip_ref.infolist():
-                    if member.filename.endswith('magiskboot.exe'):
-                        magiskboot_info = member
-                        break
-                
-                if not magiskboot_info:
-                    raise FileNotFoundError("magiskboot.exe not found inside the downloaded zip archive.")
+            parent_dir = extracted_path.parent
+            if parent_dir.is_dir() and parent_dir != DOWNLOAD_DIR:
+                 try:
+                    parent_dir.rmdir()
+                 except OSError:
+                    shutil.rmtree(parent_dir, ignore_errors=True)
 
-                zip_ref.extract(magiskboot_info, path=TOOLS_DIR)
-                
-                extracted_path = TOOLS_DIR / magiskboot_info.filename
-                
-                shutil.move(extracted_path, magiskboot_exe)
-                
-                parent_dir = extracted_path.parent
-                if parent_dir.is_dir() and parent_dir != TOOLS_DIR:
-                     try:
-                        parent_dir.rmdir()
-                     except OSError:
-                        shutil.rmtree(parent_dir)
+        downloaded_zip_path.unlink()
+        print(f"[+] {tool_name} download and extraction successful.")
+        return tool_exe
 
-            downloaded_zip_path.unlink()
-            print("[+] Download and extraction successful.")
-            return True
+    except Exception as e:
+        print(f"[!] Error downloading or extracting {tool_name}: {e}", file=sys.stderr)
+        raise ToolError(f"Failed to ensure {tool_name}")
 
-        except (subprocess.CalledProcessError, FileNotFoundError, KeyError, IndexError) as e:
-            print(f"[!] Error downloading or extracting magiskboot: {e}", file=sys.stderr)
-            sys.exit(1)
+def ensure_fetch():
+    tool_exe = DOWNLOAD_DIR / "fetch.exe"
+    if tool_exe.exists():
+        return tool_exe
+    
+    print("[!] 'fetch.exe' not found. Downloading...")
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    
+    asset_patterns = {
+        'AMD64': "fetch_windows_amd64.exe",
+        'ARM64': "fetch_windows_amd64.exe",
+        'I386': "fetch_windows_386.exe"
+    }
+    arch = platform.machine()
+    asset_name = asset_patterns.get(arch)
+    if not asset_name:
+         raise ToolError(f"Unsupported architecture for fetch: {arch}")
 
-    else:
-        print(f"[!] Auto-download for {platform.system()} is not supported. Please add it to the 'tools' folder manually.")
+    url = f"{FETCH_REPO_URL}/releases/download/{FETCH_VERSION}/{asset_name}"
+    
+    try:
+        response = requests.get(url, allow_redirects=True)
+        response.raise_for_status()
+        with open(tool_exe, 'wb') as f:
+            f.write(response.content)
+        print("[+] fetch.exe downloaded successfully.")
+        return tool_exe
+    except Exception as e:
+        print(f"[!] Failed to download fetch.exe: {e}", file=sys.stderr)
+        raise ToolError("Failed to download fetch.exe")
+
+def ensure_platform_tools():
+    if ADB_EXE.exists() and FASTBOOT_EXE.exists():
+        return
+    
+    print("[!] platform-tools (adb, fastboot) not found. Downloading...")
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    temp_zip_path = DOWNLOAD_DIR / "platform-tools.zip"
+    
+    try:
+        with requests.get(PLATFORM_TOOLS_ZIP_URL, stream=True, allow_redirects=True) as response:
+            response.raise_for_status()
+            with open(temp_zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+        with zipfile.ZipFile(temp_zip_path) as zf:
+            for member in zf.infolist():
+                if member.is_dir():
+                    continue
+                
+                if re.match(r"^platform-tools/[^/]+$", member.filename):
+                    file_name = Path(member.filename).name
+                    target_path = DOWNLOAD_DIR / file_name
+                    with zf.open(member) as source, open(target_path, "wb") as target:
+                        shutil.copyfileobj(source, target)
+                        
+        temp_zip_path.unlink()
+        print("[+] platform-tools downloaded and extracted successfully.")
+        
+    except Exception as e:
+        print(f"[!] Failed to download or extract platform-tools: {e}", file=sys.stderr)
+        raise ToolError("Failed to download platform-tools")
+
+def ensure_avb_tools():
+    key1 = DOWNLOAD_DIR / "testkey_rsa4096.pem"
+    key2 = DOWNLOAD_DIR / "testkey_rsa2048.pem"
+    
+    if AVBTOOL_PY.exists() and key1.exists() and key2.exists():
+        return
+
+    print("[!] avbtool or keys not found. Downloading from AOSP...")
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    temp_tar_path = DOWNLOAD_DIR / "avb.tar.gz"
+    
+    files_to_extract = {
+        "avbtool.py": AVBTOOL_PY,
+        "test/data/testkey_rsa4096.pem": key1,
+        "test/data/testkey_rsa2048.pem": key2,
+    }
+
+    try:
+        with requests.get(AVB_ARCHIVE_URL, stream=True, allow_redirects=True) as response:
+            response.raise_for_status()
+            with open(temp_tar_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+        with tarfile.open(temp_tar_path, "r:gz") as tf:
+            for member in tf:
+                if member.name in files_to_extract:
+                    target_path = files_to_extract[member.name]
+                    f = tf.extractfile(member)
+                    if f:
+                        with open(target_path, "wb") as target:
+                            shutil.copyfileobj(f, target)
+                        print(f"[+] Extracted {target_path.name}")
+                        
+        temp_tar_path.unlink()
+        print("[+] avbtool and keys downloaded successfully.")
+
+    except Exception as e:
+        print(f"[!] Failed to download or extract avbtool: {e}", file=sys.stderr)
+        raise ToolError("Failed to download avbtool")
+
+def ensure_magiskboot():
+    asset_patterns = {
+        'AMD64': "magiskboot-.*-windows-.*-x86_64-standalone\\.zip",
+        'ARM64': "magiskboot-.*-windows-.*-arm64-standalone\\.zip",
+    }
+    
+    try:
+        return _ensure_tool_from_github_release(
+            tool_name="magiskboot",
+            exe_name_in_zip="magiskboot.exe",
+            repo_url=MAGISKBOOT_REPO_URL,
+            tag=MAGISKBOOT_TAG,
+            asset_patterns=asset_patterns
+        )
+    except ToolError:
         sys.exit(1)
 
-def _get_gki_kernel(fetch_exe, kernel_version, work_dir):
+def ensure_edl_ng():
+    if EDL_NG_EXE.exists() and LIBUSB_DLL.exists():
+        return
+
+    print("[!] 'edl-ng.exe' or 'libusb-1.0.dll' not found. Attempting to download...")
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    
+    arch = platform.machine()
+    asset_patterns = {
+        'AMD64': "edl-ng-windows-x64.zip",
+        'ARM64': "edl-ng-windows-arm64.zip",
+    }
+    asset_pattern = asset_patterns.get(arch)
+    if not asset_pattern:
+        print(f"[!] Unsupported architecture: {arch} for edl-ng. Aborting.", file=sys.stderr)
+        raise ToolError(f"Unsupported architecture for edl-ng")
+
+    print(f"[*] Detected {arch} architecture. Downloading asset matching '{asset_pattern}'...")
+
+    try:
+        fetch_command = [
+            "--repo", EDL_NG_REPO_URL,
+            "--tag", EDL_NG_TAG,
+            "--release-asset", asset_pattern,
+            str(DOWNLOAD_DIR)
+        ]
+        _run_fetch_command(fetch_command)
+
+        downloaded_zips = list(DOWNLOAD_DIR.glob("*edl-ng*.zip"))
+        if not downloaded_zips:
+            raise FileNotFoundError("Failed to find downloaded zip for edl-ng")
+
+        downloaded_zip_path = downloaded_zips[0]
+
+        with zipfile.ZipFile(downloaded_zip_path, 'r') as zip_ref:
+            extracted_files = 0
+            for member in zip_ref.infolist():
+                if member.is_dir():
+                    continue
+                    
+                file_name = Path(member.filename).name
+                target_path = None
+
+                if file_name == "edl-ng.exe":
+                    target_path = EDL_NG_EXE
+                elif file_name == "libusb-1.0.dll":
+                    target_path = LIBUSB_DLL
+                
+                if target_path:
+                    with zip_ref.open(member) as source, open(target_path, "wb") as target:
+                        shutil.copyfileobj(source, target)
+                    print(f"[+] Extracted {file_name}")
+                    extracted_files += 1
+
+            if extracted_files < 2:
+                 print("[!] Warning: Could not find both edl-ng.exe and libusb-1.0.dll in the archive.")
+
+        downloaded_zip_path.unlink()
+        print("[+] edl-ng download and extraction successful.")
+
+    except Exception as e:
+        print(f"[!] Error downloading or extracting edl-ng: {e}", file=sys.stderr)
+        raise ToolError(f"Failed to ensure edl-ng")
+
+
+def get_gki_kernel(kernel_version, work_dir):
     print("\n[3/8] Downloading GKI Kernel with fetch...")
     asset_pattern = f".*{kernel_version}.*AnyKernel3.zip"
     fetch_command = [
-        str(fetch_exe), "--repo", REPO_URL, "--tag", RELEASE_TAG,
+        "--repo", REPO_URL, "--tag", RELEASE_TAG,
         "--release-asset", asset_pattern, str(work_dir)
     ]
-    utils.run_command(fetch_command)
+    _run_fetch_command(fetch_command)
 
     downloaded_files = list(work_dir.glob(f"*{kernel_version}*AnyKernel3.zip"))
     if not downloaded_files:
@@ -106,14 +306,30 @@ def _get_gki_kernel(fetch_exe, kernel_version, work_dir):
     print("[+] Extraction successful.")
     return kernel_image
 
-def _download_ksu_apk(fetch_exe, target_dir):
+def download_ksu_apk(target_dir):
     print("\n[7/8] Downloading KernelSU Manager APKs...")
     if list(target_dir.glob("KernelSU*.apk")):
         print("[+] KernelSU Next Manager APK already exists. Skipping download.")
     else:
         ksu_apk_command = [
-            str(fetch_exe), "--repo", f"https://github.com/{KSU_APK_REPO}", "--tag", KSU_APK_TAG,
+            "--repo", f"https://github.com/{KSU_APK_REPO}", "--tag", KSU_APK_TAG,
             "--release-asset", ".*\\.apk", str(target_dir)
         ]
-        utils.run_command(ksu_apk_command)
+        _run_fetch_command(ksu_apk_command)
         print("[+] KernelSU Next Manager APKs downloaded to the main directory (if found).")
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "install_base_tools":
+        print("--- Installing Base Tools ---")
+        DOWNLOAD_DIR.mkdir(exist_ok=True)
+        try:
+            ensure_fetch()
+            ensure_platform_tools()
+            ensure_avb_tools()
+            ensure_edl_ng()
+            print("--- Base Tools Installation Complete ---")
+        except Exception as e:
+            print(f"\n[!] An error occurred during base tool installation: {e}", file=sys.stderr)
+            if platform.system() == "Windows":
+                os.system("pause")
+            sys.exit(1)

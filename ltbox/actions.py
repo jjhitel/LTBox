@@ -9,7 +9,8 @@ from datetime import datetime
 from pathlib import Path
 
 from ltbox.constants import *
-from ltbox import utils, device, imgpatch, downloader
+from ltbox import utils, device, imgpatch
+from ltbox.downloader import ensure_magiskboot
 
 # --- Patch Actions ---
 
@@ -167,17 +168,11 @@ def root_boot_only():
     utils.check_dependencies()
 
     magiskboot_exe = utils.get_platform_executable("magiskboot")
-    fetch_exe = utils.get_platform_executable("fetch")
     
-    if not fetch_exe.exists():
-         print(f"[!] '{fetch_exe.name}' not found. Please run install.bat")
-         sys.exit(1)
-
-    downloader._ensure_magiskboot(fetch_exe, magiskboot_exe)
+    ensure_magiskboot()
 
     if platform.system() != "Windows":
         os.chmod(magiskboot_exe, 0o755)
-        os.chmod(fetch_exe, 0o755)
 
     print("--- Waiting for boot.img ---") 
     IMAGE_DIR.mkdir(exist_ok=True) 
@@ -211,7 +206,7 @@ def root_boot_only():
     shutil.copy(boot_img, WORK_DIR / "boot.img")
     boot_img.unlink()
     
-    patched_boot_path = imgpatch.patch_boot_with_root_algo(WORK_DIR, magiskboot_exe, fetch_exe)
+    patched_boot_path = imgpatch.patch_boot_with_root_algo(WORK_DIR, magiskboot_exe)
 
     if patched_boot_path and patched_boot_path.exists():
         print("\n--- Finalizing ---")
@@ -861,12 +856,8 @@ def root_device(skip_adb=False):
     utils.check_dependencies()
     
     magiskboot_exe = utils.get_platform_executable("magiskboot")
-    fetch_exe = utils.get_platform_executable("fetch")
     
-    if not fetch_exe.exists():
-         print(f"[!] '{fetch_exe.name}' not found. Please run install.bat")
-         sys.exit(1)
-    downloader._ensure_magiskboot(fetch_exe, magiskboot_exe)
+    ensure_magiskboot()
 
     print("\n--- [STEP 1/6] Waiting for ADB Connection ---")
     device.wait_for_adb(skip_adb=skip_adb)
@@ -893,7 +884,7 @@ def root_device(skip_adb=False):
     print("[+] Backups complete.")
 
     print("\n--- [STEP 4/6] Patching dumped boot.img ---")
-    patched_boot_path = imgpatch.patch_boot_with_root_algo(WORKING_BOOT_DIR, magiskboot_exe, fetch_exe)
+    patched_boot_path = imgpatch.patch_boot_with_root_algo(WORKING_BOOT_DIR, magiskboot_exe)
 
     if not (patched_boot_path and patched_boot_path.exists()):
         print("[!] Patched boot image was not created. An error occurred.", file=sys.stderr)

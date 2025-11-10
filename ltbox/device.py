@@ -7,7 +7,7 @@ import shutil
 import serial.tools.list_ports
 
 from ltbox.constants import *
-from ltbox import utils
+from ltbox import utils, downloader
 
 # --- ADB Device Handling ---
 def wait_for_adb(skip_adb=False):
@@ -136,98 +136,6 @@ def get_fastboot_vars(skip_adb=False):
         raise
         
 # --- EDL Device Handling ---
-def _ensure_edl_ng():
-    if platform.system() != "Windows":
-        print("[!] EDL functions are only supported on Windows.", file=sys.stderr)
-        sys.exit(1)
-        
-    edl_ng_exe = TOOLS_DIR / "edl-ng.exe"
-    if edl_ng_exe.exists():
-        return edl_ng_exe
-
-    fetch_exe = utils.get_platform_executable("fetch")
-    if not fetch_exe.exists():
-         print(f"[!] '{fetch_exe.name}' not found. Please run install.bat")
-         sys.exit(1)
-
-    print(f"[!] '{edl_ng_exe.name}' not found. Attempting to download...")
-    arch = platform.machine()
-    if arch == 'AMD64':
-        asset_pattern = "edl-ng-windows-x64.zip"
-    elif arch == 'ARM64':
-        asset_pattern = "edl-ng-windows-arm64.zip"
-    else:
-        print(f"[!] Unsupported Windows architecture: {arch}. Cannot download edl-ng.", file=sys.stderr)
-        sys.exit(1)
-        
-    print(f"[*] Detected {arch} architecture. Downloading '{asset_pattern}'...")
-
-    try:
-        fetch_command = [
-            str(fetch_exe),
-            "--repo", EDL_NG_REPO_URL,
-            "--tag", EDL_NG_TAG,
-            "--release-asset", asset_pattern,
-            str(TOOLS_DIR)
-        ]
-        utils.run_command(fetch_command, capture=True)
-
-        downloaded_zip_path = TOOLS_DIR / asset_pattern
-        
-        if not downloaded_zip_path.exists():
-            raise FileNotFoundError(f"Failed to find the downloaded edl-ng zip archive: {asset_pattern}")
-        
-        with zipfile.ZipFile(downloaded_zip_path, 'r') as zip_ref:
-            edl_info = None
-            libusb_info = None
-            
-            for member in zip_ref.infolist():
-                if member.filename.endswith('edl-ng.exe'):
-                    edl_info = member
-                elif member.filename.endswith('libusb-1.0.dll'):
-                    libusb_info = member
-            
-            if not edl_info:
-                raise FileNotFoundError("edl-ng.exe not found inside the downloaded zip archive.")
-
-            zip_ref.extract(edl_info, path=TOOLS_DIR)
-            
-            extracted_path = TOOLS_DIR / edl_info.filename
-            if extracted_path != edl_ng_exe:
-                shutil.move(extracted_path, edl_ng_exe)
-            
-            extracted_libusb_path = None
-            if libusb_info:
-                libusb_dll_path = TOOLS_DIR / "libusb-1.0.dll"
-                zip_ref.extract(libusb_info, path=TOOLS_DIR)
-                extracted_libusb_path = TOOLS_DIR / libusb_info.filename
-                if extracted_libusb_path != libusb_dll_path:
-                    shutil.move(extracted_libusb_path, libusb_dll_path)
-
-            parent_dir = extracted_path.parent
-            if parent_dir.is_dir() and parent_dir != TOOLS_DIR:
-                try:
-                    parent_dir.rmdir()
-                except OSError:
-                    shutil.rmtree(parent_dir, ignore_errors=True)
-
-            if extracted_libusb_path:
-                libusb_parent_dir = extracted_libusb_path.parent
-                if libusb_parent_dir.is_dir() and libusb_parent_dir != TOOLS_DIR and libusb_parent_dir != parent_dir:
-                    try:
-                        libusb_parent_dir.rmdir()
-                    except OSError:
-                        shutil.rmtree(libusb_parent_dir, ignore_errors=True)
-
-
-        downloaded_zip_path.unlink()
-        print("[+] edl-ng download and extraction successful.")
-        return edl_ng_exe
-
-    except (subprocess.CalledProcessError, FileNotFoundError, KeyError, IndexError) as e:
-        print(f"[!] Error downloading or extracting edl-ng: {e}", file=sys.stderr)
-        sys.exit(1)
-
 def check_edl_device(silent=False):
     if not silent:
         print("[*] Checking for Qualcomm EDL (9008) device...")
@@ -291,7 +199,7 @@ def setup_edl_connection(skip_adb=False):
     return port
 
 def _run_edl_command(loader_path, args_list):
-    edl_ng_exe = _ensure_edl_ng()
+    edl_ng_exe = utils.get_platform_executable("edl-ng")
     base_cmd = [str(edl_ng_exe), "--loader", str(loader_path)]
     base_cmd.extend(args_list)
     return utils.run_command(base_cmd)

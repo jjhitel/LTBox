@@ -4,9 +4,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent.parent.resolve()
 LTBOX_DIR = BASE_DIR / "ltbox"
 TOOLS_DIR = BASE_DIR / "tools"
+DOWNLOAD_DIR = TOOLS_DIR / "dl"
 PYTHON_DIR = BASE_DIR / "python3"
-AVB_DIR = TOOLS_DIR / "avb"
-PLATFORM_TOOLS_DIR = TOOLS_DIR / "platform-tools"
 
 # --- Output Directories ---
 OUTPUT_DIR = BASE_DIR / "output"
@@ -31,9 +30,11 @@ OUTPUT_XML_DIR = BASE_DIR / "output_xml"
 
 # --- Executable/Script Paths ---
 PYTHON_EXE = PYTHON_DIR / "python.exe"
-ADB_EXE = PLATFORM_TOOLS_DIR / "adb.exe"
-FASTBOOT_EXE = PLATFORM_TOOLS_DIR / "fastboot.exe"
-AVBTOOL_PY = AVB_DIR / "avbtool.py"
+ADB_EXE = DOWNLOAD_DIR / "adb.exe"
+FASTBOOT_EXE = DOWNLOAD_DIR / "fastboot.exe"
+AVBTOOL_PY = DOWNLOAD_DIR / "avbtool.py"
+EDL_NG_EXE = DOWNLOAD_DIR / "edl-ng.exe"
+LIBUSB_DLL = DOWNLOAD_DIR / "libusb-1.0.dll"
 EDIT_IMAGES_PY = LTBOX_DIR / "edit_images.py"
 GET_KERNEL_VER_PY = LTBOX_DIR / "get_kernel_ver.py"
 DECRYPT_PY = LTBOX_DIR / "decrypt_x.py"
@@ -59,10 +60,17 @@ EDL_NG_TAG = "v1.4.1"
 EDL_LOADER_FILENAME = "xbl_s_devprg_ns.melf"
 EDL_LOADER_FILE = IMAGE_DIR / EDL_LOADER_FILENAME 
 
+# --- Tool Download URLs ---
+FETCH_VERSION = "v0.4.6"
+FETCH_REPO_URL = "https://github.com/gruntwork-io/fetch"
+PLATFORM_TOOLS_ZIP_URL = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+AVB_ARCHIVE_URL = "https://android.googlesource.com/platform/external/avb/+archive/refs/heads/main.tar.gz"
+
+
 # --- AVB Keys ---
 KEY_MAP = {
-    "2597c218aae470a130f61162feaae70afd97f011": AVB_DIR / "testkey_rsa4096.pem",
-    "cdbb77177f731920bbe0a0f94f84d9038ae0617d": AVB_DIR / "testkey_rsa2048.pem"
+    "2597c218aae470a130f61162feaae70afd97f011": DOWNLOAD_DIR / "testkey_rsa4096.pem",
+    "cdbb77177f731920bbe0a0f94f84d9038ae0617d": DOWNLOAD_DIR / "testkey_rsa2048.pem"
 }
 
 # --- Country Codes for devinfo/persist patching ---

@@ -196,7 +196,7 @@ def process_boot_image_avb(image_to_process):
         key_file=key_file
     )
 
-def patch_boot_with_root_algo(work_dir, magiskboot_exe, fetch_exe):
+def patch_boot_with_root_algo(work_dir, magiskboot_exe):
     original_cwd = Path.cwd()
     os.chdir(work_dir)
     
@@ -223,7 +223,7 @@ def patch_boot_with_root_algo(work_dir, magiskboot_exe, fetch_exe):
         
         print(f"[+] Target kernel version for download: {target_kernel_version}")
 
-        kernel_image_path = downloader._get_gki_kernel(fetch_exe, target_kernel_version, work_dir)
+        kernel_image_path = downloader.get_gki_kernel(target_kernel_version, work_dir)
 
         print("\n[5/8] Replacing original kernel with the new one...")
         shutil.move(str(kernel_image_path), "kernel")
@@ -237,7 +237,7 @@ def patch_boot_with_root_algo(work_dir, magiskboot_exe, fetch_exe):
         shutil.move("new-boot.img", patched_boot_path)
         print("[+] Repack successful.")
 
-        downloader._download_ksu_apk(fetch_exe, BASE_DIR)
+        downloader.download_ksu_apk(BASE_DIR)
         
         return patched_boot_path
 

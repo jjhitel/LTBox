@@ -16,24 +16,11 @@ set "PYTHON_PTH_FILE_SRC=%LTBOX_DIR%python314._pth"
 set "PYTHON_PTH_FILE_DST=%PYTHON_DIR%\python314._pth"
 set "GETPIP_URL=https://bootstrap.pypa.io/get-pip.py"
 set "GETPIP_PATH=%PYTHON_DIR%\get-pip.py"
-set "FETCH_VERSION=v0.4.6"
-set "FETCH_URL=https://github.com/gruntwork-io/fetch/releases/download/%FETCH_VERSION%/fetch_windows_amd64.exe"
-set "FETCH_EXE=%TOOLS_DIR%fetch.exe"
-set "AVB_DIR=%TOOLS_DIR%avb"
-set "AVB_TOOL_PATH=%AVB_DIR%\avbtool.py"
-set "AVB_ARCHIVE_URL=https://android.googlesource.com/platform/external/avb/+archive/refs/heads/main.tar.gz"
-set "TEMP_ARCHIVE=%TOOLS_DIR%avb_main.tar.gz"
-
-:: Platform-Tools (ADB)
-set "PLATFORM_TOOLS_ZIP_URL=https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
-set "PLATFORM_TOOLS_ZIP_PATH=%BASE_DIR%platform-tools.zip"
-set "ADB_EXE_PATH=%TOOLS_DIR%platform-tools\adb.exe"
 
 :: ======================================================
 :: Create Directories
 :: ======================================================
 if not exist "%TOOLS_DIR%" mkdir "%TOOLS_DIR%"
-if not exist "%AVB_DIR%" mkdir "%AVB_DIR%"
 
 :: ======================================================
 :: Check and Install Dependencies
@@ -61,30 +48,9 @@ if not exist "%PYTHON_DIR%\Scripts\pip.exe" (
 echo [*] Installing required Python modules from requirements.txt...
 "%PYTHON_DIR%\Scripts\pip.exe" install -r "%BASE_DIR%requirements.txt"
 
-:: Check other tools
-if not exist "%FETCH_EXE%" (
-    echo [*] fetch.exe not found. Downloading...
-    curl -L "%FETCH_URL%" -o "%FETCH_EXE%" || exit /b 1
-)
-
-if not exist "%AVB_TOOL_PATH%" (
-    echo [*] avbtool not found. Downloading from AOSP...
-    curl -L "%AVB_ARCHIVE_URL%" -o "%TEMP_ARCHIVE%" || exit /b 1
-    echo [*] Extracting avbtool and keys...
-    tar -xzf "%TEMP_ARCHIVE%" -C "%AVB_DIR%" avbtool.py || exit /b 1
-    tar -xzf "%TEMP_ARCHIVE%" -C "%AVB_DIR%" --strip-components=2 test/data/testkey_rsa2048.pem || exit /b 1
-    tar -xzf "%TEMP_ARCHIVE%" -C "%AVB_DIR%" --strip-components=2 test/data/testkey_rsa4096.pem || exit /b 1
-    del "%TEMP_ARCHIVE%"
-)
-
-:: Check Platform-Tools (ADB)
-if not exist "%ADB_EXE_PATH%" (
-    echo [*] platform-tools ^(adb^) not found. Downloading...
-    curl -L "%PLATFORM_TOOLS_ZIP_URL%" -o "%PLATFORM_TOOLS_ZIP_PATH%" || exit /b 1
-    echo [*] Extracting platform-tools...
-    powershell -Command "Expand-Archive -Path '%PLATFORM_TOOLS_ZIP_PATH%' -DestinationPath '%TOOLS_DIR%' -Force"
-    del "%PLATFORM_TOOLS_ZIP_PATH%"
-)
+:: Download all other tools using the downloader script
+echo [*] Installing external tools (fetch, adb, avbtool)...
+"%PYTHON_DIR%\python.exe" "%LTBOX_DIR%downloader.py" install_base_tools
 
 endlocal
 exit /b 0
