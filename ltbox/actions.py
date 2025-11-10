@@ -798,6 +798,19 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
             except Exception as e:
                 print(f"[!] Error copying files from {folder.name}: {e}", file=sys.stderr)
     
+    if not skip_dp:
+        if OUTPUT_DP_DIR.exists():
+            try:
+                shutil.copytree(OUTPUT_DP_DIR, IMAGE_DIR, dirs_exist_ok=True)
+                print(f"  > Copied contents of '{OUTPUT_DP_DIR.name}' to '{IMAGE_DIR.name}'.")
+                copied_count += 1
+            except Exception as e:
+                print(f"[!] Error copying files from {OUTPUT_DP_DIR.name}: {e}", file=sys.stderr)
+        else:
+            print(f"[*] '{OUTPUT_DP_DIR.name}' not found. Skipping devinfo/persist copy.")
+    else:
+        print(f"[*] Skipping devinfo/persist copy as requested.")
+
     if copied_count == 0:
         print("[*] No 'output*' folders found. Proceeding with files already in 'image' folder.")
     
@@ -815,7 +828,7 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
         print("[!] Failed to find EDL port after reset. Aborting.")
         raise SystemExit("EDL port not found")
     
-    print("\n--- [STEP 1] Flashing main firmware via rawprogram (fh_loader) ---")
+    print("\n--- [STEP 1] Flashing all images via rawprogram (fh_loader) ---")
 
     raw_xmls = [f for f in IMAGE_DIR.glob("rawprogram*.xml") if f.name != "rawprogram0.xml"]
     patch_xmls = list(IMAGE_DIR.glob("patch*.xml"))
@@ -832,50 +845,17 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
         print("[!] The device may be in an unstable state. Do not reboot manually.")
         raise
         
-    print("\n--- [STEP 2] Flashing patched devinfo/persist ---")
-    
-    if skip_dp:
-        print(f"[*] '{OUTPUT_DP_DIR.name}' processing was skipped as requested.")
-    else:
-        patched_devinfo = OUTPUT_DP_DIR / "devinfo.img"
-        patched_persist = OUTPUT_DP_DIR / "persist.img"
-
-        if not OUTPUT_DP_DIR.exists() or (not patched_devinfo.exists() and not patched_persist.exists()):
-            print(f"[*] '{OUTPUT_DP_DIR.name}' not found or is empty. Skipping devinfo/persist flash.")
-        else:
-            print("[*] 'output_dp' folder found. Proceeding to flash devinfo/persist...")
-            
-            if not skip_reset_edl:
-                print("\n[*] Resetting device back into EDL mode for devinfo/persist flash...")
-                try:
-                    device.edl_reset(loader_path, mode="edl")
-                    print("[+] Device reset-to-EDL command sent.")
-                except Exception as e:
-                     print(f"[!] Failed to reset device to EDL: {e}", file=sys.stderr)
-                     print("[!] Please manually reboot to EDL mode.")
-                
-                device.wait_for_edl() 
-            
-            write_edl(skip_reset=True, skip_reset_edl=True)
-
-    print("\n--- [STEP 3] Flashing patched Anti-Rollback images ---")
-    arb_boot = OUTPUT_ANTI_ROLLBACK_DIR / "boot.img"
-    arb_vbmeta = OUTPUT_ANTI_ROLLBACK_DIR / "vbmeta_system.img"
-
-    if not OUTPUT_ANTI_ROLLBACK_DIR.exists() or (not arb_boot.exists() and not arb_vbmeta.exists()):
-        print(f"[*] '{OUTPUT_ANTI_ROLLBACK_DIR.name}' not found or is empty. Skipping Anti-Rollback flash.")
-    else:
-        print(f"[*] '{OUTPUT_ANTI_ROLLBACK_DIR.name}' found. Proceeding to flash Anti-Rollback images...")
-        if skip_reset_edl:
-             print("[*] Assuming device is still in EDL mode from previous step...")
-        else:
-            print("\n[!] CRITICAL: This flow is not intended to be run manually.")
-            print("[!] Please use the 'Patch and Flash' (Menu 1) option.")
-            
-        write_anti_rollback(skip_reset=True)
+    print("\n--- [STEP 2] Cleaning up temporary images ---")
+    if not skip_dp:
+        try:
+            (IMAGE_DIR / "devinfo.img").unlink(missing_ok=True)
+            (IMAGE_DIR / "persist.img").unlink(missing_ok=True)
+            print("[+] Removed devinfo.img and persist.img from 'image' folder.")
+        except OSError as e:
+            print(f"[!] Error cleaning up images: {e}", file=sys.stderr)
 
     if not skip_reset:
-        print("\n[*] Final step: Resetting device to system...")
+        print("\n--- [STEP 3] Final step: Resetting device to system ---")
         try:
             device.edl_reset(loader_path)
             print("[+] Device reset command sent.")
