@@ -269,6 +269,27 @@ def wait_for_edl():
     print(f"[+] EDL device connected on {port_name}.")
     return port_name
 
+def setup_edl_connection(skip_adb=False):
+    print("\n--- [EDL Setup] Rebooting to EDL Mode ---")
+    reboot_to_edl(skip_adb=skip_adb)
+    if not skip_adb:
+        print("[*] Waiting for 10 seconds for device to enter EDL mode...")
+        time.sleep(10)
+
+    print(f"--- [EDL Setup] Waiting for EDL Loader File ---")
+    required_files = [EDL_LOADER_FILENAME]
+    prompt = (
+        f"[STEP 1] Place the EDL loader file ('{EDL_LOADER_FILENAME}')\n"
+        f"         into the '{IMAGE_DIR.name}' folder to proceed."
+    )
+    IMAGE_DIR.mkdir(exist_ok=True)
+    utils.wait_for_files(IMAGE_DIR, required_files, prompt)
+    print(f"[+] Loader file '{EDL_LOADER_FILE.name}' found in '{IMAGE_DIR.name}'.")
+
+    port = wait_for_edl()
+    print("--- [EDL Setup] Device Connected ---")
+    return port
+
 def _run_edl_command(loader_path, args_list):
     edl_ng_exe = _ensure_edl_ng()
     base_cmd = [str(edl_ng_exe), "--loader", str(loader_path)]

@@ -467,25 +467,11 @@ def disable_ota(skip_adb=False):
 def read_edl(skip_adb=False):
     print("--- Starting EDL Read Process ---")
     
-    device.reboot_to_edl(skip_adb=skip_adb)
-    if not skip_adb:
-        print("[*] Waiting for 10 seconds for device to enter EDL mode...")
-        time.sleep(10)
+    device.setup_edl_connection(skip_adb=skip_adb)
     
     BACKUP_DIR.mkdir(exist_ok=True)
     devinfo_out = BACKUP_DIR / "devinfo.img"
     persist_out = BACKUP_DIR / "persist.img"
-
-    print(f"--- Waiting for EDL Loader File ---")
-    required_files = [EDL_LOADER_FILENAME]
-    prompt = (
-        f"[STEP 1] Place the EDL loader file ('{EDL_LOADER_FILENAME}')\n"
-        f"         into the '{IMAGE_DIR.name}' folder to proceed."
-    )
-    utils.wait_for_files(IMAGE_DIR, required_files, prompt)
-    print(f"[+] Loader file '{EDL_LOADER_FILE.name}' found in '{IMAGE_DIR.name}'.")
-
-    device.wait_for_edl()
         
     print("\n[*] Attempting to read 'devinfo' partition...")
     try:
@@ -516,17 +502,7 @@ def write_edl(skip_reset=False, skip_reset_edl=False):
     print(f"[+] Found patched images folder: '{OUTPUT_DP_DIR.name}'.")
 
     if not skip_reset_edl:
-        print(f"--- Waiting for EDL Loader File ---")
-        required_files = [EDL_LOADER_FILENAME]
-        prompt = (
-            f"[STEP 1] Place the EDL loader file ('{EDL_LOADER_FILENAME}')\n"
-            f"         into the '{IMAGE_DIR.name}' folder to proceed."
-        )
-        IMAGE_DIR.mkdir(exist_ok=True) 
-        utils.wait_for_files(IMAGE_DIR, required_files, prompt)
-        print(f"[+] Loader file '{EDL_LOADER_FILE.name}' found in '{IMAGE_DIR.name}'.")
-
-        device.wait_for_edl()
+        device.setup_edl_connection(skip_adb=False)
 
     patched_devinfo = OUTPUT_DP_DIR / "devinfo.img"
     patched_persist = OUTPUT_DP_DIR / "persist.img"
@@ -711,17 +687,7 @@ def write_anti_rollback(skip_reset=False):
     print(f"[+] Found patched images folder: '{OUTPUT_ANTI_ROLLBACK_DIR.name}'.")
 
     if not skip_reset:
-        print(f"--- Waiting for EDL Loader File ---")
-        required_files = [EDL_LOADER_FILENAME]
-        prompt = (
-            f"[STEP 1] Place the EDL loader file ('{EDL_LOADER_FILENAME}')\n"
-            f"         into the '{IMAGE_DIR.name}' folder to proceed."
-        )
-        IMAGE_DIR.mkdir(exist_ok=True) 
-        utils.wait_for_files(IMAGE_DIR, required_files, prompt)
-        print(f"[+] Loader file '{EDL_LOADER_FILE.name}' found in '{IMAGE_DIR.name}'.")
-
-        device.wait_for_edl()
+        device.setup_edl_connection(skip_adb=False)
     
     try:
         print(f"\n[*] Attempting to write 'boot' partition...")
@@ -753,7 +719,7 @@ def flash_edl(skip_reset=False, skip_reset_edl=False):
         print("[!] Please run 'Modify XML for Update' (Menu 9) first.")
         raise FileNotFoundError(f"{IMAGE_DIR.name} is missing or empty.")
         
-    loader_path = EDL_LOADER_FILE_IMAGE
+    loader_path = EDL_LOADER_FILE
     if not loader_path.exists():
         print(f"[!] Error: EDL Loader '{loader_path.name}' not found in '{IMAGE_DIR.name}' folder.")
         print("[!] Please copy it to the 'image' folder (from firmware).")
@@ -906,21 +872,7 @@ def root_device(skip_adb=False):
     device.wait_for_adb(skip_adb=skip_adb)
     
     print("\n--- [STEP 2/6] Rebooting to EDL Mode ---")
-    device.reboot_to_edl(skip_adb=skip_adb)
-    if not skip_adb:
-        print("[*] Waiting for 10 seconds for device to enter EDL mode...")
-        time.sleep(10)
-
-    print(f"--- Waiting for EDL Loader File ---")
-    required_files = [EDL_LOADER_FILENAME]
-    prompt = (
-        f"[STEP 1] Place the EDL loader file ('{EDL_LOADER_FILENAME}')\n"
-        f"         into the '{IMAGE_DIR.name}' folder to proceed."
-    )
-    utils.wait_for_files(IMAGE_DIR, required_files, prompt)
-    print(f"[+] Loader file '{EDL_LOADER_FILE.name}' found in '{IMAGE_DIR.name}'.")
-
-    device.wait_for_edl()
+    device.setup_edl_connection(skip_adb=skip_adb)
 
     print("\n--- [STEP 3/6] Dumping boot_a partition ---")
     dumped_boot_img = WORKING_BOOT_DIR / "boot.img"
@@ -987,21 +939,7 @@ def unroot_device(skip_adb=False):
     device.wait_for_adb(skip_adb=skip_adb)
     
     print("\n--- [STEP 2/5] Rebooting to EDL Mode ---")
-    device.reboot_to_edl(skip_adb=skip_adb)
-    if not skip_adb:
-        print("[*] Waiting for 10 seconds for device to enter EDL mode...")
-        time.sleep(10)
-
-    print(f"--- Waiting for EDL Loader File ---")
-    required_files = [EDL_LOADER_FILENAME]
-    prompt = (
-        f"[STEP 1] Place the EDL loader file ('{EDL_LOADER_FILENAME}')\n"
-        f"         into the '{IMAGE_DIR.name}' folder to proceed."
-    )
-    utils.wait_for_files(IMAGE_DIR, required_files, prompt)
-    print(f"[+] Loader file '{EDL_LOADER_FILE.name}' found in '{IMAGE_DIR.name}'.")
-
-    device.wait_for_edl()
+    device.setup_edl_connection(skip_adb=skip_adb)
     
     print("\n--- [STEP 3/5] Checking for backup boot.img ---")
     if not backup_boot_file.exists():
