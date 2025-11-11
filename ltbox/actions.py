@@ -604,7 +604,7 @@ def disable_ota(skip_adb=False):
 
     print("\n--- Disable OTA Process Finished ---")
 
-def read_edl(skip_adb=False):
+def read_edl(skip_adb=False, skip_reset=False):
     print("--- Starting Dump Process (fh_loader) ---")
     
     port = device.setup_edl_connection(skip_adb=skip_adb)
@@ -644,15 +644,18 @@ def read_edl(skip_adb=False):
         print("[*] Waiting 5 seconds for stability...")
         time.sleep(5)
 
-    print("\n[*] Resetting device to system...")
-    device.fh_loader_reset(port)
-    print("[+] Reset command sent.")
+    if not skip_reset:
+        print("\n[*] Resetting device to system...")
+        device.fh_loader_reset(port)
+        print("[+] Reset command sent.")
+    else:
+        print("\n[*] Skipping reset as requested (Device remains in EDL).")
 
     print(f"\n--- Dump Process Finished ---")
     print(f"[*] Files saved to: {BACKUP_DIR.name}")
 
-def read_edl_fhloader(skip_adb=False):
-    return read_edl(skip_adb)
+def read_edl_fhloader(skip_adb=False, skip_reset=False):
+    return read_edl(skip_adb, skip_reset=skip_reset)
 
 def write_edl(skip_reset=False, skip_reset_edl=False):
     print("--- Starting Write Process (Fastboot) ---")
