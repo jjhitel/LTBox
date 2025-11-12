@@ -5,6 +5,7 @@ import sys
 import time
 import zipfile
 import shutil
+import re
 import serial.tools.list_ports
 from pathlib import Path
 
@@ -60,6 +61,27 @@ def get_active_slot_suffix(skip_adb=False):
     except Exception as e:
         print(f"[!] Error getting active slot suffix: {e}", file=sys.stderr)
         print("[!] Please ensure the device is connected and authorized.")
+        return None
+
+def get_active_slot_suffix_from_fastboot():
+    print("[*] Getting active slot suffix via Fastboot...")
+    try:
+        # fastboot getvar current-slot output is typically 'current-slot: a' (on stderr or stdout)
+        result = utils.run_command([str(FASTBOOT_EXE), "getvar", "current-slot"], capture=True, check=False)
+        output = result.stderr.strip() + "\n" + result.stdout.strip()
+        
+        match = re.search(r"current-slot:\s*([a-z]+)", output)
+        if match:
+            slot = match.group(1).strip()
+            if slot in ['a', 'b']:
+                suffix = f"_{slot}"
+                print(f"[+] Found active slot suffix (Fastboot): {suffix}")
+                return suffix
+        
+        print(f"[!] Warning: Could not get valid slot suffix from Fastboot. (Output snippet: {output.splitlines()[0] if output else 'None'})")
+        return None
+    except Exception as e:
+        print(f"[!] Error getting active slot suffix via Fastboot: {e}", file=sys.stderr)
         return None
 
 def reboot_to_edl(skip_adb=False):

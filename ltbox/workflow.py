@@ -30,20 +30,36 @@ def patch_all(wipe=0, skip_adb=False):
         print("\n--- [NO WIPE MODE] Starting Automated Update & Flash ROW Firmware Process ---")
     
     print("\n" + "="*61)
-    print("  STEP 2/9: Waiting for ADB Connection & Getting Device Info")
+    print("  STEP 2/9: Waiting for ADB/Fastboot Connection & Getting Device Info")
     print("="*61)
-    device.wait_for_adb(skip_adb=skip_adb)
-    device_model = device.get_device_model(skip_adb=skip_adb)
-    if not device_model and not skip_adb:
-        raise SystemExit("Failed to get device model via ADB.")
     
-    active_slot_suffix = device.get_active_slot_suffix(skip_adb=skip_adb)
-    
-    print("\n--- [STEP 2/9] Device Info Check SUCCESS ---")
-    print("[*] Device will boot back to system if needed. Waiting for ADB connection again...")
-    device.wait_for_adb(skip_adb=skip_adb)
-    print("[+] ADB device connected.")
-    
+    device_model = None
+    active_slot_suffix = None
+
+    if not skip_adb:
+        device.wait_for_adb(skip_adb=False)
+        device_model = device.get_device_model(skip_adb=False)
+        if not device_model:
+            raise SystemExit("Failed to get device model via ADB.")
+        active_slot_suffix = device.get_active_slot_suffix(skip_adb=False)
+        
+        print("\n--- [STEP 2/9] Device Info Check SUCCESS ---")
+        print("[*] Device will boot back to system if needed. Waiting for ADB connection again...")
+        device.wait_for_adb(skip_adb=False)
+        print("[+] ADB device connected.")
+
+    else:
+        print("[!] Skip ADB is ON. Switching to Fastboot for slot detection.")
+        print("    Please manually boot your device into FASTBOOT mode.")
+        device.wait_for_fastboot()
+        
+        active_slot_suffix = device.get_active_slot_suffix_from_fastboot()
+        
+        print("\n--- [STEP 2/9] Device Info Check (Fastboot) FINISHED ---")
+        print("[*] Note: Device is currently in Fastboot mode.")
+        print("[*] For the next steps, you will need to switch to EDL mode manually")
+        print("    or rely on the script waiting for EDL connection.")
+
     print("\n--- [STEP 3/9] Waiting for RSA Firmware 'image' folder ---")
     prompt = (
         "Please copy the entire 'image' folder from your\n"
