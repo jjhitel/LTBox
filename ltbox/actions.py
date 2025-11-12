@@ -1052,9 +1052,26 @@ def flash_edl(skip_reset: bool = False, skip_reset_edl: bool = False, skip_dp: b
     if not skip_reset:
         print("\n--- Full EDL Flash Process Finished ---")
 
+def _fh_loader_write_part(port, image_path, lun, start_sector):
+    if not FH_LOADER_EXE.exists():
+        raise FileNotFoundError(f"fh_loader.exe not found at {FH_LOADER_EXE}")
+        
+    port_str = f"\\\\.\\{port}"
+    cmd = [
+        str(FH_LOADER_EXE),
+        f"--port={port_str}",
+        f"--sendimage={image_path}",
+        f"--lun={lun}",
+        f"--start_sector={start_sector}",
+        "--zlpawarehost=1",
+        "--noprompt",
+        "--memoryname=UFS"
+    ]
+    print(f"[*] Flashing {image_path.name} to LUN:{lun} @ {start_sector}...")
+    utils.run_command(cmd)
 
-def root_device(skip_adb: bool = False) -> None:
-    print("--- Starting Root Device Process ---")
+def root_device(skip_adb=False):
+    print("--- Starting Root Device Process (EDL Mode) ---")
     
     if OUTPUT_ROOT_DIR.exists():
         shutil.rmtree(OUTPUT_ROOT_DIR)
@@ -1127,7 +1144,7 @@ def root_device(skip_adb: bool = False) -> None:
         shutil.copy(dumped_boot_img, base_boot_bak)
         print("[+] Backups complete.")
 
-        print("\n[*] Dumping complete. Resetting to System to prepare for clean EDL Write...")
+        print("\n[*] Dumping complete. Resetting to System to clear EDL state...")
         dev.fh_loader_reset(port)
         
         print("\n--- [STEP 4/6] Patching dumped boot.img ---")
@@ -1154,19 +1171,26 @@ def root_device(skip_adb: bool = False) -> None:
     print("\n--- [STEP 6/6] Flashing patched boot.img via EDL ---")
     
     if not skip_adb:
-        print("[*] Waiting for device to boot to System (ADB)...")
+        print("[*] Waiting for device to boot to System (ADB) to ensure clean state...")
         dev.wait_for_adb()
+        print("[*] Rebooting to EDL for flashing...")
+        port = dev.setup_edl_connection()
     else:
-        print("[!] Skip ADB is ON. Please manually reboot to EDL if not already handled.")
+        print("[!] Skip ADB is ON.")
+        print("[!] Please manually reboot your device to EDL mode now.")
+        port = dev.wait_for_edl()
 
-    print("[*] Rebooting to EDL for flashing...")
-    port = dev.setup_edl_connection()
+    try:
+        dev.load_firehose_programmer(EDL_LOADER_FILE, port)
+        time.sleep(2)
+    except Exception as e:
+        print(f"[!] Warning: Programmer loading issue: {e}")
 
     if not params:
          params = _ensure_params_or_fail("boot")
 
     try:
-        dev.fh_loader_write_part(
+        _fh_loader_write_part(
             port=port,
             image_path=final_boot_img,
             lun=params['lun'],
@@ -1182,9 +1206,8 @@ def root_device(skip_adb: bool = False) -> None:
 
     print("\n--- Root Device Process Finished ---")
 
-
-def unroot_device(skip_adb: bool = False) -> None:
-    print("--- Starting Unroot Device Process ---")
+def unroot_device(skip_adb=False):
+    print("--- Starting Unroot Device Process (EDL Mode) ---")
     
     backup_boot_file = BACKUP_BOOT_DIR / "boot.img"
     BACKUP_BOOT_DIR.mkdir(exist_ok=True)
@@ -1212,15 +1235,26 @@ def unroot_device(skip_adb: bool = False) -> None:
 
     dev = device.DeviceController(skip_adb=skip_adb)
 
-    print("\n--- [STEP 3/4] Rebooting to EDL Mode ---")
-    port = dev.setup_edl_connection()
+    if not skip_adb:
+        print("\n[STEP 3/4] Rebooting to EDL Mode...")
+        dev.wait_for_adb()
+        port = dev.setup_edl_connection()
+    else:
+        print("\n[STEP 3/4] Waiting for EDL Connection (Manual)...")
+        port = dev.wait_for_edl()
+
+    try:
+        dev.load_firehose_programmer(EDL_LOADER_FILE, port)
+        time.sleep(2)
+    except Exception as e:
+        print(f"[!] Warning: Programmer loading issue: {e}")
 
     print("\n--- [STEP 4/4] Flashing stock boot.img via EDL ---")
     try:
         params = _ensure_params_or_fail("boot")
         print(f"  > Found info in {params['source_xml']}: LUN={params['lun']}, Start={params['start_sector']}")
         
-        dev.fh_loader_write_part(
+        _fh_loader_write_part(
             port=port,
             image_path=backup_boot_file,
             lun=params['lun'],
