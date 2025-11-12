@@ -324,32 +324,47 @@ def modify_xml_algo(wipe: int = 0) -> None:
         print(f"[*] 'rawprogram4.xml' not found. Copying 'rawprogram_unsparse4.xml'...")
         shutil.copy(rawprogram_unsparse4, rawprogram4)
 
-    print("\n[*] Modifying 'rawprogram_save_persist_unsparse0.xml' (if exists)...")
+    print("\n[*] Modifying 'rawprogram_save_persist_unsparse0.xml'...")
+    
     rawprogram_save = OUTPUT_XML_DIR / "rawprogram_save_persist_unsparse0.xml"
-    if rawprogram_save.exists():
-        try:
-            with open(rawprogram_save, 'r', encoding='utf-8') as f:
-                content = f.read()
+
+    if not rawprogram_save.exists():
+        rawprogram_fallback = OUTPUT_XML_DIR / "rawprogram_unsparse0-half.xml"
+        
+        if rawprogram_fallback.exists():
+            print(f"[*] '{rawprogram_save.name}' not found. Renaming '{rawprogram_fallback.name}'...")
+            try:
+                rawprogram_fallback.rename(rawprogram_save)
+            except OSError as e:
+                print(f"[!] Failed to rename fallback file: {e}", file=sys.stderr)
+                raise
+        else:
+            print(f"[!] Critical Error: Neither '{rawprogram_save.name}' nor '{rawprogram_fallback.name}' found.")
+            print("[!] Cannot proceed with Wipe/No Wipe modification. Aborting.")
+            raise FileNotFoundError(f"Critical XML file missing: {rawprogram_save.name} or {rawprogram_fallback.name}")
+
+    try:
+        with open(rawprogram_save, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if wipe == 0:
+            print(f"  > [NO WIPE] Removing metadata and userdata entries...")
+            for i in range(1, 11):
+                content = content.replace(f'filename="metadata_{i}.img"', '')
+            for i in range(1, 21):
+                content = content.replace(f'filename="userdata_{i}.img"', '')
+        else:
+            print(f"  > [WIPE] Skipping metadata and userdata removal.")
             
-            if wipe == 0:
-                print(f"  > [NO WIPE] Removing metadata and userdata entries...")
-                for i in range(1, 11):
-                    content = content.replace(f'filename="metadata_{i}.img"', '')
-                for i in range(1, 21):
-                    content = content.replace(f'filename="userdata_{i}.img"', '')
-            else:
-                print(f"  > [WIPE] Skipping metadata and userdata removal.")
-                
-            with open(rawprogram_save, 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("  > Patched successfully.")
-        except Exception as e:
-            print(f"[!] Error patching: {e}", file=sys.stderr)
-    else:
-        print("  > File not found. Skipping patch.")
+        with open(rawprogram_save, 'w', encoding='utf-8') as f:
+            f.write(content)
+        print("  > Patched successfully.")
+    except Exception as e:
+        print(f"[!] Error patching: {e}", file=sys.stderr)
+        raise
 
     print("\n[*] Cleaning up unnecessary files in output folder...")
-
+    
     files_to_delete = []
     for f in OUTPUT_XML_DIR.glob("*.xml"):
         if is_garbage_file(f):
