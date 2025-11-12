@@ -1,11 +1,12 @@
 import subprocess
 import sys
 import shutil
+from typing import Optional
 
 from ltbox.constants import *
 from ltbox import utils, device, actions
 
-def patch_all(wipe=0, skip_adb=False):
+def patch_all(wipe: int = 0, skip_adb: bool = False) -> None:
     
     print("--- [STEP 1/9] Cleaning up previous output folders ---")
     output_folders_to_clean = [
@@ -33,27 +34,28 @@ def patch_all(wipe=0, skip_adb=False):
     print("  STEP 2/9: Waiting for ADB/Fastboot Connection & Getting Device Info")
     print("="*61)
     
-    device_model = None
-    active_slot_suffix = None
+    dev = device.DeviceController(skip_adb=skip_adb)
+    device_model: Optional[str] = None
+    active_slot_suffix: Optional[str] = None
 
     if not skip_adb:
-        device.wait_for_adb(skip_adb=False)
-        device_model = device.get_device_model(skip_adb=False)
+        dev.wait_for_adb()
+        device_model = dev.get_device_model()
         if not device_model:
             raise SystemExit("Failed to get device model via ADB.")
-        active_slot_suffix = device.get_active_slot_suffix(skip_adb=False)
+        active_slot_suffix = dev.get_active_slot_suffix()
         
         print("\n--- [STEP 2/9] Device Info Check SUCCESS ---")
         print("[*] Device will boot back to system if needed. Waiting for ADB connection again...")
-        device.wait_for_adb(skip_adb=False)
+        dev.wait_for_adb()
         print("[+] ADB device connected.")
 
     else:
         print("[!] Skip ADB is ON. Switching to Fastboot for slot detection.")
         print("    Please manually boot your device into FASTBOOT mode.")
-        device.wait_for_fastboot()
+        dev.wait_for_fastboot()
         
-        active_slot_suffix = device.get_active_slot_suffix_from_fastboot()
+        active_slot_suffix = dev.get_active_slot_suffix_from_fastboot()
         
         print("\n--- [STEP 2/9] Device Info Check (Fastboot) FINISHED ---")
         print("[*] Note: Device is currently in Fastboot mode.")

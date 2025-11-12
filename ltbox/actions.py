@@ -8,12 +8,13 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
+from typing import Optional, List, Dict, Any
 
 from ltbox.constants import *
 from ltbox import utils, device, imgpatch, downloader
 from ltbox.downloader import ensure_magiskboot
 
-def _scan_and_decrypt_xmls():
+def _scan_and_decrypt_xmls() -> List[Path]:
     OUTPUT_XML_DIR.mkdir(exist_ok=True)
     
     xmls = list(OUTPUT_XML_DIR.glob("rawprogram*.xml"))
@@ -44,7 +45,7 @@ def _scan_and_decrypt_xmls():
             
     return xmls
 
-def _get_partition_params(target_label, xml_paths):
+def _get_partition_params(target_label: str, xml_paths: List[Path]) -> Optional[Dict[str, Any]]:
     for xml_path in xml_paths:
         try:
             tree = ET.parse(xml_path)
@@ -64,7 +65,7 @@ def _get_partition_params(target_label, xml_paths):
             
     return None
 
-def _ensure_params_or_fail(label):
+def _ensure_params_or_fail(label: str) -> Dict[str, Any]:
     xmls = _scan_and_decrypt_xmls()
     if not xmls:
         raise FileNotFoundError("No XML/.x files found for dump.")
@@ -82,7 +83,7 @@ def _ensure_params_or_fail(label):
         
     return params
 
-def convert_images(device_model=None, skip_adb=False):
+def convert_images(device_model: Optional[str] = None, skip_adb: bool = False) -> None:
     utils.check_dependencies()
     
     print("--- Starting vendor_boot & vbmeta conversion process ---") 
@@ -226,7 +227,7 @@ def convert_images(device_model=None, skip_adb=False):
     print(f"  Final images have been saved to the '{OUTPUT_DIR.name}' folder.")
     print("=" * 61)
 
-def root_boot_only():
+def root_boot_only() -> None:
     print(f"[*] Cleaning up old '{OUTPUT_ROOT_DIR.name}' folder...")
     if OUTPUT_ROOT_DIR.exists():
         shutil.rmtree(OUTPUT_ROOT_DIR)
@@ -294,7 +295,7 @@ def root_boot_only():
         else:
             print("[!] Patched boot image was not created. An error occurred during the process.", file=sys.stderr)
 
-def select_country_code(prompt_message="Please select a country from the list below:"):
+def select_country_code(prompt_message: str = "Please select a country from the list below:") -> str:
     print(f"\n--- {prompt_message.upper()} ---")
 
     if not COUNTRY_CODES:
@@ -336,7 +337,7 @@ def select_country_code(prompt_message="Please select a country from the list be
             print("\n[!] Selection cancelled by user. Exiting.")
             sys.exit(1)
 
-def edit_devinfo_persist():
+def edit_devinfo_persist() -> None:
     print("--- Starting devinfo & persist patching process ---")
     
     print("--- Waiting for devinfo.img / persist.img ---") 
@@ -466,7 +467,7 @@ def edit_devinfo_persist():
     print(f"  Modified images are ready in the '{OUTPUT_DP_DIR.name}' folder.")
     print("=" * 61)
 
-def modify_xml(wipe=0, skip_dp=False):
+def modify_xml(wipe: int = 0, skip_dp: bool = False) -> None:
     print("--- Starting XML Modification Process ---")
     
     print("--- Waiting for 'image' folder ---")
@@ -554,8 +555,9 @@ def modify_xml(wipe=0, skip_dp=False):
     print("  You can now run 'Flash EDL' (Menu 10).")
     print("=" * 61)
 
-def disable_ota(skip_adb=False):
-    if skip_adb:
+def disable_ota(skip_adb: bool = False) -> None:
+    dev = device.DeviceController(skip_adb=skip_adb)
+    if dev.skip_adb:
         print("[!] 'Disable OTA' was skipped as requested by Skip ADB setting.")
         return
     
@@ -565,7 +567,7 @@ def disable_ota(skip_adb=False):
     print("  STEP 1/2: Waiting for ADB Connection")
     print("="*61)
     try:
-        device.wait_for_adb(skip_adb=skip_adb)
+        dev.wait_for_adb()
         print("[+] ADB device connected.")
     except Exception as e:
         print(f"[!] Error waiting for ADB device: {e}", file=sys.stderr)
@@ -597,13 +599,14 @@ def disable_ota(skip_adb=False):
 
     print("\n--- Disable OTA Process Finished ---")
 
-def read_edl(skip_adb=False, skip_reset=False, additional_targets=None):
+def read_edl(skip_adb: bool = False, skip_reset: bool = False, additional_targets: Optional[List[str]] = None) -> None:
     print("--- Starting Dump Process (fh_loader) ---")
     
-    port = device.setup_edl_connection(skip_adb=skip_adb)
+    dev = device.DeviceController(skip_adb=skip_adb)
+    port = dev.setup_edl_connection()
     
     try:
-        device.load_firehose_programmer(EDL_LOADER_FILE, port)
+        dev.load_firehose_programmer(EDL_LOADER_FILE, port)
         time.sleep(2)
     except Exception as e:
         print(f"[!] Warning: Programmer loading issue (might be already loaded): {e}")
@@ -624,7 +627,7 @@ def read_edl(skip_adb=False, skip_reset=False, additional_targets=None):
             params = _ensure_params_or_fail(target)
             print(f"  > Found info in {params['source_xml']}: LUN={params['lun']}, Start={params['start_sector']}")
             
-            device.fh_loader_read_part(
+            dev.fh_loader_read_part(
                 port=port,
                 output_filename=str(out_file),
                 lun=params['lun'],
@@ -643,7 +646,7 @@ def read_edl(skip_adb=False, skip_reset=False, additional_targets=None):
 
     if not skip_reset:
         print("\n[*] Resetting device to system...")
-        device.fh_loader_reset(port)
+        dev.fh_loader_reset(port)
         print("[+] Reset command sent.")
     else:
         print("\n[*] Skipping reset as requested (Device remains in EDL).")
@@ -651,13 +654,14 @@ def read_edl(skip_adb=False, skip_reset=False, additional_targets=None):
     print(f"\n--- Dump Process Finished ---")
     print(f"[*] Files saved to: {BACKUP_DIR.name}")
 
-def read_edl_fhloader(skip_adb=False, skip_reset=False, additional_targets=None):
+def read_edl_fhloader(skip_adb: bool = False, skip_reset: bool = False, additional_targets: Optional[List[str]] = None) -> None:
     return read_edl(skip_adb, skip_reset=skip_reset, additional_targets=additional_targets)
 
-def write_edl(skip_reset=False, skip_reset_edl=False):
+def write_edl(skip_reset: bool = False, skip_reset_edl: bool = False) -> None:
     print("--- Starting Write Process (Fastboot) ---")
 
-    skip_adb = os.environ.get('SKIP_ADB') == '1'
+    skip_adb_val = os.environ.get('SKIP_ADB') == '1'
+    dev = device.DeviceController(skip_adb=skip_adb_val)
 
     if not OUTPUT_DP_DIR.exists():
         print(f"[!] Error: Patched images folder '{OUTPUT_DP_DIR.name}' not found.", file=sys.stderr)
@@ -665,27 +669,27 @@ def write_edl(skip_reset=False, skip_reset_edl=False):
         raise FileNotFoundError(f"{OUTPUT_DP_DIR.name} not found.")
     print(f"[+] Found patched images folder: '{OUTPUT_DP_DIR.name}'.")
 
-    if not skip_adb:
+    if not dev.skip_adb:
         print("[*] checking device state...")
         
-        if device.check_fastboot_device(silent=True):
+        if dev.check_fastboot_device(silent=True):
             print("[+] Device is already in Fastboot mode.")
         
         else:
-            edl_port = device.check_edl_device(silent=True)
+            edl_port = dev.check_edl_device(silent=True)
             if edl_port:
                 print(f"[!] Device found in EDL mode ({edl_port}).")
                 print("[*] Resetting to System via fh_loader to prepare for Fastboot...")
                 try:
-                    device.fh_loader_reset(edl_port)
+                    dev.fh_loader_reset(edl_port)
                     print("[+] Reset command sent. Waiting for device to boot...")
                     time.sleep(10)
                 except Exception as e:
                     print(f"[!] Warning: Failed to reset from EDL: {e}")
             
             try:
-                device.wait_for_adb(skip_adb=False)
-                device.reboot_to_bootloader(skip_adb=False)
+                dev.wait_for_adb()
+                dev.reboot_to_bootloader()
                 time.sleep(10)
             except Exception as e:
                 print(f"[!] Error requesting reboot to bootloader: {e}")
@@ -699,7 +703,7 @@ def write_edl(skip_reset=False, skip_reset_edl=False):
         print("="*61 + "\n")
         input("  Press Enter when device is in Fastboot mode...")
 
-    device.wait_for_fastboot()
+    dev.wait_for_fastboot()
 
     patched_devinfo = OUTPUT_DP_DIR / "devinfo.img"
     patched_persist = OUTPUT_DP_DIR / "persist.img"
@@ -738,7 +742,7 @@ def write_edl(skip_reset=False, skip_reset_edl=False):
 
     print("\n--- Write Process Finished ---")
 
-def read_anti_rollback(dumped_boot_path, dumped_vbmeta_path):
+def read_anti_rollback(dumped_boot_path: Path, dumped_vbmeta_path: Path) -> Tuple[str, int, int]:
     print("--- Anti-Rollback Status Check ---")
     utils.check_dependencies()
     
@@ -802,7 +806,7 @@ def read_anti_rollback(dumped_boot_path, dumped_vbmeta_path):
     print(f"\n--- Status Check Complete: {status} ---")
     return status, current_boot_rb, current_vbmeta_rb
 
-def patch_anti_rollback(comparison_result):
+def patch_anti_rollback(comparison_result: Tuple[str, int, int]) -> None:
     print("--- Anti-Rollback Patcher ---")
     utils.check_dependencies()
 
@@ -850,7 +854,7 @@ def patch_anti_rollback(comparison_result):
         print(f"\n[!] An error occurred during patching: {e}", file=sys.stderr)
         shutil.rmtree(OUTPUT_ANTI_ROLLBACK_DIR) 
 
-def write_anti_rollback(skip_reset=False):
+def write_anti_rollback(skip_reset: bool = False) -> None:
     print("--- Starting Anti-Rollback Write Process ---")
 
     boot_img = OUTPUT_ANTI_ROLLBACK_DIR / "boot.img"
@@ -862,21 +866,23 @@ def write_anti_rollback(skip_reset=False):
         raise FileNotFoundError(f"Patched images not found in {OUTPUT_ANTI_ROLLBACK_DIR.name}")
     print(f"[+] Found patched images folder: '{OUTPUT_ANTI_ROLLBACK_DIR.name}'.")
 
+    dev = device.DeviceController(skip_adb=False)
+    
     if not skip_reset:
-        device.setup_edl_connection(skip_adb=False)
+        dev.setup_edl_connection()
     
     try:
         print(f"\n[*] Attempting to write 'boot' partition...")
-        device.edl_write_part(EDL_LOADER_FILE, "boot_a", boot_img)
+        dev.edl_write_part(EDL_LOADER_FILE, "boot_a", boot_img)
         print("[+] Successfully wrote 'boot'.")
 
         print(f"\n[*] Attempting to write 'vbmeta_system' partition...")
-        device.edl_write_part(EDL_LOADER_FILE, "vbmeta_system_a", vbmeta_img)
+        dev.edl_write_part(EDL_LOADER_FILE, "vbmeta_system_a", vbmeta_img)
         print("[+] Successfully wrote 'vbmeta_system'.")
 
         if not skip_reset:
             print("\n[*] Operations complete. Resetting device...")
-            device.edl_reset(EDL_LOADER_FILE)
+            dev.edl_reset(EDL_LOADER_FILE)
             print("[+] Device reset command sent.")
         else:
             print("\n[*] Operations complete. Skipping device reset as requested.")
@@ -887,10 +893,11 @@ def write_anti_rollback(skip_reset=False):
     
     print("\n--- Anti-Rollback Write Process Finished ---")
 
-def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
+def flash_edl(skip_reset: bool = False, skip_reset_edl: bool = False, skip_dp: bool = False) -> None:
     print("--- Starting Full EDL Flash Process ---")
 
-    skip_adb = os.environ.get('SKIP_ADB') == '1'
+    skip_adb_val = os.environ.get('SKIP_ADB') == '1'
+    dev = device.DeviceController(skip_adb=skip_adb_val)
     
     if not IMAGE_DIR.is_dir() or not any(IMAGE_DIR.iterdir()):
         print(f"[!] Error: The '{IMAGE_DIR.name}' folder is missing or empty.")
@@ -951,32 +958,32 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
     if copied_count == 0:
         print("[*] No 'output*' folders found. Proceeding with files already in 'image' folder.")
 
-    port = device.setup_edl_connection(skip_adb=skip_adb)
+    port = dev.setup_edl_connection()
 
     print("[*] Ensuring clean EDL state via System Reboot loop...")
     try:
-        device.fh_loader_reset(port)
+        dev.fh_loader_reset(port)
     except Exception as e:
         print(f"[!] Warning: fh_loader reset failed: {e}")
 
-    if skip_adb:
+    if dev.skip_adb:
         print("\n" + "="*60)
         print("  [CLEANUP] Device has been reset to System to clear port state.")
         print("  [ACTION]  Please manually reboot your device to EDL mode again.")
         print("            (Power off -> Hold Vol+ & Plug USB, or generic key combo)")
         print("="*60 + "\n")
-        port = device.wait_for_edl()
+        port = dev.wait_for_edl()
     else:
         print("[*] Waiting for device to boot to System (ADB)...")
         try:
-            device.wait_for_adb() 
+            dev.wait_for_adb() 
             print("[*] Rebooting to EDL...")
-            device.reboot_to_edl()
-            port = device.wait_for_edl()
+            dev.reboot_to_edl()
+            port = dev.wait_for_edl()
             time.sleep(3)
         except Exception as e:
              print(f"[!] Auto-reboot failed: {e}. Please check device.")
-             port = device.wait_for_edl()
+             port = dev.wait_for_edl()
 
     raw_xmls = [f for f in IMAGE_DIR.glob("rawprogram*.xml") if f.name != "rawprogram0.xml"]
     patch_xmls = list(IMAGE_DIR.glob("patch*.xml"))
@@ -1013,7 +1020,7 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
     print("\n--- [STEP 1] Flashing all images via rawprogram (fh_loader) ---")
     
     try:
-        device.edl_rawprogram(loader_path, "UFS", raw_xmls, patch_xmls, port)
+        dev.edl_rawprogram(loader_path, "UFS", raw_xmls, patch_xmls, port)
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"[!] An error occurred during main flash: {e}", file=sys.stderr)
         print("[!] The device may be in an unstable state. Do not reboot manually.")
@@ -1035,7 +1042,7 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
             time.sleep(5)
             
             print("[*] Attempting to reset device via fh_loader...")
-            device.fh_loader_reset(port)
+            dev.fh_loader_reset(port)
             print("[+] Device reset command sent.")
         except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
              print(f"[!] Failed to reset device: {e}", file=sys.stderr)
@@ -1046,7 +1053,7 @@ def flash_edl(skip_reset=False, skip_reset_edl=False, skip_dp=False):
         print("\n--- Full EDL Flash Process Finished ---")
 
 
-def root_device(skip_adb=False):
+def root_device(skip_adb: bool = False) -> None:
     print("--- Starting Root Device Process ---")
     
     if OUTPUT_ROOT_DIR.exists():
@@ -1057,11 +1064,12 @@ def root_device(skip_adb=False):
     utils.check_dependencies()
     
     magiskboot_exe = utils.get_platform_executable("magiskboot")
-    
     ensure_magiskboot()
 
+    dev = device.DeviceController(skip_adb=skip_adb)
+
     print("\n--- [STEP 1/6] Waiting for ADB Connection ---")
-    device.wait_for_adb(skip_adb=skip_adb)
+    dev.wait_for_adb()
 
     if not skip_adb:
         print("\n[*] Checking & Installing KernelSU Next (Spoofed) APK...")
@@ -1081,9 +1089,9 @@ def root_device(skip_adb=False):
             print("[!] Spoofed APK not found. Skipping installation.")
     
     print("\n--- [STEP 2/6] Rebooting to EDL Mode ---")
-    port = device.setup_edl_connection(skip_adb=skip_adb)
+    port = dev.setup_edl_connection()
     try:
-        device.load_firehose_programmer(EDL_LOADER_FILE, port)
+        dev.load_firehose_programmer(EDL_LOADER_FILE, port)
         time.sleep(2)
     except Exception as e:
         print(f"[!] Warning: Programmer loading issue: {e}")
@@ -1101,7 +1109,7 @@ def root_device(skip_adb=False):
         try:
             params = _ensure_params_or_fail("boot")
             print(f"  > Found info in {params['source_xml']}: LUN={params['lun']}, Start={params['start_sector']}")
-            device.fh_loader_read_part(
+            dev.fh_loader_read_part(
                 port=port,
                 output_filename=str(dumped_boot_img),
                 lun=params['lun'],
@@ -1118,8 +1126,9 @@ def root_device(skip_adb=False):
         print(f"[*] Creating temporary backup for AVB processing...")
         shutil.copy(dumped_boot_img, base_boot_bak)
         print("[+] Backups complete.")
+
         print("\n[*] Dumping complete. Resetting to System to prepare for clean EDL Write...")
-        device.fh_loader_reset(port)
+        dev.fh_loader_reset(port)
         
         print("\n--- [STEP 4/6] Patching dumped boot.img ---")
         patched_boot_path = imgpatch.patch_boot_with_root_algo(WORKING_BOOT_DIR, magiskboot_exe)
@@ -1146,18 +1155,18 @@ def root_device(skip_adb=False):
     
     if not skip_adb:
         print("[*] Waiting for device to boot to System (ADB)...")
-        device.wait_for_adb(skip_adb=False)
+        dev.wait_for_adb()
     else:
         print("[!] Skip ADB is ON. Please manually reboot to EDL if not already handled.")
 
     print("[*] Rebooting to EDL for flashing...")
-    port = device.setup_edl_connection(skip_adb=skip_adb)
+    port = dev.setup_edl_connection()
 
     if not params:
          params = _ensure_params_or_fail("boot")
 
     try:
-        device.fh_loader_write_part(
+        dev.fh_loader_write_part(
             port=port,
             image_path=final_boot_img,
             lun=params['lun'],
@@ -1166,7 +1175,7 @@ def root_device(skip_adb=False):
         print("[+] Successfully flashed 'boot.img' via EDL.")
         
         print("\n[*] Resetting to system...")
-        device.fh_loader_reset(port)
+        dev.fh_loader_reset(port)
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"[!] An error occurred during EDL flash: {e}", file=sys.stderr)
         raise
@@ -1174,12 +1183,12 @@ def root_device(skip_adb=False):
     print("\n--- Root Device Process Finished ---")
 
 
-def unroot_device(skip_adb=False):
+def unroot_device(skip_adb: bool = False) -> None:
     print("--- Starting Unroot Device Process ---")
     
     backup_boot_file = BACKUP_BOOT_DIR / "boot.img"
     BACKUP_BOOT_DIR.mkdir(exist_ok=True)
-
+    
     print("\n--- [STEP 1/4] Checking Requirements ---")
     if not list(IMAGE_DIR.glob("rawprogram*.xml")) and not list(IMAGE_DIR.glob("*.x")):
          print(f"[!] Error: No firmware XMLs found in '{IMAGE_DIR.name}'.")
@@ -1201,15 +1210,17 @@ def unroot_device(skip_adb=False):
     
     print("[+] Stock backup 'boot.img' found.")
 
+    dev = device.DeviceController(skip_adb=skip_adb)
+
     print("\n--- [STEP 3/4] Rebooting to EDL Mode ---")
-    port = device.setup_edl_connection(skip_adb=skip_adb)
+    port = dev.setup_edl_connection()
 
     print("\n--- [STEP 4/4] Flashing stock boot.img via EDL ---")
     try:
         params = _ensure_params_or_fail("boot")
         print(f"  > Found info in {params['source_xml']}: LUN={params['lun']}, Start={params['start_sector']}")
         
-        device.fh_loader_write_part(
+        dev.fh_loader_write_part(
             port=port,
             image_path=backup_boot_file,
             lun=params['lun'],
@@ -1218,7 +1229,7 @@ def unroot_device(skip_adb=False):
         print("[+] Successfully flashed stock 'boot.img'.")
         
         print("\n[*] Resetting to system...")
-        device.fh_loader_reset(port)
+        dev.fh_loader_reset(port)
         
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
         print(f"[!] An error occurred during EDL flash: {e}", file=sys.stderr)
