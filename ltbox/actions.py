@@ -395,7 +395,6 @@ def edit_devinfo_persist() -> None:
     
     status_messages = []
     files_found = 0
-    is_cn_detected = False
     
     display_order = ["persist.img", "devinfo.img"]
     
@@ -407,57 +406,47 @@ def edit_devinfo_persist() -> None:
             if code:
                 status_messages.append(f"{display_name}: {code}XX")
                 files_found += 1
-                if code == "CN":
-                    is_cn_detected = True
             else:
                 status_messages.append(f"{display_name}: null")
     
     print(f"\n[+] Detection Result:  {', '.join(status_messages)}")
-
-    proceed = False
     
     if files_found == 0:
         print("[!] No region codes detected. Patching skipped.")
         devinfo_img.unlink(missing_ok=True)
         persist_img.unlink(missing_ok=True)
         return
-    elif is_cn_detected:
-        print("\n[*] CN Region detected. Automatically proceeding to region selection...")
-        proceed = True
-    else:
-        print("\nDo you want to change the region code? (y/n)")
-        choice = ""
-        while choice not in ['y', 'n']:
-            choice = input("    Enter choice: ").lower().strip()
-        
-        if choice == 'y':
-            proceed = True
-        else:
-            print("[*] Operation cancelled. No changes made.")
-            
-            devinfo_img.unlink(missing_ok=True)
-            persist_img.unlink(missing_ok=True)
-            
-            print("[*] Safety: Removing stock devinfo.img/persist.img from 'image' folder to prevent accidental flash.")
-            (IMAGE_DIR / "devinfo.img").unlink(missing_ok=True)
-            (IMAGE_DIR / "persist.img").unlink(missing_ok=True)
-            
-            return
 
-    if proceed:
-        target_map = detected_codes.copy()
-        replacement_code = select_country_code("SELECT NEW REGION CODE")
-        imgpatch.patch_region_codes(replacement_code, target_map)
-
-        modified_devinfo = BASE_DIR / "devinfo_modified.img"
-        modified_persist = BASE_DIR / "persist_modified.img"
+    print("\nDo you want to change the region code? (y/n)")
+    choice = ""
+    while choice not in ['y', 'n']:
+        choice = input("Enter choice: ").lower().strip()
+    
+    if choice == 'n':
+        print("[*] Operation cancelled. No changes made.")
         
-        if modified_devinfo.exists():
-            shutil.move(modified_devinfo, OUTPUT_DP_DIR / "devinfo.img")
-        if modified_persist.exists():
-            shutil.move(modified_persist, OUTPUT_DP_DIR / "persist.img")
-            
-        print(f"\n[*] Final images have been moved to '{OUTPUT_DP_DIR.name}' folder.")
+        devinfo_img.unlink(missing_ok=True)
+        persist_img.unlink(missing_ok=True)
+        
+        print("[*] Safety: Removing stock devinfo.img/persist.img from 'image' folder to prevent accidental flash.")
+        (IMAGE_DIR / "devinfo.img").unlink(missing_ok=True)
+        (IMAGE_DIR / "persist.img").unlink(missing_ok=True)
+        
+        return
+
+    target_map = detected_codes.copy()
+    replacement_code = select_country_code("SELECT NEW REGION CODE")
+    imgpatch.patch_region_codes(replacement_code, target_map)
+
+    modified_devinfo = BASE_DIR / "devinfo_modified.img"
+    modified_persist = BASE_DIR / "persist_modified.img"
+    
+    if modified_devinfo.exists():
+        shutil.move(modified_devinfo, OUTPUT_DP_DIR / "devinfo.img")
+    if modified_persist.exists():
+        shutil.move(modified_persist, OUTPUT_DP_DIR / "persist.img")
+        
+    print(f"\n[*] Final images have been moved to '{OUTPUT_DP_DIR.name}' folder.")
     
     devinfo_img.unlink(missing_ok=True)
     persist_img.unlink(missing_ok=True)
