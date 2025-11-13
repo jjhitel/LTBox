@@ -10,7 +10,7 @@ from typing import Optional, Dict
 from ..constants import *
 from .. import utils, device, downloader
 from ..downloader import ensure_magiskboot
-from .xml import _ensure_params_or_fail
+from ..partition import ensure_params_or_fail
 from .system import detect_active_slot_robust
 from ..patch.root import patch_boot_with_root_algo
 from ..patch.avb import process_boot_image_avb
@@ -143,7 +143,7 @@ def root_device(dev: device.DeviceController) -> None:
         base_boot_bak = BASE_DIR / "boot.bak.img"
 
         try:
-            params = _ensure_params_or_fail(target_partition)
+            params = ensure_params_or_fail(target_partition)
             print(get_string("act_found_dump_info").format(xml=params['source_xml'], lun=params['lun'], start=params['start_sector']))
             dev.fh_loader_read_part(
                 port=port,
@@ -205,7 +205,7 @@ def root_device(dev: device.DeviceController) -> None:
         print(get_string("act_warn_prog_load").format(e=e))
 
     if not params:
-         params = _ensure_params_or_fail(target_partition)
+         params = ensure_params_or_fail(target_partition)
 
     try:
         dev.fh_loader_write_part(
@@ -267,7 +267,7 @@ def unroot_device(dev: device.DeviceController) -> None:
 
     print(get_string("act_unroot_step4").format(part=target_partition))
     try:
-        params = _ensure_params_or_fail(target_partition)
+        params = ensure_params_or_fail(target_partition)
         print(get_string("act_found_dump_info").format(xml=params['source_xml'], lun=params['lun'], start=params['start_sector']))
         
         dev.fh_loader_write_part(

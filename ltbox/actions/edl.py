@@ -9,7 +9,7 @@ from typing import Optional, List, Dict
 
 from ..constants import *
 from .. import utils, device
-from .xml import _ensure_params_or_fail
+from ..partition import ensure_params_or_fail
 from ..i18n import get_string
 
 def read_edl(dev: device.DeviceController, skip_reset: bool = False, additional_targets: Optional[List[str]] = None) -> None:
@@ -35,7 +35,7 @@ def read_edl(dev: device.DeviceController, skip_reset: bool = False, additional_
         print(get_string("act_prep_dump").format(target=target))
         
         try:
-            params = _ensure_params_or_fail(target)
+            params = ensure_params_or_fail(target)
             print(get_string("act_found_dump_info").format(xml=params['source_xml'], lun=params['lun'], start=params['start_sector']))
             
             dev.fh_loader_read_part(
@@ -98,7 +98,7 @@ def write_edl(dev: device.DeviceController, skip_reset: bool = False, skip_reset
         print(f"[*] Flashing '{target}' via EDL...")
 
         try:
-            params = _ensure_params_or_fail(target)
+            params = ensure_params_or_fail(target)
             print(get_string("act_found_boot_info").format(lun=params['lun'], start=params['start_sector']))
             
             dev.fh_loader_write_part(
@@ -161,7 +161,7 @@ def write_anti_rollback(dev: device.DeviceController, skip_reset: bool = False) 
         print(get_string("act_arb_write_step3").format(slot=active_slot))
 
         print(get_string("act_write_boot").format(target=target_boot))
-        params_boot = _ensure_params_or_fail(target_boot)
+        params_boot = ensure_params_or_fail(target_boot)
         print(get_string("act_found_boot_info").format(lun=params_boot['lun'], start=params_boot['start_sector']))
         dev.fh_loader_write_part(
             port=port,
@@ -172,7 +172,7 @@ def write_anti_rollback(dev: device.DeviceController, skip_reset: bool = False) 
         print(get_string("act_write_boot_ok").format(target=target_boot))
 
         print(get_string("act_write_vbmeta").format(target=target_vbmeta))
-        params_vbmeta = _ensure_params_or_fail(target_vbmeta)
+        params_vbmeta = ensure_params_or_fail(target_vbmeta)
         print(get_string("act_found_vbmeta_info").format(lun=params_vbmeta['lun'], start=params_vbmeta['start_sector']))
         dev.fh_loader_write_part(
             port=port,
