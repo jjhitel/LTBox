@@ -17,23 +17,29 @@ from ltbox import utils
 class ToolError(Exception):
     pass
 
-def download_resource(url: str, dest_path: Path) -> None:
-    print(f"[*] Downloading {dest_path.name}...")
+def download_resource(url: str, dest_path: Path, lang: Optional[Dict[str, str]] = None) -> None:
+    lang = lang or {}
+    msg = lang.get('dl_downloading', "[*] Downloading {filename}...").format(filename=dest_path.name)
+    print(msg)
     try:
         with requests.get(url, stream=True, allow_redirects=True) as response:
             response.raise_for_status()
             with open(dest_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
-        print(f"[+] Downloaded {dest_path.name} successfully.")
+        msg_success = lang.get('dl_download_success', "[+] Downloaded {filename} successfully.").format(filename=dest_path.name)
+        print(msg_success)
     except Exception as e:
-        print(f"[!] Failed to download {url}: {e}", file=sys.stderr)
+        msg_err = lang.get('dl_download_failed', "[!] Failed to download {url}: {error}").format(url=url, error=e)
+        print(msg_err, file=sys.stderr)
         if dest_path.exists():
             dest_path.unlink()
         raise ToolError(f"Download failed for {dest_path.name}")
 
-def extract_archive_files(archive_path: Path, extract_map: Dict[str, Path]) -> None:
-    print(f"[*] Extracting files from {archive_path.name}...")
+def extract_archive_files(archive_path: Path, extract_map: Dict[str, Path], lang: Optional[Dict[str, str]] = None) -> None:
+    lang = lang or {}
+    msg = lang.get('dl_extracting', "[*] Extracting files from {filename}...").format(filename=archive_path.name)
+    print(msg)
     try:
         is_tar = archive_path.suffix == '.gz' or archive_path.suffix == '.tar'
         
@@ -46,7 +52,7 @@ def extract_archive_files(archive_path: Path, extract_map: Dict[str, Path]) -> N
                         if f:
                             with open(target_path, "wb") as target:
                                 shutil.copyfileobj(f, target)
-                            print(f"  > Extracted {target_path.name}")
+                            print(lang.get('dl_extracted_file', "  > Extracted {filename}").format(filename=target_path.name))
         else:
             with zipfile.ZipFile(archive_path, 'r') as zf:
                 for member in zf.infolist():
@@ -54,16 +60,18 @@ def extract_archive_files(archive_path: Path, extract_map: Dict[str, Path]) -> N
                         target_path = extract_map[member.filename]
                         with zf.open(member) as source, open(target_path, "wb") as target:
                             shutil.copyfileobj(source, target)
-                        print(f"  > Extracted {target_path.name}")
+                        print(lang.get('dl_extracted_file', "  > Extracted {filename}").format(filename=target_path.name))
                         
     except Exception as e:
-        print(f"[!] Failed to extract archive {archive_path.name}: {e}", file=sys.stderr)
+        msg_err = lang.get('dl_extract_failed', "[!] Failed to extract archive {filename}: {error}").format(filename=archive_path.name, error=e)
+        print(msg_err, file=sys.stderr)
         raise ToolError(f"Extraction failed for {archive_path.name}")
 
-def _run_fetch_command(args: List[str]) -> subprocess.CompletedProcess:
+def _run_fetch_command(args: List[str], lang: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
+    lang = lang or {}
     fetch_exe = DOWNLOAD_DIR / "fetch.exe"
     if not fetch_exe.exists():
-        print("[!] 'fetch.exe' not found. Cannot proceed.")
+        print(lang.get('dl_fetch_not_found', "[!] 'fetch.exe' not found. Cannot proceed."))
         raise FileNotFoundError("fetch.exe not found")
     
     command = [str(fetch_exe)] + args
@@ -74,22 +82,26 @@ def _ensure_tool_from_github_release(
     exe_name_in_zip: str, 
     repo_url: str, 
     tag: str, 
-    asset_patterns: Dict[str, str]
+    asset_patterns: Dict[str, str],
+    lang: Optional[Dict[str, str]] = None
 ) -> Path:
+    lang = lang or {}
     tool_exe = DOWNLOAD_DIR / f"{tool_name}.exe"
     if tool_exe.exists():
         return tool_exe
 
-    print(f"[!] '{tool_exe.name}' not found. Attempting to download...")
+    print(lang.get('dl_tool_not_found', "[!] '{tool_name}' not found. Attempting to download...").format(tool_name=tool_exe.name))
     DOWNLOAD_DIR.mkdir(exist_ok=True)
     
     arch = platform.machine()
     asset_pattern = asset_patterns.get(arch)
     if not asset_pattern:
-        print(f"[!] Unsupported architecture: {arch} for {tool_name}. Aborting.", file=sys.stderr)
+        msg = lang.get('dl_unsupported_arch', "[!] Unsupported architecture: {arch} for {tool_name}. Aborting.").format(arch=arch, tool_name=tool_name)
+        print(msg, file=sys.stderr)
         raise ToolError(f"Unsupported architecture for {tool_name}")
 
-    print(f"[*] Detected {arch} architecture. Downloading asset matching '{asset_pattern}'...")
+    msg = lang.get('dl_detect_arch', "[*] Detected {arch} architecture. Downloading asset matching '{pattern}'...").format(arch=arch, pattern=asset_pattern)
+    print(msg)
 
     try:
         fetch_command = [
@@ -98,7 +110,7 @@ def _ensure_tool_from_github_release(
             "--release-asset", asset_pattern,
             str(DOWNLOAD_DIR)
         ]
-        _run_fetch_command(fetch_command)
+        _run_fetch_command(fetch_command, lang)
 
         downloaded_zips = list(DOWNLOAD_DIR.glob(f"*{tool_name}*.zip"))
         if not downloaded_zips:
@@ -130,14 +142,15 @@ def _ensure_tool_from_github_release(
                     shutil.rmtree(parent_dir, ignore_errors=True)
 
         downloaded_zip_path.unlink()
-        print(f"[+] {tool_name} download and extraction successful.")
+        print(lang.get('dl_tool_success', "[+] {tool_name} download and extraction successful.").format(tool_name=tool_name))
         return tool_exe
 
     except Exception as e:
-        print(f"[!] Error downloading or extracting {tool_name}: {e}", file=sys.stderr)
+        msg_err = lang.get('dl_tool_failed', "[!] Error downloading or extracting {tool_name}: {error}").format(tool_name=tool_name, error=e)
+        print(msg_err, file=sys.stderr)
         raise ToolError(f"Failed to ensure {tool_name}")
 
-def ensure_fetch() -> Path:
+def ensure_fetch(lang: Optional[Dict[str, str]] = None) -> Path:
     tool_exe = DOWNLOAD_DIR / "fetch.exe"
     if tool_exe.exists():
         return tool_exe
@@ -155,18 +168,19 @@ def ensure_fetch() -> Path:
          raise ToolError(f"Unsupported architecture for fetch: {arch}")
 
     url = f"{FETCH_REPO_URL}/releases/download/{FETCH_VERSION}/{asset_name}"
-    download_resource(url, tool_exe)
+    download_resource(url, tool_exe, lang)
     return tool_exe
 
-def ensure_platform_tools() -> None:
+def ensure_platform_tools(lang: Optional[Dict[str, str]] = None) -> None:
+    lang = lang or {}
     if ADB_EXE.exists() and FASTBOOT_EXE.exists():
         return
     
-    print("[!] platform-tools (adb, fastboot) not found. Downloading...")
+    print(lang.get('dl_platform_not_found', "[!] platform-tools (adb, fastboot) not found. Downloading..."))
     DOWNLOAD_DIR.mkdir(exist_ok=True)
     temp_zip_path = DOWNLOAD_DIR / "platform-tools.zip"
     
-    download_resource(PLATFORM_TOOLS_ZIP_URL, temp_zip_path)
+    download_resource(PLATFORM_TOOLS_ZIP_URL, temp_zip_path, lang)
     
     try:
         with zipfile.ZipFile(temp_zip_path) as zf:
@@ -181,26 +195,28 @@ def ensure_platform_tools() -> None:
                         shutil.copyfileobj(source, target)
                         
         temp_zip_path.unlink()
-        print("[+] platform-tools extracted successfully.")
+        print(lang.get('dl_platform_success', "[+] platform-tools extracted successfully."))
         
     except Exception as e:
-        print(f"[!] Failed to extract platform-tools: {e}", file=sys.stderr)
+        msg_err = lang.get('dl_platform_failed', "[!] Failed to extract platform-tools: {error}").format(error=e)
+        print(msg_err, file=sys.stderr)
         if temp_zip_path.exists():
             temp_zip_path.unlink()
         raise ToolError("Failed to process platform-tools")
 
-def ensure_avb_tools() -> None:
+def ensure_avb_tools(lang: Optional[Dict[str, str]] = None) -> None:
+    lang = lang or {}
     key1 = DOWNLOAD_DIR / "testkey_rsa4096.pem"
     key2 = DOWNLOAD_DIR / "testkey_rsa2048.pem"
     
     if AVBTOOL_PY.exists() and key1.exists() and key2.exists():
         return
 
-    print("[!] avbtool or keys not found. Downloading from AOSP...")
+    print(lang.get('dl_avb_not_found', "[!] avbtool or keys not found. Downloading from AOSP..."))
     DOWNLOAD_DIR.mkdir(exist_ok=True)
     temp_tar_path = DOWNLOAD_DIR / "avb.tar.gz"
     
-    download_resource(AVB_ARCHIVE_URL, temp_tar_path)
+    download_resource(AVB_ARCHIVE_URL, temp_tar_path, lang)
 
     files_to_extract = {
         "avbtool.py": AVBTOOL_PY,
@@ -208,11 +224,11 @@ def ensure_avb_tools() -> None:
         "test/data/testkey_rsa2048.pem": key2,
     }
 
-    extract_archive_files(temp_tar_path, files_to_extract)
+    extract_archive_files(temp_tar_path, files_to_extract, lang)
     temp_tar_path.unlink()
-    print("[+] avbtool and keys ready.")
+    print(lang.get('dl_avb_ready', "[+] avbtool and keys ready."))
 
-def ensure_magiskboot() -> Path:
+def ensure_magiskboot(lang: Optional[Dict[str, str]] = None) -> Path:
     asset_patterns = {
         'AMD64': "magiskboot-.*-windows-.*-x86_64-standalone\\.zip",
         'ARM64': "magiskboot-.*-windows-.*-arm64-standalone\\.zip",
@@ -224,64 +240,69 @@ def ensure_magiskboot() -> Path:
             exe_name_in_zip="magiskboot.exe",
             repo_url=MAGISKBOOT_REPO_URL,
             tag=MAGISKBOOT_TAG,
-            asset_patterns=asset_patterns
+            asset_patterns=asset_patterns,
+            lang=lang
         )
     except ToolError:
         sys.exit(1)
 
-def get_gki_kernel(kernel_version: str, work_dir: Path) -> Path:
-    print("\n[3/8] Downloading GKI Kernel with fetch...")
+def get_gki_kernel(kernel_version: str, work_dir: Path, lang: Optional[Dict[str, str]] = None) -> Path:
+    lang = lang or {}
+    print(lang.get('dl_gki_downloading', "\n[3/8] Downloading GKI Kernel with fetch..."))
     asset_pattern = f".*{kernel_version}.*Normal-AnyKernel3.zip"
     fetch_command = [
         "--repo", REPO_URL, "--tag", RELEASE_TAG,
         "--release-asset", asset_pattern, str(work_dir)
     ]
-    _run_fetch_command(fetch_command)
+    _run_fetch_command(fetch_command, lang)
 
     downloaded_files = list(work_dir.glob(f"*{kernel_version}*Normal-AnyKernel3.zip"))
     if not downloaded_files:
-        print(f"[!] Failed to download Normal AnyKernel3.zip for kernel {kernel_version}.")
+        print(lang.get('dl_gki_download_fail', "[!] Failed to download Normal AnyKernel3.zip for kernel {version}.").format(version=kernel_version))
         sys.exit(1)
     
     anykernel_zip = work_dir / ANYKERNEL_ZIP_FILENAME
     shutil.move(downloaded_files[0], anykernel_zip)
-    print("[+] Download complete.")
+    print(lang.get('dl_gki_download_ok', "[+] Download complete."))
 
-    print("\n[4/8] Extracting new kernel image...")
+    print(lang.get('dl_gki_extracting', "\n[4/8] Extracting new kernel image..."))
     extracted_kernel_dir = work_dir / "extracted_kernel"
     with zipfile.ZipFile(anykernel_zip, 'r') as zip_ref:
         zip_ref.extractall(extracted_kernel_dir)
     
     kernel_image = extracted_kernel_dir / "Image"
     if not kernel_image.exists():
-        print("[!] 'Image' file not found in the downloaded zip.")
+        print(lang.get('dl_gki_image_missing', "[!] 'Image' file not found in the downloaded zip."))
         sys.exit(1)
-    print("[+] Extraction successful.")
+    print(lang.get('dl_gki_extract_ok', "[+] Extraction successful."))
     return kernel_image
 
-def download_ksu_apk(target_dir: Path) -> None:
-    print("\n[7/8] Downloading KernelSU Next Manager APKs (Spoofed)...")
+def download_ksu_apk(target_dir: Path, lang: Optional[Dict[str, str]] = None) -> None:
+    lang = lang or {}
+    print(lang.get('dl_ksu_downloading', "\n[7/8] Downloading KernelSU Next Manager APKs (Spoofed)..."))
     if list(target_dir.glob("*spoofed*.apk")):
-        print("[+] KernelSU Next Manager (Spoofed) APK already exists. Skipping download.")
+        print(lang.get('dl_ksu_exists', "[+] KernelSU Next Manager (Spoofed) APK already exists. Skipping download."))
     else:
         ksu_apk_command = [
             "--repo", f"https://github.com/{KSU_APK_REPO}", "--tag", KSU_APK_TAG,
             "--release-asset", ".*spoofed.*\\.apk", str(target_dir)
         ]
-        _run_fetch_command(ksu_apk_command)
-        print("[+] KernelSU Next Manager (Spoofed) APKs downloaded to the main directory (if found).")
+        _run_fetch_command(ksu_apk_command, lang)
+        print(lang.get('dl_ksu_success', "[+] KernelSU Next Manager (Spoofed) APKs downloaded to the main directory (if found)."))
 
 if __name__ == "__main__":
+    lang = {} 
     if len(sys.argv) > 1 and sys.argv[1] == "install_base_tools":
-        print("--- Installing Base Tools ---")
+        print(lang.get('dl_base_installing', "--- Installing Base Tools ---"))
         DOWNLOAD_DIR.mkdir(exist_ok=True)
         try:
-            ensure_fetch()
-            ensure_platform_tools()
-            ensure_avb_tools()
-            print("--- Base Tools Installation Complete ---")
+            ensure_fetch(lang)
+            ensure_platform_tools(lang)
+            ensure_avb_tools(lang)
+            print(lang.get('dl_base_complete', "--- Base Tools Installation Complete ---"))
         except Exception as e:
-            print(f"\n[!] An error occurred during base tool installation: {e}", file=sys.stderr)
+            msg = lang.get('dl_base_error', "\n[!] An error occurred during base tool installation: {error}").format(error=e)
+            print(msg, file=sys.stderr)
             if platform.system() == "Windows":
                 os.system("pause")
             sys.exit(1)
