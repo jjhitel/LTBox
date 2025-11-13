@@ -32,6 +32,7 @@ if not exist "%MAIN_PY%" (
 
 :: --- 3. Run Main Python Script ---
 "%PYTHON_EXE%" "%MAIN_PY%"
+goto :eof
 
 :: --- 6. Exit ---
 :cleanup
