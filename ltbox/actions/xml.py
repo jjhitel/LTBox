@@ -10,13 +10,12 @@ from .. import utils
 from ..crypto import decrypt_file
 from ..i18n import get_string
 
-def _modify_xml_algo(wipe: int = 0) -> None:
-    def is_garbage_file(path: Path) -> bool:
-        name = path.name.lower()
-        stem = path.stem.lower()
-        if stem == "rawprogram_unsparse0": return True
-        if "wipe_partitions" in name or "blank_gpt" in name: return True
-        return False
+def decrypt_x_files() -> None:
+    print(get_string("act_start_decrypt_xml"))
+    
+    print(get_string("act_wait_image"))
+    prompt = get_string("act_prompt_image")
+    utils.wait_for_directory(const.IMAGE_DIR, prompt)
 
     if const.OUTPUT_XML_DIR.exists():
         shutil.rmtree(const.OUTPUT_XML_DIR)
@@ -59,6 +58,20 @@ def _modify_xml_algo(wipe: int = 0) -> None:
         print(get_string("img_xml_no_files").format(dir=const.IMAGE_DIR.name))
         shutil.rmtree(const.OUTPUT_XML_DIR)
         raise FileNotFoundError(get_string("img_xml_no_files").format(dir=const.IMAGE_DIR.name))
+    
+    print("\n" + "=" * 61)
+    print(get_string("act_success"))
+    print(get_string("act_xml_ready").format(dir=const.OUTPUT_XML_DIR.name))
+    print("=" * 61)
+
+
+def _modify_xml_algo(wipe: int = 0) -> None:
+    def is_garbage_file(path: Path) -> bool:
+        name = path.name.lower()
+        stem = path.stem.lower()
+        if stem == "rawprogram_unsparse0": return True
+        if "wipe_partitions" in name or "blank_gpt" in name: return True
+        return False
 
     rawprogram4 = const.OUTPUT_XML_DIR / "rawprogram4.xml"
     rawprogram_unsparse4 = const.OUTPUT_XML_DIR / "rawprogram_unsparse4.xml"
@@ -181,13 +194,10 @@ def _modify_xml_algo(wipe: int = 0) -> None:
 def modify_xml(wipe: int = 0, skip_dp: bool = False) -> None:
     print(get_string("act_start_xml_mod"))
     
-    print(get_string("act_wait_image"))
-    prompt = get_string("act_prompt_image")
-    utils.wait_for_directory(const.IMAGE_DIR, prompt)
-
-    if const.OUTPUT_XML_DIR.exists():
-        shutil.rmtree(const.OUTPUT_XML_DIR)
-    const.OUTPUT_XML_DIR.mkdir(exist_ok=True)
+    if not const.OUTPUT_XML_DIR.exists() or not any(const.OUTPUT_XML_DIR.iterdir()):
+        print(get_string("act_err_no_xml_output_folder").format(dir=const.OUTPUT_XML_DIR.name), file=sys.stderr)
+        print(get_string("act_err_run_decrypt_first"), file=sys.stderr)
+        raise FileNotFoundError(get_string("act_err_run_decrypt_first"))
 
     with utils.temporary_workspace(const.WORKING_DIR):
         print(get_string("act_create_temp").format(dir=const.WORKING_DIR.name))

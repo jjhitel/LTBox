@@ -29,5 +29,6 @@ from .system import (
 )
 
 from .xml import (
-    modify_xml
+    modify_xml,
+    decrypt_x_files
 )

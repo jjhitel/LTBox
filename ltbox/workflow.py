@@ -70,6 +70,7 @@ def patch_all(dev: device.DeviceController, wipe: int = 0) -> None:
         print("\n" + "="*61)
         print(get_string('wf_step5_modify_xml'))
         print("="*61)
+        actions.decrypt_x_files()
         actions.modify_xml(wipe=wipe)
         print(get_string('wf_step5_complete'))
         

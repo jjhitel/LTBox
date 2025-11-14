@@ -80,7 +80,8 @@ def run_task(command, title, dev, command_map):
             
             no_dev_needed = {
                 "root_boot_only", "edit_dp", "read_anti_rollback", 
-                "patch_anti_rollback", "clean", "modify_xml", "modify_xml_wipe"
+                "patch_anti_rollback", "clean", "modify_xml", "modify_xml_wipe",
+                "decrypt_xml"
             }
             
             if command not in no_dev_needed:
@@ -184,8 +185,9 @@ def print_advanced_menu():
     print(get_string("menu_adv_8"))
     print(get_string("menu_adv_9"))
     print(get_string("menu_adv_10"))
-    print("\n" + get_string("menu_adv_11"))
-    print(get_string("menu_adv_m"))
+    print(get_string("menu_adv_11"))
+    print(get_string("menu_adv_12"))
+    print("\n" + get_string("menu_adv_m"))
     print("\n  " + "=" * 58 + "\n")
 
 def advanced_menu(dev, command_map):
@@ -196,11 +198,12 @@ def advanced_menu(dev, command_map):
         "4": ("write_edl", get_string("task_title_write_devinfo")),
         "5": ("read_anti_rollback", get_string("task_title_read_arb")),
         "6": ("patch_anti_rollback", get_string("task_title_patch_arb")),
-        "7" : ("write_anti_rollback", get_string("task_title_write_arb")),
-        "8": ("modify_xml_wipe", get_string("task_title_modify_xml_wipe")),
-        "9": ("modify_xml", get_string("task_title_modify_xml_nowipe")),
-        "10": ("flash_edl", get_string("task_title_flash_edl")),
-        "11": ("clean", get_string("task_title_clean"))
+        "7": ("write_anti_rollback", get_string("task_title_write_arb")),
+        "8": ("decrypt_xml", get_string("task_title_decrypt_xml")),
+        "9": ("modify_xml_wipe", get_string("task_title_modify_xml_wipe")),
+        "10": ("modify_xml", get_string("task_title_modify_xml_nowipe")),
+        "11": ("flash_edl", get_string("task_title_flash_edl")),
+        "12": ("clean", get_string("task_title_clean"))
     }
 
     while True:
@@ -210,7 +213,7 @@ def advanced_menu(dev, command_map):
         if choice in actions_map:
             cmd, title = actions_map[choice]
             run_task(cmd, title, dev, command_map)
-            if choice == "11":
+            if choice == "12":
                 sys.exit()
         elif choice == "m":
             return
@@ -334,6 +337,7 @@ def entry_point():
                 "patch_anti_rollback": (a.patch_anti_rollback, {}),
                 "write_anti_rollback": (a.write_anti_rollback, {}),
                 "clean": (u.clean_workspace, {}),
+                "decrypt_xml": (a.decrypt_x_files, {}),
                 "modify_xml": (a.modify_xml, {"wipe": 0}),
                 "modify_xml_wipe": (a.modify_xml, {"wipe": 1}),
                 "flash_edl": (a.flash_edl, {}),
