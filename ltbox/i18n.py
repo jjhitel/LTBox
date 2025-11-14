@@ -85,4 +85,3 @@ def get_string(key: str, default: str = "") -> str:
     if val:
         return val
     return f"[{key}]"
-}

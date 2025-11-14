@@ -364,8 +364,8 @@ def entry_point():
             
             if platform.system() == "Windows":
                 os.system("pause")
-    else:
-        main_loop(device_controller_class, COMMAND_MAP)
+        else:
+            main_loop(device_controller_class, COMMAND_MAP)
 
     except (RuntimeError, ToolError) as e:
         print(f"\n[!] A fatal error occurred. Aborting.", file=sys.stderr)
