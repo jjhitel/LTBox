@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-from ltbox import i18n
-from ltbox.logger import logging_context
+from . import i18n
+from .logger import logging_context
 
 APP_DIR = Path(__file__).parent.resolve()
 BASE_DIR = APP_DIR.parent
@@ -33,7 +33,7 @@ def setup_console():
         except Exception as e:
             print(f"[!] Warning: Failed to set console title: {e}", file=sys.stderr)
 
-from ltbox.i18n import get_string
+from .i18n import get_string
 
 def check_path_encoding():
     current_path = str(Path(__file__).parent.parent.resolve())
@@ -321,9 +321,9 @@ def entry_point():
         sys.exit(1)
 
     try:
-        from ltbox import utils as u, actions as a, workflow as w, device as d
-        from ltbox import constants as c
-        from ltbox.patch import avb as avb
+        from . import utils as u, actions as a, workflow as w, device as d
+        from . import constants as c
+        from .patch import avb as avb
         
         utils, actions, workflow, device, constants, avb_patch = u, a, w, d, c, avb
         

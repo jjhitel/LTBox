@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Callable, Generator, Any, Union, Dict, Tuple
 
-from ltbox import constants as const
+from . import constants as const
 from .i18n import get_string
 
 _CACHED_ENV = None

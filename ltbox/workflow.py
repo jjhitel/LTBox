@@ -3,9 +3,9 @@ import sys
 import shutil
 from typing import Optional, Dict
 
-from ltbox import constants as const
-from ltbox import utils, device, actions
-from ltbox.i18n import get_string
+from . import constants as const
+from . import utils, device, actions
+from .i18n import get_string
 
 def patch_all(dev: device.DeviceController, wipe: int = 0) -> None:
     

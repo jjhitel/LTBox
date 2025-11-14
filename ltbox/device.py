@@ -7,8 +7,8 @@ import serial.tools.list_ports
 from pathlib import Path
 from typing import Optional, List, Dict
 
-from ltbox import constants as const
-from ltbox import utils
+from . import constants as const
+from . import utils
 from .i18n import get_string
 
 class DeviceController:

@@ -5,9 +5,9 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from ltbox import constants as const
-from ltbox import utils
-from ltbox.i18n import get_string
+from .. import constants as const
+from .. import utils
+from ..i18n import get_string
 
 _avbtool_module = None
 
