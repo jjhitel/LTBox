@@ -70,21 +70,15 @@ def run_task(command, title, dev, command_map):
 
     try:
         with logging_context(log_file):
-            func_tuple = command_map.get(command)
-            if not func_tuple:
+            task_info = command_map.get(command)
+            if not task_info:
                 print(get_string("unknown_command").format(command=command), file=sys.stderr)
                 return
             
-            func, base_kwargs = func_tuple
-            final_kwargs = base_kwargs.copy()
+            func = task_info["func"]
+            final_kwargs = task_info["kwargs"].copy()
             
-            no_dev_needed = {
-                "root_boot_only", "edit_dp", "read_anti_rollback", 
-                "patch_anti_rollback", "clean", "modify_xml", "modify_xml_wipe",
-                "decrypt_xml"
-            }
-            
-            if command not in no_dev_needed:
+            if task_info["needs_dev"]:
                 final_kwargs["dev"] = dev
             
             func(**final_kwargs)
@@ -325,24 +319,24 @@ def entry_point():
             from .patch import avb as avb
             
             COMMAND_MAP = {
-                "convert": (a.convert_images, {}),
-                "root_device": (a.root_device, {}),
-                "root_boot_only": (a.root_boot_only, {}),
-                "unroot_device": (a.unroot_device, {}),
-                "disable_ota": (a.disable_ota, {}),
-                "edit_dp": (a.edit_devinfo_persist, {}),
-                "read_edl": (a.read_edl, {}),
-                "write_edl": (a.write_edl, {}),
-                "read_anti_rollback": (a.read_anti_rollback, {}),
-                "patch_anti_rollback": (a.patch_anti_rollback, {}),
-                "write_anti_rollback": (a.write_anti_rollback, {}),
-                "clean": (u.clean_workspace, {}),
-                "decrypt_xml": (a.decrypt_x_files, {}),
-                "modify_xml": (a.modify_xml, {"wipe": 0}),
-                "modify_xml_wipe": (a.modify_xml, {"wipe": 1}),
-                "flash_edl": (a.flash_edl, {}),
-                "patch_all": (w.patch_all, {"wipe": 0}),
-                "patch_all_wipe": (w.patch_all, {"wipe": 1}),
+                "convert": {"func": a.convert_images, "kwargs": {}, "needs_dev": True},
+                "root_device": {"func": a.root_device, "kwargs": {}, "needs_dev": True},
+                "root_boot_only": {"func": a.root_boot_only, "kwargs": {}, "needs_dev": False},
+                "unroot_device": {"func": a.unroot_device, "kwargs": {}, "needs_dev": True},
+                "disable_ota": {"func": a.disable_ota, "kwargs": {}, "needs_dev": True},
+                "edit_dp": {"func": a.edit_devinfo_persist, "kwargs": {}, "needs_dev": False},
+                "read_edl": {"func": a.read_edl, "kwargs": {}, "needs_dev": True},
+                "write_edl": {"func": a.write_edl, "kwargs": {}, "needs_dev": True},
+                "read_anti_rollback": {"func": a.read_anti_rollback, "kwargs": {}, "needs_dev": False},
+                "patch_anti_rollback": {"func": a.patch_anti_rollback, "kwargs": {}, "needs_dev": False},
+                "write_anti_rollback": {"func": a.write_anti_rollback, "kwargs": {}, "needs_dev": True},
+                "clean": {"func": u.clean_workspace, "kwargs": {}, "needs_dev": False},
+                "decrypt_xml": {"func": a.decrypt_x_files, "kwargs": {}, "needs_dev": False},
+                "modify_xml": {"func": a.modify_xml, "kwargs": {"wipe": 0}, "needs_dev": False},
+                "modify_xml_wipe": {"func": a.modify_xml, "kwargs": {"wipe": 1}, "needs_dev": False},
+                "flash_edl": {"func": a.flash_edl, "kwargs": {}, "needs_dev": True},
+                "patch_all": {"func": w.patch_all, "kwargs": {"wipe": 0}, "needs_dev": True},
+                "patch_all_wipe": {"func": w.patch_all, "kwargs": {"wipe": 1}, "needs_dev": True},
             }
             
             device_controller_class = d.DeviceController
@@ -369,7 +363,7 @@ def entry_point():
             if platform.system() == "Windows":
                 os.system("pause")
         else:
-            main_loop(device_controller_class, COMMAND_MAP)
+            main_loop(device_controller_class, command_map)
 
     except (RuntimeError, ToolError) as e:
         print(f"\n[!] A fatal error occurred. Aborting.", file=sys.stderr)
