@@ -278,7 +278,7 @@ def download_ksu_apk(target_dir: Path) -> None:
         _run_fetch_command(ksu_apk_command)
         print(get_string("dl_ksu_success"))
 
-def _get_kernel_version_from_adb(dev: "device.DeviceController") -> str:
+def get_kernel_version_from_adb(dev: "device.DeviceController") -> str:
     from ltbox import device
     print(get_string("dl_lkm_get_kver"))
     result = utils.run_command(
@@ -324,15 +324,19 @@ def download_ksuinit(target_path: Path) -> None:
             target_path.unlink()
         raise ToolError(get_string("dl_err_download_tool").format(name="ksuinit"))
 
-def get_lkm_kernel(dev: "device.DeviceController", target_path: Path) -> None:
+def get_lkm_kernel(dev: "device.DeviceController", target_path: Path, kernel_version_str: Optional[str] = None) -> None:
     from ltbox import device
     if target_path.exists():
         target_path.unlink()
         
-    kernel_version = _get_kernel_version_from_adb(dev)
+    kernel_version = kernel_version_str
+    if not kernel_version:
+        kernel_version = get_kernel_version_from_adb(dev)
+    else:
+        print(get_string("dl_lkm_kver_found").format(ver=kernel_version))
     
     asset_pattern_regex = f"android.*-{kernel_version}_kernelsu.ko"
-    print(get_string("dl_lkm_downloading").format(asset=f"*{kernel_version}_kernelsu.ko"))
+    print(get_string("dl_lkm_downloading").format(asset=asset_pattern_regex))
     
     fetch_command = [
         "--repo", f"https://github.com/{const.KSU_APK_REPO}",

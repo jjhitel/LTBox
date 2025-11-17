@@ -13,7 +13,8 @@ def patch_boot_with_root_algo(
     work_dir: Path, 
     magiskboot_exe: Path, 
     dev: Optional[device.DeviceController] = None, 
-    gki: bool = False
+    gki: bool = False,
+    lkm_kernel_version: Optional[str] = None
 ) -> Optional[Path]:
     
     img_name = "boot.img" if gki else "init_boot.img"
@@ -82,7 +83,7 @@ def patch_boot_with_root_algo(
             ksuinit_path = work_dir / "init"
             kmod_path = work_dir / "kernelsu.ko"
             downloader.download_ksuinit(ksuinit_path)
-            downloader.get_lkm_kernel(dev, kmod_path)
+            downloader.get_lkm_kernel(dev, kmod_path, lkm_kernel_version)
         except Exception as e:
             print(get_string("img_root_lkm_download_fail").format(e=e), file=sys.stderr)
             return None

@@ -10,7 +10,7 @@ from typing import Optional, Dict
 
 from .. import constants as const
 from .. import utils, device, downloader
-from ..downloader import ensure_magiskboot
+from ..downloader import ensure_magiskboot, get_kernel_version_from_adb
 from ..errors import ToolError
 from ..partition import ensure_params_or_fail
 from .system import detect_active_slot_robust
@@ -166,6 +166,7 @@ def root_boot_only(gki: bool = False) -> None:
 
     patched_boot_path = None
     patched_vbmeta_path = None
+    lkm_kernel_version: Optional[str] = None
 
     with utils.temporary_workspace(const.WORK_DIR):
         shutil.copy(boot_img, const.WORK_DIR / img_name)
@@ -183,6 +184,7 @@ def root_boot_only(gki: bool = False) -> None:
             try:
                 dev = device.DeviceController(skip_adb=False)
                 dev.wait_for_adb()
+                lkm_kernel_version = get_kernel_version_from_adb(dev)
                 patched_boot_path = _patch_lkm_via_app(dev, const.WORK_DIR, img_name)
             except Exception as e:
                 print(get_string("act_err_adb_process").format(e=e), file=sys.stderr)
@@ -270,6 +272,18 @@ def root_device(dev: device.DeviceController, gki: bool = False) -> None:
         dev.wait_for_adb()
 
     active_slot = detect_active_slot_robust(dev)
+    
+    lkm_kernel_version: Optional[str] = None
+    if not gki:
+        if not dev.skip_adb:
+            try:
+                lkm_kernel_version = get_kernel_version_from_adb(dev)
+            except Exception as e:
+                print(f"[!] Warning: Could not get kernel version via ADB: {e}", file=sys.stderr)
+                print("[!] Will attempt to get it later, but this may fail if device is rebooting.")
+        else:
+            print("[!] LKM root with 'Skip ADB' is not supported as it needs the kernel version.", file=sys.stderr)
+            raise ToolError("LKM root requires ADB to get kernel version.")
 
     target_partition = ""
     target_vbmeta_partition = ""
@@ -388,7 +402,11 @@ def root_device(dev: device.DeviceController, gki: bool = False) -> None:
         else:
             print(get_string("act_root_step4_init_boot"))
             
-        patched_boot_path = patch_boot_with_root_algo(const.WORKING_BOOT_DIR, magiskboot_exe, dev=dev, gki=gki)
+        patched_boot_path = patch_boot_with_root_algo(
+            const.WORKING_BOOT_DIR, magiskboot_exe, 
+            dev=dev, gki=gki,
+            lkm_kernel_version=lkm_kernel_version
+        )
 
         if not (patched_boot_path and patched_boot_path.exists()):
             print(get_string("act_err_root_fail"), file=sys.stderr)
