@@ -16,7 +16,6 @@ from ltbox import constants as const
 from ltbox import utils
 from ltbox.i18n import get_string, load_lang as i18n_load_lang
 from ltbox.errors import ToolError
-from ltbox import device
 
 def download_resource(url: str, dest_path: Path) -> None:
     import requests
@@ -279,7 +278,8 @@ def download_ksu_apk(target_dir: Path) -> None:
         _run_fetch_command(ksu_apk_command)
         print(get_string("dl_ksu_success"))
 
-def _get_kernel_version_from_adb(dev: device.DeviceController) -> str:
+def _get_kernel_version_from_adb(dev: "device.DeviceController") -> str:
+    from ltbox import device
     print(get_string("dl_lkm_get_kver"))
     result = utils.run_command(
         [str(const.ADB_EXE), "shell", "cat", "/proc/version"],
@@ -324,7 +324,8 @@ def download_ksuinit(target_path: Path) -> None:
             target_path.unlink()
         raise ToolError(get_string("dl_err_download_tool").format(name="ksuinit"))
 
-def get_lkm_kernel(dev: device.DeviceController, target_path: Path) -> None:
+def get_lkm_kernel(dev: "device.DeviceController", target_path: Path) -> None:
+    from ltbox import device
     if target_path.exists():
         target_path.unlink()
         
