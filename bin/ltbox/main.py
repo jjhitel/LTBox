@@ -6,7 +6,7 @@ import sys
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Callable, Any
 
 from . import downloader, i18n
 from .logger import logging_context
@@ -463,8 +463,8 @@ def entry_point():
             from . import utils as u, actions as a, workflow as w, device as d
             from . import constants as c
             from .patch import avb as avb
-            
-            COMMAND_MAP = {
+
+            COMMAND_MAP: Dict[str, Tuple[Callable[..., Any], Dict[str, Any]]] = {
                 "convert": (a.convert_images, {}),
                 "root_device_gki": (a.root_device, {"gki": True}),
                 "root_boot_only_gki": (a.root_boot_only, {"gki": True}),
