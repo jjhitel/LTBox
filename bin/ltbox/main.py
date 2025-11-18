@@ -76,8 +76,7 @@ def run_task(command, title, dev, command_map):
         with logging_context(log_file):
             func_tuple = command_map.get(command)
             if not func_tuple:
-                print(get_string("unknown_command").format(command=command), file=sys.stderr)
-                return
+                raise ToolError(get_string("unknown_command").format(command=command))
             
             func, base_kwargs = func_tuple
             final_kwargs = base_kwargs.copy()
@@ -92,11 +91,43 @@ def run_task(command, title, dev, command_map):
             if command not in no_dev_needed:
                 final_kwargs["dev"] = dev
             
-            func(**final_kwargs)
+            result = func(**final_kwargs)
 
-    except (subprocess.CalledProcessError, FileNotFoundError, RuntimeError, KeyError, ToolError) as e:
+            print("\n" + "=" * 61)
+            print(get_string("act_success"))
+            print("=" * 61)
+
+            if isinstance(result, str) and result:
+                print(result)
+            elif isinstance(result, tuple) and command == "read_anti_rollback":
+                 print(get_string("act_arb_complete").format(status=result[0]))
+                 print(get_string("act_curr_boot_idx").format(idx=result[1]))
+                 print(get_string("act_curr_vbmeta_idx").format(idx=result[2]))
+            elif command == "clean":
+                pass
+            elif result:
+                print(get_string("act_unhandled_success_result").format(res=result))
+
+
+    except ToolError as e:
+        print("\n" + "!" * 61, file=sys.stderr)
+        print(get_string("task_failed").format(title=title), file=sys.stderr)
+        print(str(e), file=sys.stderr)
+        print("!" * 61, file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        print("\n" + "!" * 61, file=sys.stderr)
+        cmd_str = " ".join(e.cmd) if isinstance(e.cmd, list) else e.cmd
+        print(get_string("err_cmd_failed").format(cmd=cmd_str), file=sys.stderr)
+        if e.stdout:
+            print(f"--- STDOUT ---\n{e.stdout}", file=sys.stderr)
+        if e.stderr:
+            print(f"--- STDERR ---\n{e.stderr}", file=sys.stderr)
+        print("!" * 61, file=sys.stderr)
+    except (FileNotFoundError, RuntimeError, KeyError) as e:
         if not isinstance(e, SystemExit):
+            print("\n" + "!" * 61, file=sys.stderr)
             print(get_string("unexpected_error").format(e=e), file=sys.stderr)
+            print("!" * 61, file=sys.stderr)
     except SystemExit:
         print(get_string("process_halted"), file=sys.stderr)
     except KeyboardInterrupt:
