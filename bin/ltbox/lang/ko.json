@@ -743,5 +743,6 @@
   "img_avb_erase_footer_fail": "[*] 참고: 'erase_footer' 실패, 푸터가 없기 때문일 수 있습니다. ({e})",
   "img_avb_warn_key_fallback": "[!] 경고: 원본 키 SHA1 '{key}'가 key_map에 없습니다. '{fallback_name}'(으)로 대체합니다.",
   "img_avb_warn_algo_override": "[!] 경고: '{name}'의 알고리즘이 '{algo}'입니다. 'NONE'이 아닙니다. NONE으로 강제합니다.",
-  "img_avb_apply_footer": "[*] '{name}'에 Algorithm={algo}(으)로 해시 푸터 적용 중..."
+  "img_avb_apply_footer": "[*] '{name}'에 Algorithm={algo}(으)로 해시 푸터 적용 중...",
+  "act_err_arb_early_fw": "필요한 파티션들을 덤프하여 확인했지만 롤백 인덱스가 존재하지 않습니다. 기기의 펌웨어가 극초기 버전일 경우 이런 현상이 발생할 수 있으며 OTA 업데이트를 1회 진행 후 다시 시도하세요."
 }

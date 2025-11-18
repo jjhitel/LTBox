@@ -32,6 +32,10 @@ def read_anti_rollback(dumped_boot_path: Path, dumped_vbmeta_path: Path) -> Tupl
         current_vbmeta_rb = int(vbmeta_info.get('rollback', '0'))
         
     except Exception as e:
+        print("\n" + "!" * 61, file=sys.stderr)
+        print(get_string("act_err_arb_early_fw"), file=sys.stderr)
+        print("!" * 61 + "\n", file=sys.stderr)
+        
         print(get_string("act_err_avb_info").format(e=e), file=sys.stderr)
         print(get_string("act_arb_error"))
         return 'ERROR', 0, 0
