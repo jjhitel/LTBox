@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List, Tuple, Dict, Callable, Any
 
 from . import downloader, i18n
+from .i18n import get_string
 from .logger import logging_context
 
 APP_DIR = Path(__file__).parent.resolve()
