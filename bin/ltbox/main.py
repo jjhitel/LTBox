@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple, Dict, Callable, Any
+from typing import Tuple, Dict, Callable, Any
 
 from . import downloader, i18n
 from .i18n import get_string

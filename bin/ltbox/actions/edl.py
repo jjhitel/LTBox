@@ -4,7 +4,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Tuple
 
 from .. import constants as const
 from .. import utils, device

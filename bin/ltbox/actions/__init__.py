@@ -14,8 +14,7 @@ from .edl import (
 
 from .region import (
     convert_images,
-    edit_devinfo_persist,
-    select_country_code
+    edit_devinfo_persist
 )
 
 from .root import (

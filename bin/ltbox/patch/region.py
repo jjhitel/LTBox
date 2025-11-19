@@ -1,7 +1,7 @@
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Any, Tuple, Union
+from typing import Dict, Optional, Any, Tuple
 
 from .. import constants as const
 from .. import utils
