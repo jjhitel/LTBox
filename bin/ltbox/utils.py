@@ -58,10 +58,31 @@ def run_command(
 ) -> subprocess.CompletedProcess:
     run_env = env if env is not None else _get_tool_env()
 
-    return subprocess.run(
-        command, shell=shell, check=check, capture_output=capture,
-        text=True, encoding='utf-8', errors='ignore', env=run_env, cwd=cwd
+    if capture:
+        return subprocess.run(
+            command, shell=shell, check=check, capture_output=True,
+            text=True, encoding='utf-8', errors='ignore', env=run_env, cwd=cwd
+        )
+
+    process = subprocess.Popen(
+        command, shell=shell, env=run_env, cwd=cwd,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding='utf-8', errors='ignore', bufsize=1
     )
+
+    output_lines = []
+    if process.stdout:
+        for line in process.stdout:
+            sys.stdout.write(line)
+            output_lines.append(line)
+    
+    process.wait()
+    returncode = process.returncode
+
+    if check and returncode != 0:
+        raise subprocess.CalledProcessError(returncode, command, output="".join(output_lines))
+
+    return subprocess.CompletedProcess(command, returncode, stdout="".join(output_lines), stderr=None)
 
 def get_platform_executable(name: str) -> Path:
     return const.DOWNLOAD_DIR / f"{name}.exe"
