@@ -84,7 +84,7 @@ def dump_partitions(dev: device.DeviceController, skip_reset: bool = False, addi
         except (ValueError, FileNotFoundError) as e:
             utils.ui.echo(get_string("act_skip_dump").format(target=target, e=e))
         except Exception as e:
-            utils.ui.error(get_string("act_err_dump").format(part=target, e=e))
+            utils.ui.error(get_string("act_err_dump").format(target=target, e=e))
 
         utils.ui.echo(get_string("act_wait_stability"))
         time.sleep(5)
