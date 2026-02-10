@@ -2,6 +2,8 @@
 
 [🇰🇷 한국어](READMEs/README_ko-KR.md)
 
+[🇨🇳 简体中文](READMEs/README_zh-CN.md)
+
 [![License: CC BY-NC-SA 4.0][cc-by-nc-sa-shield]][cc-by-nc-sa]
 
 ## ⚠️ Important: Disclaimer
@@ -11,6 +13,14 @@
 Modifying your device's firmware carries significant risks, including but not limited to, bricking your device, data loss, or voiding your warranty. The author **assumes no liability** and is not responsible for any **damage or consequence** that may occur to **your device or anyone else's device** from using these scripts.
 
 **You are solely responsible for any consequences. Use at your own absolute risk.**
+
+## Where can I get the official ROMs?
+
+Install [Lenovo Software Fix](https://support.lenovo.com/us/en/downloads/ds101291-rescue-and-smart-assistant-lmsa).
+Login Lenovo account.
+Enter your device Serial Number and download [ROW / Global] region ROM.
+
+The downloaded ROM will be stored in `C:/ProgramData/RSA/Download/RomFiles/`
 
 ---
 
