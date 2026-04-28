@@ -80,7 +80,7 @@ serialport = "4"
 
 # GUI
 iced = { version = "0.14", features = ["tokio", "svg", "image", "advanced"] }
-iced_aw = { version = "0.13", default-features = false, features = ["badge", "card", "menu", "selection_list", "drop_down", "spinner"] }
+iced_aw = { version = "0.14", default-features = false, features = ["badge", "card", "menu", "selection_list", "drop_down", "spinner"] }
 rfd = "0.17"
 dirs = "6"
 fs2 = "0.4"
