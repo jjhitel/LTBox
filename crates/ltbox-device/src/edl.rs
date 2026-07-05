@@ -122,7 +122,41 @@ pub fn find_edl_port() -> Result<String> {
             return Ok(port.port_name.clone());
         }
     }
+
+    #[cfg(windows)]
+    {
+        if let Some(port_name) = fallback_find_qcom_port_wmi() {
+            if ports.iter().any(|p| p.port_name == port_name) {
+                return Ok(port_name);
+            }
+        }
+    }
+
     Err(EdlError::PortNotFound)
+}
+
+#[cfg(windows)]
+fn fallback_find_qcom_port_wmi() -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg("Get-CimInstance Win32_PnPEntity -Filter \"Name LIKE '%9008%(COM%'\" | Select-Object -First 1 -ExpandProperty Name");
+
+    let output = cmd.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    let start = stdout.rfind("(COM")?;
+    let end = stdout[start..].find(')')?;
+    Some(stdout[start + 1..start + end].to_string())
 }
 
 pub fn check_device() -> bool {
