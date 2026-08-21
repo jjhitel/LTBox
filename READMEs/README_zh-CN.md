@@ -33,6 +33,7 @@ LTBox 是以侧边栏为核心的桌面 GUI，每个入口都会打开一个引�
 | **系统更新** | 禁用或重新启用 OTA 更新；**启动恢复**可救回区域转换后因 OTA 而无法启动的设备 |
 | **获取 Root** | 使用 KernelSU / KernelSU Next / SukiSU Ultra / ReSukiSU / APatch / FolkPatch / Magisk（及分支）获取 Root |
 | **取消 Root** | 从之前的 Root 备份恢复原始引导镜像 |
+| **GPU 频率/电压** | 使用 KonaBess 修改设备 GPU 表，并重新构建和刷写受 AVB 保护的镜像 |
 | **重启** | 跳转到 System / Recovery / Bootloader / EDL |
 | **高级** | 手动逐步执行流水线步骤 — 见下方 |
 | **设置** | 语言（en/ko/zh/ru/ja）、主题（系统/浅色/深色）、强调色、默认 EDL 加载器路径 |

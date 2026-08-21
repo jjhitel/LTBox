@@ -1,6 +1,5 @@
 /target
 /dist
-crash.log
 ltbox.log
 
 # iced_lucide codegen output — regenerated every build from fonts/lucide.toml

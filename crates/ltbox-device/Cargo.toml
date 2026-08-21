@@ -19,7 +19,6 @@ serialport = { workspace = true }
 ureq = { workspace = true }
 roxmltree = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 zip = { workspace = true }
 
 # Windows-only: native SetupAPI + registry enumeration to resolve the EDL
@@ -31,5 +30,4 @@ windows-sys = { workspace = true, features = [
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_System_Registry",
     "Win32_System_SystemInformation",
-    "Win32_Foundation",
 ] }

@@ -33,6 +33,7 @@ LTBox is a sidebar-driven desktop GUI; each entry opens a guided wizard.
 | **System Updates** | Disable or re-enable OTA updates; **Boot Recovery** revives a region-converted device that won't boot after an OTA |
 | **Root Device** | Root with KernelSU / KernelSU Next / SukiSU Ultra / ReSukiSU / APatch / FolkPatch / Magisk (+ forks) |
 | **Unroot Device** | Restore the stock boot image from an earlier root backup |
+| **GPU Clock/Voltage** | Edit the device GPU table with KonaBess, then rebuild and flash the AVB-protected images |
 | **Reboot** | Jump to System, Recovery, Bootloader, or EDL |
 | **Advanced** | Run individual pipeline steps by hand — see below |
 | **Settings** | Language (en/ko/zh/ru/ja), theme (system/light/dark), accent color, default EDL loader path |

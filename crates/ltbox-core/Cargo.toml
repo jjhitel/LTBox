@@ -6,10 +6,8 @@ license.workspace = true
 
 [dependencies]
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tracing = { workspace = true }
 aes = { workspace = true }
 cbc = { workspace = true }
 sha2 = { workspace = true }
@@ -17,7 +15,6 @@ digest = { workspace = true }
 ureq = { workspace = true }
 roxmltree = { workspace = true }
 moka = { workspace = true }
-camino = { workspace = true }
 dirs = { workspace = true }
 semver = { workspace = true }
 

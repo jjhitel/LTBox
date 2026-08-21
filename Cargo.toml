@@ -30,7 +30,7 @@ serde_json = "1"
 
 # Crypto — RustCrypto 2026 bundle.
 aes = "0.9"
-cbc = { version = "0.2", features = ["alloc"] }
+cbc = "0.2"
 sha1 = "0.11"
 sha2 = "0.11"
 digest = "0.11"
@@ -38,7 +38,7 @@ getrandom = "0.4"
 
 # HTTP — ureq 3, pure-blocking rustls client. One-shot + small call
 # sites (GitHub JSON, nightly.link zip, Qualcomm driver zip).
-ureq = { version = "3", features = ["rustls", "json"] }
+ureq = { version = "3", features = ["json"] }
 
 # Zip (Qualcomm driver archive extraction)
 zip = { version = "8", default-features = false, features = ["deflate"] }
@@ -53,7 +53,7 @@ zstd = "0.13"
 # them in the log/UI. Introduced at low-blast-radius sites first; a full
 # sweep would touch ~100 call sites for a modest win so we keep `PathBuf`
 # everywhere else for now.
-camino = { version = "1", features = ["serde1"] }
+camino = "1"
 
 # XML
 roxmltree = "0.21"
@@ -82,7 +82,7 @@ adb_client = { version = "3", features = ["usb"] }
 # `to_pkcs8_pem` to write the LTBox-owned `adbkey` to disk on first
 # launch (avoids re-triggering the on-device "Allow USB debugging?"
 # prompt every run).
-rsa = { version = "0.9", features = ["pem"] }
+rsa = "0.9"
 
 # USB (for Fastboot).
 nusb = "0.2"
@@ -92,7 +92,7 @@ serialport = "4"
 
 # GUI
 iced = { version = "0.14", features = ["tokio", "svg", "image", "advanced", "canvas"] }
-iced_aw = { version = "0.14", default-features = false, features = ["badge", "card", "menu", "selection_list", "drop_down"] }
+iced_aw = { version = "0.14", default-features = false, features = ["drop_down"] }
 rfd = "0.17"
 dirs = "6"
 fs2 = "0.4"
@@ -103,7 +103,7 @@ open = "5"
 windows-sys = { version = "0.61", features = ["Win32_UI_Shell", "Win32_Foundation", "Win32_System_Console", "Win32_System_Threading"] }
 noto-fonts-dl = { version = "0.1", features = ["ja", "ko", "zh"] }
 winresource = "0.1"
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt"] }
 gptman = "3"
 os_pipe = "1"
 

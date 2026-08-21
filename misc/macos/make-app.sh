@@ -14,7 +14,7 @@
 #                          the Gatekeeper quarantine once (right-click → Open,
 #                          or `xattr -dr com.apple.quarantine LTBox.app`).
 #                          Developer-ID notarization only removes that one-time
-#                          prompt and is optional (plan S4).
+#                          prompt and is optional.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -152,7 +152,7 @@ if otool -L "$APP/Contents/MacOS/$BIN_NAME" \
     exit 1
 fi
 
-# 6. Sign. Developer ID + hardened runtime when an identity is provided (S4),
+# 6. Sign. Developer ID + hardened runtime when an identity is provided,
 #    else ad-hoc — arm64 requires at least an ad-hoc signature to run.
 ENTITLEMENTS="$HERE/LTBox.entitlements"
 if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then

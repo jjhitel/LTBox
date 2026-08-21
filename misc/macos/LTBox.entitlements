@@ -3,7 +3,7 @@
 <!--
   Hardened-runtime entitlements for LTBox.app. The USB entitlement lets
   libusb/nusb claim the Qualcomm 9008 (05c6:9008) EDL interface. Its actual
-  necessity under the hardened runtime is verified on hardware in plan S7.
+  necessity under the hardened runtime is verified on hardware.
   Not sandboxed (no App Store), so no com.apple.security.app-sandbox.
 -->
 <plist version="1.0">

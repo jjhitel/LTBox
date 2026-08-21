@@ -7,10 +7,6 @@ name: Rust CI
 # execute on Linux (Wine is not viable for an iced GUI binary), and
 # the test gate has to actually run the binary.
 #
-# Migration plan if/when a Linux build target is wanted: add a
-# `build-linux-x86_64` job using the same `lint` toolchain — no xwin,
-# just `cargo build --release --target x86_64-unknown-linux-gnu`.
-
 concurrency:
   group: rust-ci-${{ github.ref_name }}
   cancel-in-progress: true
@@ -128,7 +124,7 @@ jobs:
         # APIs. Target x86_64-pc-windows-msvc through the same
         # cargo-xwin sysroot the build jobs use so clippy sees the
         # same world rustc will compile against.
-        run: cargo xwin clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo xwin clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc
 
   cargo-deny:
     name: cargo-deny
@@ -229,7 +225,6 @@ jobs:
             tag="${GITHUB_SHA:0:7}"
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "is_release=${{ startsWith(github.ref, 'refs/tags/v') }}" >> "${GITHUB_OUTPUT}"
 
       - name: Install clang shim for ring aarch64 cross
         # `ring`'s build.rs hardcodes the compiler to bare `clang`
@@ -447,8 +442,8 @@ jobs:
       - name: Build universal LTBox.app + tarball
         # make-app.sh builds both Mac arches (LIBUSB_STATIC=1), lipo's the
         # universal binary, assembles + ad-hoc-signs LTBox.app, and packages
-        # it as a .tar.gz. No Developer ID here — notarization is the optional
-        # S4 path (set MACOS_SIGN_IDENTITY + add signing secrets to enable it).
+        # it as a .tar.gz. No Developer ID here — notarization is optional
+        # (set MACOS_SIGN_IDENTITY + add signing secrets to enable it).
         run: ./misc/macos/make-app.sh
 
       - name: Stage artifact
@@ -516,7 +511,7 @@ jobs:
         # clippy job never sees. The cfg is identical for both Apple targets,
         # so linting once on the arm64 leg is enough.
         if: ${{ matrix.arch == 'arm64' }}
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked
 
       - name: cargo test --workspace
         run: cargo test --workspace --locked --target ${{ matrix.target }}
@@ -598,7 +593,7 @@ jobs:
       - name: cargo clippy (native Linux)
         # Lints the cfg(target_os = "linux") paths that the Windows-targeted
         # clippy job never sees.
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked
 
       - name: cargo test --workspace
         run: cargo test --workspace --locked

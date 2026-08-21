@@ -1,8 +1,8 @@
 # LTBox udev rules — grant the logged-in desktop user access to the
 # USB devices LTBox needs without requiring root or a sudo helper.
 #
-# Install (manual; the GUI will offer a `pkexec ltbox --install-udev`
-# wrapper once the Linux driver flow lands):
+# Install manually, or let the GUI invoke `pkexec ltbox --install-udev`
+# from its Linux driver flow:
 #
 #   sudo cp misc/udev/51-ltbox-qcom.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload

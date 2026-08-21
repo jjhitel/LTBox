@@ -33,6 +33,7 @@ LTBox는 사이드바 중심의 데스크톱 GUI입니다. 각 항목을 열면 
 | **시스템 업데이트** | OTA 업데이트 비활성화/활성화; 지역 변환된 기기가 OTA 후 부팅에 실패하면 **부팅 복구**로 되살리기 |
 | **루팅** | KernelSU / KernelSU Next / SukiSU Ultra / ReSukiSU / APatch / FolkPatch / Magisk(+포크)로 루팅 |
 | **언루팅** | 이전 루팅 백업에서 순정 부트 이미지 복원 |
+| **GPU 클럭/전압** | KonaBess로 기기 GPU 테이블을 수정하고 AVB 보호 이미지를 다시 빌드해 플래싱 |
 | **재부팅** | System / Recovery / Bootloader / EDL로 이동 |
 | **고급** | 파이프라인 단계를 직접 하나씩 실행 — 아래 참조 |
 | **설정** | 언어(en/ko/zh/ru/ja), 테마(시스템/라이트/다크), 강조 색상, 기본 EDL 로더 경로 |
