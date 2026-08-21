@@ -5,7 +5,6 @@ use iced::Task;
 use ltbox_core::tr_args;
 
 impl App {
-    #[allow(unreachable_code)]
     pub(crate) fn update_sys(&mut self, msg: SysMsg) -> Task<Message> {
         match msg {
             SysMsg::SysAction(a) => {
@@ -73,10 +72,9 @@ impl App {
                 // never read in this path. File picker with the standard
                 // loader extension filter, recents shared with the rest
                 // of the loader pickers via the File bucket.
-                return self.pick_loader_with_default(|__v| {
+                self.pick_loader_with_default(|__v| {
                     Message::Sys(SysMsg::SysRescueFolderChosen(__v))
-                });
-                Task::none()
+                })
             }
             SysMsg::SysRescueFolderChosen(path) => {
                 if let Some(p) = path {
@@ -129,7 +127,6 @@ impl App {
                 // flashing firmware built for other models.
                 let device_model = self.device_model.clone();
                 let conn = self.connection;
-                let ll = self.live_labels();
                 let phase_kind = match action {
                     SysUpdateAction::Disable => OperationPhaseKind::SysUpdateDisable,
                     SysUpdateAction::Enable => OperationPhaseKind::SysUpdateEnable,
@@ -144,7 +141,7 @@ impl App {
                         action = self.t(action.label_key())
                     )
                 ));
-                return Task::perform(
+                Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             sysupdate_worker(
@@ -153,7 +150,6 @@ impl App {
                                 rescue_region,
                                 device_model,
                                 conn,
-                                ll,
                                 phases,
                             )
                         })
@@ -164,8 +160,7 @@ impl App {
                         Ok(lines) => Message::Sys(SysMsg::SysExecDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
-                );
-                Task::none()
+                )
             }
             SysMsg::SysExecDone(lines) => {
                 self.flush_exec_done_log(lines);

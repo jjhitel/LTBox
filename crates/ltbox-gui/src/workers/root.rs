@@ -268,7 +268,7 @@ pub(crate) fn root_worker(
         (|| -> std::result::Result<(), String> {
             // Phase 3/8 — Enter EDL mode.
             live!(log, "[Root] {}", phases.marker(3));
-            transition_to_edl(conn, &ll, &mut log)?;
+            transition_to_edl(conn, &mut log)?;
 
             // The target was resolved once before payload staging. Geometry
             // resolves from GPT by its partition label.
@@ -320,7 +320,7 @@ pub(crate) fn root_worker(
             // flash it alongside the patched root target image at Phase 6.
             let mut root_efisp_efi: Option<std::path::PathBuf> = None;
             {
-                let mut session = open_edl_session(&loader, false, &mut log)?;
+                let mut session = open_edl_session(&loader, &mut log)?;
                 let root_image_name = manager_cfg.root_image_target.filename();
                 let dumped_root_image = work_dir.join(root_image_name);
                 let dumped_vbmeta = work_dir.join("vbmeta.img");
@@ -501,7 +501,7 @@ pub(crate) fn root_worker(
             }
             // Phase 6/8 — Write patched images.
             live!(log, "[Root] {}", phases.marker(6));
-            let mut session = open_edl_session(&loader, true, &mut log)?;
+            let mut session = open_edl_session(&loader, &mut log)?;
             // Mirror of the equivalent one-shot `qdl-rs
             // --phys-part-idx 4 write <name> <img>` — GPT
             // resolves the start sector, so no rawprogram
@@ -633,9 +633,7 @@ pub(crate) fn root_worker(
                     "[EDL] {}",
                     tr_args!("log_edl_attempt_reset_after_error", error = e.to_string())
                 ));
-                if let Ok(mut s) =
-                    ltbox_device::edl::EdlSession::open(&loader, false, &mut reset_log)
-                {
+                if let Ok(mut s) = ltbox_device::edl::EdlSession::open(&loader, &mut reset_log) {
                     s.reset_tolerant(&mut reset_log);
                 } else {
                     reset_log.push(format!(

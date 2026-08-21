@@ -3,7 +3,7 @@
 //! from the update_sys handler.
 
 use crate::{
-    ConnectionStatus, LiveLabels, PhaseReporter, RescueRegion, SysUpdateAction, open_edl_session,
+    ConnectionStatus, PhaseReporter, RescueRegion, SysUpdateAction, open_edl_session,
     transition_to_edl,
 };
 use ltbox_core::tr_args;
@@ -14,7 +14,6 @@ pub(crate) fn sysupdate_worker(
     rescue_region: Option<RescueRegion>,
     device_model: String,
     conn: ConnectionStatus,
-    ll: LiveLabels,
     phases: PhaseReporter,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
@@ -238,10 +237,10 @@ pub(crate) fn sysupdate_worker(
             // check even though the operation is
             // perfectly recoverable from those
             // modes.
-            transition_to_edl(conn, &ll, &mut log)?;
+            transition_to_edl(conn, &mut log)?;
 
             ltbox_core::live!(log, "[Rescue] {}", phases.marker(3));
-            let mut session = open_edl_session(&loader, true, &mut log)?;
+            let mut session = open_edl_session(&loader, &mut log)?;
 
             // vendor_boot + vbmeta resolve through the
             // shared partition LUN map (LUN 4 on supported

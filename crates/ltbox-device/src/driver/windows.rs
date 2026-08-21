@@ -13,7 +13,10 @@ use ltbox_core::i18n::tr;
 use ltbox_core::{live, tr_args};
 use rsa::rand_core::{OsRng, RngCore};
 
-use super::{DriverError, DriverStatus, DriverUpdate, QcomDriverMode, Result, qcom_driver_mode};
+use super::{
+    DriverError, DriverStatus, DriverUpdate, QcomDriverMode, Result, parse_version,
+    qcom_driver_mode, version_from_tag, version_lt,
+};
 
 /// `Command::new` with no console window.
 fn silent_command(program: impl AsRef<OsStr>) -> Command {
@@ -294,60 +297,6 @@ pub fn check_driver_update() -> Option<DriverUpdate> {
     } else {
         None
     }
-}
-
-/// Parse the dotted version from a Windows release tag such as
-/// `release-win-v1.0.2.0` → `1.0.2.0`. Repo tags always carry a `v`-prefixed
-/// version as the final `-`-delimited segment, so require exactly that: the
-/// last segment must start with `v`/`V`, and the remainder must be a strict
-/// dotted version. This rejects sign-prefixed / non-`v` garbage
-/// (`release-win-+1.2`, `…-v+1.2`, `…-v-1.2`) as `None` rather than
-/// extracting a truncated value.
-fn version_from_tag(tag: &str) -> Option<String> {
-    let seg = tag.rsplit('-').next()?;
-    let v = seg.strip_prefix(['v', 'V'])?;
-    parse_version(v)?;
-    Some(v.to_string())
-}
-
-/// Parse a strict dotted version into numeric components, or `None` when
-/// malformed — every `.`-separated component must be non-empty and ASCII
-/// digits only. `"1.0.2.0"` → `[1, 0, 2, 0]`; `"1..2"`, `"1."`, `".2"`,
-/// `"."`, `""`, `"1.x"`, and sign-prefixed `"+1"` / `"1.+2"` → `None`.
-/// The explicit digit gate is required because `u64::from_str` otherwise
-/// accepts a leading `+`.
-fn parse_version(v: &str) -> Option<Vec<u64>> {
-    v.split('.')
-        .map(|p| {
-            if p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()) {
-                None
-            } else {
-                p.parse::<u64>().ok()
-            }
-        })
-        .collect()
-}
-
-/// `true` when `a` is strictly older than `b`, comparing component-wise
-/// with missing trailing components treated as 0 (so `1.0` == `1.0.0`).
-/// Inputs are pre-validated by the parsers above; a malformed string here
-/// degrades to an empty (all-zero) version rather than panicking.
-fn version_lt(a: &str, b: &str) -> bool {
-    let (a, b) = (
-        parse_version(a).unwrap_or_default(),
-        parse_version(b).unwrap_or_default(),
-    );
-    let n = a.len().max(b.len());
-    for i in 0..n {
-        let (x, y) = (
-            a.get(i).copied().unwrap_or(0),
-            b.get(i).copied().unwrap_or(0),
-        );
-        if x != y {
-            return x < y;
-        }
-    }
-    false
 }
 
 /// Read an `.inf` as text, honouring a UTF-16LE BOM (some signed INFs ship
@@ -902,29 +851,6 @@ mod tests {
     }
 
     #[test]
-    fn version_from_tag_extracts_dotted() {
-        assert_eq!(
-            version_from_tag("release-win-v1.0.2.0").as_deref(),
-            Some("1.0.2.0")
-        );
-        assert_eq!(version_from_tag("v2.3.4").as_deref(), Some("2.3.4"));
-        assert_eq!(version_from_tag("release-linux").as_deref(), None);
-        assert_eq!(version_from_tag("").as_deref(), None);
-        // Malformed dotted versions are rejected, not silently truncated.
-        assert_eq!(version_from_tag("release-win-v1..2").as_deref(), None);
-        assert_eq!(version_from_tag("release-win-v1.").as_deref(), None);
-        assert_eq!(version_from_tag("release-win-v1.x").as_deref(), None);
-        // `u64::from_str` accepts a leading `+`; the digit gate rejects it.
-        assert_eq!(version_from_tag("release-win-v1.+2").as_deref(), None);
-        // Final segment must be `v`-prefixed; sign-prefixed, `v`-less, and
-        // `rsplit`-cleaned signed tags all reject.
-        assert_eq!(version_from_tag("release-win-+1.2").as_deref(), None);
-        assert_eq!(version_from_tag("release-win-v+1.2").as_deref(), None);
-        assert_eq!(version_from_tag("release-win-v-1.2").as_deref(), None);
-        assert_eq!(version_from_tag("release-win-1.0.2.0").as_deref(), None);
-    }
-
-    #[test]
     fn parse_driver_ver_handles_spacing_and_date() {
         assert_eq!(
             parse_driver_ver("[Version]\nDriverVer = 09/27/2023,1.0.2.0\n").as_deref(),
@@ -968,40 +894,6 @@ mod tests {
             KERNEL_SPEC.uninstall_display_name,
             Some("Qualcomm USB Kernel Drivers")
         );
-    }
-
-    /// Regression: userspace release 1.0.2.2 ships `qcserlib.inf` 1.0.2.1.
-    /// Comparing the INF against the release always reports a stale update,
-    /// while the installed package `DisplayVersion` compares equal.
-    #[test]
-    fn userspace_version_namespaces_do_not_mix() {
-        assert!(version_lt("1.0.2.1", "1.0.2.2"));
-        assert!(!version_lt("1.0.2.2", "1.0.2.2"));
-        assert!(version_lt("1.0.2.2", "1.0.2.3"));
-    }
-
-    /// Regression: the kernel INF `DriverVer` ("1.0.3.6") and the QUD release
-    /// tag ("1.00.94.6") are different namespaces, so the old INF-vs-tag
-    /// comparison always reported an update. Comparing the registry
-    /// `DisplayVersion` (same namespace as the tag) clears the false banner.
-    #[test]
-    fn kernel_version_namespaces_do_not_mix() {
-        // Old, broken comparison: INF DriverVer vs QUD tag → always "older".
-        assert!(version_lt("1.0.3.6", "1.00.94.6"));
-        // Fixed comparison: installed QUD version vs latest QUD tag.
-        assert!(!version_lt("1.00.94.6", "1.00.94.6"));
-        assert!(version_lt("1.00.94.6", "1.00.94.7"));
-        // Leading zeros in the QUD scheme parse numerically (`00` == 0).
-        assert!(!version_lt("1.00.94.6", "1.0.94.6"));
-    }
-
-    #[test]
-    fn version_lt_compares_componentwise() {
-        assert!(version_lt("1.0.1.0", "1.0.2.0"));
-        assert!(version_lt("1.0", "1.0.0.1"));
-        assert!(!version_lt("1.0.2.0", "1.0.2.0"));
-        assert!(!version_lt("1.0.0", "1.0"));
-        assert!(!version_lt("2.0.0.0", "1.9.9.9"));
     }
 
     #[test]

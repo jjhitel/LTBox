@@ -173,6 +173,100 @@ impl From<ureq::Error> for DriverError {
 
 pub type Result<T> = std::result::Result<T, DriverError>;
 
+#[cfg(any(windows, target_os = "linux"))]
+fn version_from_tag(tag: &str) -> Option<String> {
+    let seg = tag.rsplit('-').next()?;
+    let v = seg.strip_prefix(['v', 'V'])?;
+    parse_version(v)?;
+    Some(v.to_string())
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+fn parse_version(v: &str) -> Option<Vec<u64>> {
+    v.split('.')
+        .map(|p| {
+            if p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()) {
+                None
+            } else {
+                p.parse::<u64>().ok()
+            }
+        })
+        .collect()
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+fn version_lt(a: &str, b: &str) -> bool {
+    let (a, b) = (
+        parse_version(a).unwrap_or_default(),
+        parse_version(b).unwrap_or_default(),
+    );
+    let n = a.len().max(b.len());
+    for i in 0..n {
+        let (x, y) = (
+            a.get(i).copied().unwrap_or(0),
+            b.get(i).copied().unwrap_or(0),
+        );
+        if x != y {
+            return x < y;
+        }
+    }
+    false
+}
+
+#[cfg(all(test, any(windows, target_os = "linux")))]
+mod version_tests {
+    use super::{version_from_tag, version_lt};
+
+    #[test]
+    fn version_from_tag_extracts_dotted() {
+        assert_eq!(
+            version_from_tag("release-win-v1.0.2.0").as_deref(),
+            Some("1.0.2.0")
+        );
+        assert_eq!(
+            version_from_tag("release-lnx-v1.0.6.4").as_deref(),
+            Some("1.0.6.4")
+        );
+        assert_eq!(version_from_tag("v2.3.4").as_deref(), Some("2.3.4"));
+        assert_eq!(version_from_tag("release-linux").as_deref(), None);
+        assert_eq!(version_from_tag("").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-v1..2").as_deref(), None);
+        assert_eq!(version_from_tag("release-lnx-v1..6").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-v1.").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-v1.x").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-v1.+2").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-+1.2").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-v+1.2").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-v-1.2").as_deref(), None);
+        assert_eq!(version_from_tag("release-win-1.0.2.0").as_deref(), None);
+        assert_eq!(version_from_tag("release-lnx-1.0.6.4").as_deref(), None);
+    }
+
+    #[test]
+    fn userspace_version_namespaces_do_not_mix() {
+        assert!(version_lt("1.0.2.1", "1.0.2.2"));
+        assert!(!version_lt("1.0.2.2", "1.0.2.2"));
+        assert!(version_lt("1.0.2.2", "1.0.2.3"));
+    }
+
+    #[test]
+    fn kernel_version_namespaces_do_not_mix() {
+        assert!(version_lt("1.0.3.6", "1.00.94.6"));
+        assert!(!version_lt("1.00.94.6", "1.00.94.6"));
+        assert!(version_lt("1.00.94.6", "1.00.94.7"));
+        assert!(!version_lt("1.00.94.6", "1.0.94.6"));
+    }
+
+    #[test]
+    fn version_lt_compares_componentwise() {
+        assert!(version_lt("1.0.1.0", "1.0.2.0"));
+        assert!(version_lt("1.0", "1.0.0.1"));
+        assert!(!version_lt("1.0.2.0", "1.0.2.0"));
+        assert!(!version_lt("1.0.0", "1.0"));
+        assert!(!version_lt("2.0.0.0", "1.9.9.9"));
+    }
+}
+
 /// Best-effort reachability probe for the GitHub host LTBox downloads driver
 /// assets from. Used to pre-disable install / update buttons (with an
 /// "internet required" tooltip) instead of letting the user click into a

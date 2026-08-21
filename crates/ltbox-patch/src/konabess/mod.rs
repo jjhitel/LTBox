@@ -89,29 +89,6 @@ pub fn apply_export_to_vendor_boot_file(
     })
 }
 
-/// Apply an in-memory edited table and write the rebuilt vendor-boot image.
-pub fn apply_gpu_table_to_vendor_boot_file(
-    input: &Path,
-    output: &Path,
-    target_index: usize,
-    chip: &str,
-    table: &GpuTable,
-) -> Result<()> {
-    let image = fs::read(input).map_err(|e| {
-        LtboxError::Patch(format!(
-            "cannot read vendor_boot image {}: {e}",
-            input.display()
-        ))
-    })?;
-    let rebuilt = replace_vendor_boot_gpu_table(&image, target_index, chip, table)?;
-    fs::write(output, rebuilt).map_err(|e| {
-        LtboxError::Patch(format!(
-            "cannot write vendor_boot image {}: {e}",
-            output.display()
-        ))
-    })
-}
-
 /// Build an AVB-valid `vendor_boot.img` + `vbmeta.img` pair from the stock
 /// images in `firmware_dir` and a KonaBess export file.
 pub fn build_konabess_avb_images(
@@ -151,24 +128,6 @@ pub fn build_konabess_avb_images_with_progress(
         target_index,
         &export,
         &mut on_stage,
-    )
-}
-
-/// Build AVB-valid images directly from an edited in-memory GPU table.
-pub fn build_konabess_avb_images_from_table(
-    firmware_dir: &Path,
-    output_dir: &Path,
-    target_index: usize,
-    chip: &str,
-    table: &GpuTable,
-) -> Result<KonaBessAvbOutput> {
-    build_konabess_avb_images_from_table_with_progress(
-        firmware_dir,
-        output_dir,
-        target_index,
-        chip,
-        table,
-        |_| {},
     )
 }
 

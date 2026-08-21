@@ -214,14 +214,9 @@ impl App {
         )
     }
 
-    /// Shared frame for the partition / physical-storage select tables:
-    /// centered title, muted subtitle, a divider, and the scrollable row
-    /// list. Only the i18n keys and the pre-built `list` column (header +
-    /// data rows, which differ per wizard) vary between callers.
+    /// Shared frame for the partition / physical-storage select tables.
     fn select_step_frame<'a>(
         &'a self,
-        _title_key: &str,
-        _subtitle_key: &str,
         list: iced::widget::Column<'a, Message>,
     ) -> Element<'a, Message> {
         let scrolled = scrollable(list)
@@ -372,11 +367,7 @@ impl App {
             list = list.push(clickable);
         }
 
-        self.select_step_frame(
-            "flash_parts_select_title",
-            "flash_parts_select_subtitle",
-            list,
-        )
+        self.select_step_frame(list)
     }
 
     pub(crate) fn flash_parts_confirm_step(&self) -> Element<'_, Message> {
@@ -640,11 +631,7 @@ impl App {
             list = list.push(tinted);
         }
 
-        self.select_step_frame(
-            "dump_parts_select_title",
-            "dump_parts_select_subtitle",
-            list,
-        )
+        self.select_step_frame(list)
     }
 
     pub(crate) fn view_dump_phys_wizard(&self) -> Element<'_, Message> {
@@ -752,7 +739,7 @@ impl App {
             list = list.push(data_row);
         }
 
-        self.select_step_frame("phys_select_title", "phys_select_subtitle", list)
+        self.select_step_frame(list)
     }
 
     pub(crate) fn view_flash_phys_wizard(&self) -> Element<'_, Message> {
@@ -890,7 +877,7 @@ impl App {
             list = list.push(clickable);
         }
 
-        self.select_step_frame("phys_select_title", "flash_phys_select_subtitle", list)
+        self.select_step_frame(list)
     }
 
     pub(crate) fn flash_phys_confirm_step(&self) -> Element<'_, Message> {

@@ -117,28 +117,6 @@ pub fn decompress(work_dir: &Path, input: &str, output: &str) -> Result<()> {
     )
 }
 
-/// Cleanup temporary files. Non-zero magiskboot exit becomes `Err`.
-pub fn cleanup(work_dir: &Path) -> Result<()> {
-    check_magiskboot("cleanup", run_magiskboot(work_dir, &["cleanup"])?)
-}
-
-/// Get kernel version from a kernel binary.
-pub fn get_kernel_version(kernel_path: &Path) -> Result<Option<String>> {
-    let data = fs::read(kernel_path).map_err(|e| LtboxError::BootImage(e.to_string()))?;
-    let needle = b"Linux version ";
-    if let Some(pos) = data.windows(needle.len()).position(|w| w == needle) {
-        let ver: String = data[pos + needle.len()..]
-            .iter()
-            .take_while(|&&b| b.is_ascii_digit() || b == b'.')
-            .map(|&b| b as char)
-            .collect();
-        if !ver.is_empty() {
-            return Ok(Some(ver));
-        }
-    }
-    Ok(None)
-}
-
 /// Process-wide CWD guard: `boot_main` resolves filenames relative to CWD,
 /// so we must `chdir` into `work_dir`. PollDevice fires concurrently via
 /// `spawn_blocking` — a static mutex serializes the chdir/run/restore sequence.

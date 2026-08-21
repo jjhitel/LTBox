@@ -35,7 +35,7 @@ fn scan_lun_partitions(
 
     std::thread::sleep(std::time::Duration::from_secs(2));
     let loader = std::path::PathBuf::from(loader_path);
-    let mut session = match ltbox_device::edl::EdlSession::open(&loader, true, log) {
+    let mut session = match ltbox_device::edl::EdlSession::open(&loader, log) {
         Ok(s) => s,
         Err(e) => {
             ltbox_core::live!(
@@ -222,7 +222,7 @@ pub(crate) fn flash_parts_execute(
     ltbox_core::live!(log, "[FlashParts] {}", phases.marker(1));
     std::thread::sleep(std::time::Duration::from_secs(2));
     let loader = std::path::PathBuf::from(&loader_path);
-    let mut session = match ltbox_device::edl::EdlSession::open(&loader, true, &mut log) {
+    let mut session = match ltbox_device::edl::EdlSession::open(&loader, &mut log) {
         Ok(s) => s,
         Err(e) => {
             ltbox_core::live!(
@@ -528,7 +528,7 @@ pub(crate) fn dump_parts_execute(
     ltbox_core::live!(log, "[DumpParts] {}", phases.marker(1));
     std::thread::sleep(std::time::Duration::from_secs(2));
     let loader = std::path::PathBuf::from(&loader_path);
-    let mut session = match ltbox_device::edl::EdlSession::open(&loader, true, &mut log) {
+    let mut session = match ltbox_device::edl::EdlSession::open(&loader, &mut log) {
         Ok(s) => s,
         Err(e) => {
             let msg = tr_args!("live_dumpparts_edl_open_failed", error = e.to_string());
@@ -671,7 +671,7 @@ pub(crate) fn dump_physical_execute(
     ltbox_core::live!(log, "[DumpPhys] {}", phases.marker(2));
     std::thread::sleep(std::time::Duration::from_secs(2));
     let loader = std::path::PathBuf::from(&loader_path);
-    let mut session = match ltbox_device::edl::EdlSession::open(&loader, true, &mut log) {
+    let mut session = match ltbox_device::edl::EdlSession::open(&loader, &mut log) {
         Ok(s) => s,
         Err(e) => {
             let msg = tr_args!("live_dump_phys_edl_open_failed", error = e.to_string());
@@ -764,7 +764,7 @@ pub(crate) fn flash_physical_execute(
     ltbox_core::live!(log, "[FlashPhys] {}", phases.marker(2));
     std::thread::sleep(std::time::Duration::from_secs(2));
     let loader = std::path::PathBuf::from(&loader_path);
-    let mut session = match ltbox_device::edl::EdlSession::open(&loader, true, &mut log) {
+    let mut session = match ltbox_device::edl::EdlSession::open(&loader, &mut log) {
         Ok(s) => s,
         Err(e) => {
             ltbox_core::live!(

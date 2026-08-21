@@ -30,14 +30,14 @@ impl App {
             }
             2 => {
                 if self.root.is_gki() {
-                    self.root_file_step(self.t("root_kernel_title"), self.t("root_kernel_subtitle"))
+                    self.root_file_step(self.t("root_kernel_subtitle"))
                 } else {
                     self.root_provider_step()
                 }
             }
             3 => {
                 if self.root.is_forks() {
-                    self.root_file_step(self.t("root_apk_title"), self.t("root_apk_subtitle"))
+                    self.root_file_step(self.t("root_apk_subtitle"))
                 } else {
                     self.root_version_step()
                 }
@@ -558,7 +558,7 @@ impl App {
         centered_step(col, self.square_step_max_width(providers.len()))
     }
 
-    pub(crate) fn root_file_step(&self, _title: &str, subtitle: &str) -> Element<'_, Message> {
+    pub(crate) fn root_file_step(&self, subtitle: &str) -> Element<'_, Message> {
         let selected = self.root.file_path.is_some();
         let status_text = if let Some(p) = &self.root.file_path {
             p.clone()

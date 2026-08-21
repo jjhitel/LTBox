@@ -53,11 +53,6 @@ struct Asset {
 }
 
 #[derive(Debug, Deserialize)]
-struct TagItem {
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
 struct WorkflowRunsResponse {
     workflow_runs: Vec<WorkflowRun>,
 }
@@ -67,8 +62,6 @@ pub struct WorkflowRun {
     pub id: u64,
     pub head_branch: Option<String>,
     pub path: Option<String>,
-    pub status: Option<String>,
-    pub conclusion: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,11 +144,6 @@ impl GitHubClient {
         }))
     }
 
-    pub fn latest_release_tag(&self) -> Result<String> {
-        let release: Release = self.get_json("/releases/latest")?;
-        Ok(release.tag_name)
-    }
-
     /// Newest non-draft, non-prerelease release on the repo, or `Ok(None)`
     /// when the repo has nothing stable published yet.
     ///
@@ -229,14 +217,6 @@ impl GitHubClient {
             .into_iter()
             .map(|a| (a.name, a.browser_download_url))
             .collect())
-    }
-
-    /// Latest tag name (tags API, not releases).
-    pub fn latest_tag(&self) -> Result<String> {
-        let tags: Vec<TagItem> = self.get_json("/tags?per_page=1")?;
-        tags.first()
-            .map(|t| t.name.clone())
-            .ok_or_else(|| LtboxError::Download("No tags found".into()))
     }
 
     pub fn workflow_run_for_tag(&self, tag: &str) -> Result<u64> {

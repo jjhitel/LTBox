@@ -361,7 +361,7 @@ fn fab_style(t: &Theme, status: button::Status, bg: iced::Color, fg: iced::Color
     }
 
     button::Style {
-        background: Some(blend(bg, fg, theme::state_alpha(status)).into()),
+        background: Some(theme::mix_color(bg, fg, theme::state_alpha(status)).into()),
         text_color: fg,
         border: iced::Border {
             radius: theme::shape::FULL.into(),
@@ -391,7 +391,7 @@ fn utility_action_style(t: &Theme, status: button::Status) -> button::Style {
     let p = pal_of(t);
     button::Style {
         background: Some(
-            blend(
+            theme::mix_color(
                 p.surface_container_high,
                 p.on_surface_variant,
                 theme::state_alpha(status),
@@ -411,7 +411,7 @@ fn utility_error_action_style(t: &Theme, status: button::Status) -> button::Styl
     let p = pal_of(t);
     button::Style {
         background: Some(
-            blend(
+            theme::mix_color(
                 p.surface_container_high,
                 p.error,
                 theme::state_alpha(status),
@@ -818,17 +818,6 @@ pub(crate) fn wizard_nav<'a>(
         Message::Root(RootMsg::RootBack),
         Message::Root(RootMsg::RootNext),
     )
-}
-
-/// Linear mix of two colors by `t` ∈ [0, 1].
-pub(crate) fn blend(base: iced::Color, overlay: iced::Color, t: f32) -> iced::Color {
-    let t = t.clamp(0.0, 1.0);
-    iced::Color {
-        r: base.r * (1.0 - t) + overlay.r * t,
-        g: base.g * (1.0 - t) + overlay.g * t,
-        b: base.b * (1.0 - t) + overlay.b * t,
-        a: base.a,
-    }
 }
 
 // =========================================================================

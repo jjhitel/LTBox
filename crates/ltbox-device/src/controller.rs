@@ -1,11 +1,4 @@
 //! Active-slot resolution across the ADB and Fastboot transports.
-//!
-//! This module used to also host a `DeviceController` that owned mode
-//! detection and the ADB/Fastboot/EDL transitions. The GUI reimplemented
-//! those transitions in `ltbox-gui/src/workers/edl_transition.rs`, which is
-//! the version actually exercised against hardware, so the controller here
-//! sat unreachable and drifted. It was removed rather than kept as a second
-//! source of truth — put transition logic in the worker, not here.
 
 use crate::adb::AdbManager;
 use crate::fastboot::FastbootDevice;
@@ -14,16 +7,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ControllerError {
-    #[error("ADB error: {0}")]
-    Adb(#[from] crate::adb::AdbError),
-    #[error("Fastboot error: {0}")]
-    Fastboot(#[from] crate::fastboot::FastbootError),
-    #[error("EDL error: {0}")]
-    Edl(#[from] crate::edl::EdlError),
-    #[error("No device found in any mode")]
-    NoDevice,
-    #[error("Operation requires {0} mode")]
-    WrongMode(String),
     #[error("{0}")]
     SlotResolve(String),
 }

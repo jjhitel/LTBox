@@ -82,8 +82,7 @@ pub(crate) fn reboot_edl_with_loader_worker(
     reboot_cmd_sent: String,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
-    // `auto_reset=false` — reset is triggered explicitly below.
-    let mut session = open_edl_session(&loader, false, &mut log)?;
+    let mut session = open_edl_session(&loader, &mut log)?;
     match target {
         RebootTarget::System => {
             // Reboot-to-system is the user's intent here; the inner EDL

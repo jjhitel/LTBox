@@ -143,12 +143,12 @@ impl App {
                     .size(13)
                     .width(Length::Fill)
                     .center()
-                    .style(label_style),
+                    .style(muted_style),
                 text(rescue_req)
                     .size(11)
                     .width(Length::Fill)
                     .center()
-                    .style(label_style),
+                    .style(muted_style),
             ]
             .spacing(8)
             .align_x(iced::Alignment::Center);
@@ -365,7 +365,9 @@ impl App {
             .style(|t: &Theme| {
                 let p = pal_of(t);
                 container::Style {
-                    background: Some(blend(p.surface_container_high, p.success, 0.12).into()),
+                    background: Some(
+                        theme::mix_color(p.surface_container_high, p.success, 0.12).into(),
+                    ),
                     border: iced::Border {
                         radius: theme::shape::FULL.into(),
                         ..Default::default()
@@ -452,11 +454,11 @@ impl App {
             .style(move |t: &Theme| {
                 let p = pal_of(t);
                 let background = if is_error {
-                    blend(p.surface_container, p.error, 0.08)
+                    theme::mix_color(p.surface_container, p.error, 0.08)
                 } else if is_busy {
                     p.surface_container_high
                 } else {
-                    blend(p.surface_container, p.success, 0.08)
+                    theme::mix_color(p.surface_container, p.success, 0.08)
                 };
                 container::Style {
                     background: Some(background.into()),

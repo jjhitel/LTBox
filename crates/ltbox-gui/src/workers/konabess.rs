@@ -65,7 +65,6 @@ struct DeviceBackend<'a> {
     conn: ConnectionStatus,
     loader: &'a Path,
     is_tb323fu: bool,
-    ll: &'a LiveLabels,
     session: Option<ltbox_device::edl::EdlSession>,
     writes_started: bool,
 }
@@ -97,8 +96,8 @@ impl KonaBessInspectionBackend for DeviceBackend<'_> {
     }
 
     fn enter_edl(&mut self, log: &mut Vec<String>) -> Result<(), String> {
-        transition_to_edl(self.conn, self.ll, log)?;
-        self.session = Some(open_edl_session(self.loader, false, log)?);
+        transition_to_edl(self.conn, log)?;
+        self.session = Some(open_edl_session(self.loader, log)?);
         Ok(())
     }
 
@@ -174,7 +173,7 @@ impl KonaBessInspectionBackend for DeviceBackend<'_> {
             self.session = None;
             return;
         }
-        if let Ok(mut session) = ltbox_device::edl::EdlSession::open(self.loader, false, log) {
+        if let Ok(mut session) = ltbox_device::edl::EdlSession::open(self.loader, log) {
             session.reset_tolerant(log);
         }
     }
@@ -279,7 +278,6 @@ pub(crate) fn konabess_inspection_worker(
         conn,
         loader: &loader,
         is_tb323fu,
-        ll: &ll,
         session: None,
         writes_started: false,
     };
@@ -373,7 +371,7 @@ impl KonaBessFlashBackend for FlashDeviceBackend<'_> {
     }
 
     fn open_session(&mut self, log: &mut Vec<String>) -> Result<(), String> {
-        self.session = Some(open_edl_session(self.loader, true, log)?);
+        self.session = Some(open_edl_session(self.loader, log)?);
         Ok(())
     }
 
@@ -415,7 +413,7 @@ impl KonaBessFlashBackend for FlashDeviceBackend<'_> {
             self.session = None;
             return;
         }
-        if let Ok(mut session) = ltbox_device::edl::EdlSession::open(self.loader, false, log) {
+        if let Ok(mut session) = ltbox_device::edl::EdlSession::open(self.loader, log) {
             session.reset_tolerant(log);
         }
     }
@@ -554,7 +552,7 @@ impl KonaBessCancelBackend for CancelDeviceBackend<'_> {
     fn reboot_to_system(&mut self, log: &mut Vec<String>) {
         // Inspection returned Firehose to Sahara, so cancellation opens a
         // fresh session exactly like the pre-write recovery path.
-        if let Ok(mut session) = ltbox_device::edl::EdlSession::open(self.loader, false, log) {
+        if let Ok(mut session) = ltbox_device::edl::EdlSession::open(self.loader, log) {
             session.reset_tolerant(log);
         }
     }

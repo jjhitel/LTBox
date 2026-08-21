@@ -1938,24 +1938,6 @@ impl AdvWizard {
             _ => PickerKind::File,
         }
     }
-
-    /// i18n key for the `[X]` slot in the unified Browse description.
-    /// Maps each action to a short noun phrase (e.g. "Encrypted
-    /// rawprogram folder", "ARB image"). File pickers read this via
-    /// `FilePickSpec::target_i18n_key`; folder pickers read it as the
-    /// description caption alongside the generic folder-kind label.
-    pub(crate) fn picker_target_i18n_key(&self) -> &'static str {
-        match self.action {
-            Some(AdvAction::ConvertXml) => "picker_target_encrypted_rawprogram",
-            Some(AdvAction::PatchDevinfo) => "picker_target_edl_loader",
-            Some(AdvAction::RegionConvert) => "picker_target_vendor_boot_img",
-            Some(AdvAction::ImageInfo) => "picker_target_avb_images",
-            Some(AdvAction::DetectArb) => "picker_target_edl_loader",
-            Some(AdvAction::PatchArb) => "picker_target_arb_folder",
-            Some(AdvAction::RebuildVbmeta) => "picker_target_vbmeta_img",
-            _ => "picker_target_file",
-        }
-    }
 }
 
 #[cfg(test)]

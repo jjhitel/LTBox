@@ -4,7 +4,6 @@ use crate::*;
 use iced::Task;
 
 impl App {
-    #[allow(unreachable_code)]
     pub(crate) fn update_reboot(&mut self, msg: RebootMsg) -> Task<Message> {
         match msg {
             RebootMsg::RebootRequest(target) => {
@@ -57,7 +56,7 @@ impl App {
                     ),
                 ));
                 let reboot_cmd_sent = self.t("log_reboot_command_sent").to_string();
-                return Task::perform(
+                Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             reboot_worker(conn, target, reboot_cmd_sent)
@@ -69,8 +68,7 @@ impl App {
                         Ok(lines) => Message::Reboot(RebootMsg::RebootDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
-                );
-                Task::none()
+                )
             }
             RebootMsg::RebootEdlWithLoader(target, path) => {
                 let Some(loader_input) = path else {

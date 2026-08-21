@@ -431,10 +431,6 @@ fn wait_for_stable_port(mode: QcomDriverMode) -> Result<String> {
 }
 
 /// Wait for an EDL device; returns the stable-device marker string.
-///
-/// Name kept (`wait_for_device`) to avoid an extra rename churn through
-/// `controller.rs`; the underlying transport just moved from a COM port
-/// name to a libusb VID/PID marker.
 pub fn wait_for_device() -> Result<String> {
     wait_for_stable_port(qcom_driver_mode())
 }
@@ -481,21 +477,8 @@ impl WipeErasePlanEntry {
 
 impl EdlSession {
     /// Open: find port → Sahara upload → Firehose configure.
-    ///
-    /// `auto_reset` ignored — `reset_on_drop` stays `false` to avoid qdl's
-    /// recursive drop-time reset stack overflow. Call [`EdlSession::reset`]
-    /// explicitly on the happy path.
-    pub fn open(loader_path: &Path, auto_reset: bool, log: &mut Vec<String>) -> Result<Self> {
-        Self::open_with_mode(loader_path, auto_reset, log, qcom_driver_mode())
-    }
-
-    pub fn open_with_mode(
-        loader_path: &Path,
-        auto_reset: bool,
-        log: &mut Vec<String>,
-        mode: QcomDriverMode,
-    ) -> Result<Self> {
-        let _ = auto_reset;
+    pub fn open(loader_path: &Path, log: &mut Vec<String>) -> Result<Self> {
+        let mode = qcom_driver_mode();
         ltbox_core::live!(log, "[EDL] {}", tr("log_edl_scanning"));
         let port = wait_for_stable_port(mode)?;
         // `port` is now a libusb marker string ("USB:VID_05C6&PID_9008"),
@@ -666,7 +649,7 @@ impl EdlSession {
         }
         ltbox_core::live!(log, "[EDL] {}", tr("log_edl_sahara_uploaded"));
 
-        // See `open` doc: reset_on_drop stays false to dodge qdl's recursive reset.
+        // Keep reset_on_drop false to dodge qdl's recursive reset.
         dev.reset_on_drop = false;
 
         ltbox_core::live!(log, "[EDL] {}", tr("log_edl_firehose_configuring"));
@@ -1249,23 +1232,6 @@ impl EdlSession {
         );
         qdl::firehose_set_bootable(&mut self.dev, XBL_A_LUN)
             .map_err(|e| EdlError::Session(format!("setbootablestoragedrive failed: {e}")))
-    }
-
-    /// Flash every `<program>` in the rawprogram XMLs, then apply patch
-    /// XMLs. XML coordinates drive the flash, so no slot-suffix guessing
-    /// (EDL can't read slot suffix from ADB). Images resolve against the
-    /// XML's own directory. Empty filename / `num_sectors=0` entries
-    /// skipped (GPT placeholders). Missing non-super images logged and
-    /// skipped; missing split-super images fail during preflight.
-    /// Mirrors v2 `flash_rawprogram` in `bin/ltbox/device/edl.py`.
-    pub fn flash_rawprogram(
-        &mut self,
-        program_xmls: &[PathBuf],
-        patch_xmls: &[PathBuf],
-        log: &mut Vec<String>,
-    ) -> Result<()> {
-        // Back-compat: default to keep-data.
-        self.flash_rawprogram_with_wipe(program_xmls, patch_xmls, false, log)
     }
 
     /// Erased on wipe=true (matches v2 `_ERASE_LABELS`).

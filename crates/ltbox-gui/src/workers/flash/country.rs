@@ -36,8 +36,8 @@ pub(crate) fn change_country_worker(
     std::fs::create_dir_all(&critical_backup)
         .map_err(|e| tr_args!("err_country_backup_dir_failed", error = e.to_string()))?;
     live!(log, "[Country] {}", phases.marker(2));
-    transition_to_edl(conn, &ll, &mut log)?;
-    let mut session = open_edl_session(&loader, true, &mut log)?;
+    transition_to_edl(conn, &mut log)?;
+    let mut session = open_edl_session(&loader, &mut log)?;
     let outcome = run_country_change(
         &mut session,
         &work_dir,

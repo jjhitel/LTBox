@@ -4,7 +4,6 @@ use crate::*;
 use iced::Task;
 
 impl App {
-    #[allow(unreachable_code)]
     pub(crate) fn update_flash(&mut self, msg: FlashMsg) -> Task<Message> {
         match msg {
             FlashMsg::FlashRegion(r) => {
@@ -152,24 +151,20 @@ impl App {
             }
             FlashMsg::FlashSelectFolder => {
                 self.picker_target = PickerTarget::FlashFolder;
-                return pick_folder_task(
+                pickers::pick_folder_for(
                     pickers::PickerKind::QfilFirmwareFolder,
                     &self.recent_paths,
                     Message::FolderSelected,
-                );
-                Task::none()
+                )
             }
             FlashMsg::FlashSelectLoader => {
                 // Always open the picker (don't auto-reuse the Settings default
                 // via `pick_loader_with_default`) so the Change button can pick
                 // a different loader — the default was already applied when the
                 // loader-less folder was selected.
-                return pickers::pick_file_for(
-                    loader_file_spec("picker_target_edl_loader"),
-                    &self.recent_paths,
-                    |v| Message::Flash(FlashMsg::FlashLoaderChosen(v)),
-                );
-                Task::none()
+                pickers::pick_file_for(loader_file_spec(), &self.recent_paths, |v| {
+                    Message::Flash(FlashMsg::FlashLoaderChosen(v))
+                })
             }
             FlashMsg::FlashLoaderChosen(path) => {
                 if let Some(p) = path {
@@ -227,7 +222,7 @@ impl App {
                 // known — so a TB323FU target (which reads its rollback index
                 // by dumping partitions over EDL) is exempt and stays on Auto.
                 let ll = self.live_labels();
-                return Task::perform(
+                Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             ltbox_core::runtime::run_heavy(move || {
@@ -251,8 +246,7 @@ impl App {
                         Ok(lines) => Message::Flash(FlashMsg::FlashExecDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
-                );
-                Task::none()
+                )
             }
             FlashMsg::FlashExecDone(lines) => {
                 // Extend *before* end_op so the END separator sits

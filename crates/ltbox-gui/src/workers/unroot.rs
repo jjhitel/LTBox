@@ -127,10 +127,10 @@ pub(crate) fn unroot_worker(
     }
 
     live!(log, "[Unroot] {}", phases.marker(2));
-    transition_to_edl(conn, &ll, &mut log)?;
+    transition_to_edl(conn, &mut log)?;
 
     live!(log, "[Unroot] {}", phases.marker(3));
-    let mut session = open_edl_session(&loader, true, &mut log)?;
+    let mut session = open_edl_session(&loader, &mut log)?;
 
     live!(log, "[Unroot] {} ({restored_label})", phases.marker(4));
     session

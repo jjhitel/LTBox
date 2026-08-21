@@ -196,7 +196,7 @@ impl App {
                 let changelog_block = column![
                     text(self.t("ota_popup_changelog").to_string())
                         .size(11)
-                        .style(label_style),
+                        .style(muted_style),
                     container(changelog_editor)
                         .padding([8, 10])
                         .width(Length::Fill)

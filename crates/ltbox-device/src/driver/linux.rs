@@ -21,7 +21,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ltbox_core::{live, tr_args};
 
 use super::{
-    DriverError, DriverStatus, DriverUpdate, Result, classify_udev_rules, qcom_driver_mode,
+    DriverError, DriverStatus, DriverUpdate, Result, classify_udev_rules, parse_version,
+    qcom_driver_mode, version_from_tag, version_lt,
 };
 
 /// Where `ltbox --install-udev` writes the rules; kept in sync with the GUI's
@@ -413,43 +414,6 @@ fn installed_kernel_driver_version() -> Option<String> {
     }
 }
 
-fn version_from_tag(tag: &str) -> Option<String> {
-    let seg = tag.rsplit('-').next()?;
-    let v = seg.strip_prefix(['v', 'V'])?;
-    parse_version(v)?;
-    Some(v.to_string())
-}
-
-fn parse_version(v: &str) -> Option<Vec<u64>> {
-    v.split('.')
-        .map(|p| {
-            if p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()) {
-                None
-            } else {
-                p.parse::<u64>().ok()
-            }
-        })
-        .collect()
-}
-
-fn version_lt(a: &str, b: &str) -> bool {
-    let (a, b) = (
-        parse_version(a).unwrap_or_default(),
-        parse_version(b).unwrap_or_default(),
-    );
-    let n = a.len().max(b.len());
-    for i in 0..n {
-        let (x, y) = (
-            a.get(i).copied().unwrap_or(0),
-            b.get(i).copied().unwrap_or(0),
-        );
-        if x != y {
-            return x < y;
-        }
-    }
-    false
-}
-
 fn download_file(
     url: &str,
     name: &str,
@@ -794,16 +758,6 @@ mod tests {
             "qcom_usb_kernel_drivers_x64.exe"
         ));
         assert!(!linux_kernel_asset_matches("qud_1.0.6.4_amd64.deb"));
-    }
-
-    #[test]
-    fn version_from_linux_tag_extracts_dotted() {
-        assert_eq!(
-            version_from_tag("release-lnx-v1.0.6.4").as_deref(),
-            Some("1.0.6.4")
-        );
-        assert_eq!(version_from_tag("release-lnx-v1..6").as_deref(), None);
-        assert_eq!(version_from_tag("release-lnx-1.0.6.4").as_deref(), None);
     }
 
     #[test]

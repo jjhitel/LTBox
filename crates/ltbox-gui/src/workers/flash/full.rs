@@ -698,9 +698,9 @@ pub(crate) fn flash_worker(
 
     // Phase 5/9 — Enter EDL and open the Firehose transport.
     live!(log, "[Flash] {}", phases.marker(5));
-    transition_to_edl(conn, &ll, &mut log)?;
+    transition_to_edl(conn, &mut log)?;
 
-    let mut session = open_edl_session(&loader, true, &mut log)?;
+    let mut session = open_edl_session(&loader, &mut log)?;
 
     // Phase 6/9 — Read live device state and stage safeguards.
     live!(log, "[Flash] {}", phases.marker(6));

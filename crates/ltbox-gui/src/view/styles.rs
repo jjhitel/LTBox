@@ -12,16 +12,6 @@ pub(crate) fn muted_style(t: &Theme) -> iced::widget::text::Style {
     }
 }
 
-/// `on_surface_variant` — captions and sidebar section headers. M3 reserves
-/// `outline` for borders; used as text it falls below AA contrast in light mode
-/// (~4.3:1), so secondary text uses `on_surface_variant` and the quieter tier
-/// comes from size / weight instead.
-pub(crate) fn label_style(t: &Theme) -> iced::widget::text::Style {
-    iced::widget::text::Style {
-        color: Some(pal_of(t).on_surface_variant),
-    }
-}
-
 /// `on_surface` — primary foreground on surface containers.
 pub(crate) fn on_surface_style(t: &Theme) -> iced::widget::text::Style {
     iced::widget::text::Style {
@@ -330,7 +320,7 @@ pub(crate) fn md_filled_btn_style(t: &Theme, status: button::Status) -> button::
             ..Default::default()
         };
     }
-    let bg = blend(p.primary, p.on_primary, theme::state_alpha(status));
+    let bg = mix_color(p.primary, p.on_primary, theme::state_alpha(status));
     button::Style {
         background: Some(bg.into()),
         text_color: p.on_primary,
@@ -381,7 +371,7 @@ pub(crate) fn banner_filled_btn_style(t: &Theme, status: button::Status) -> butt
     }
     // Filled on a warning-container surface: dark/light role inversion of
     // the container pair, with the on-color state layer mixed in.
-    let bg = blend(
+    let bg = mix_color(
         p.on_warning_container,
         p.warning_container,
         theme::state_alpha(status),
@@ -482,7 +472,7 @@ pub(crate) fn sel_card_style_for(t: &Theme, selected: bool, destructive: bool) -
 }
 
 /// Outer button style for option / Browse cards. Border carries the same
-/// MD radius as [`sel_card_style`] so the bg fill clips to the rounded
+/// LG radius as [`sel_card_style`] so the bg fill clips to the rounded
 /// shape instead of bleeding out as a square.
 ///
 /// The three states have to be rankable at a glance. They used to be

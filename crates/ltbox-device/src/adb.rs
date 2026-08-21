@@ -86,8 +86,6 @@ pub fn kill_adb_server() -> Result<()> {
 pub enum AdbError {
     #[error("ADB error: {0}")]
     Client(String),
-    #[error("Device not found")]
-    DeviceNotFound,
     #[error("Command failed: {0}")]
     CommandFailed(String),
     #[error("Timeout waiting for device")]
@@ -121,8 +119,6 @@ const CONNECT_RETRY_BACKOFF: std::time::Duration = std::time::Duration::from_mil
 
 pub struct AdbManager {
     serial: Option<String>,
-    pub skip_adb: bool,
-    pub connected_once: bool,
     /// Cached USB device handle — lazy, populated on first successful
     /// `connect_device`. Reused so the RSA auth handshake only fires
     /// once per `AdbManager` lifetime. Dropped on any I/O error so a
@@ -139,8 +135,6 @@ impl AdbManager {
     pub fn new() -> Self {
         Self {
             serial: None,
-            skip_adb: false,
-            connected_once: false,
             device: None,
             cached_bootmode: None,
         }
@@ -318,10 +312,7 @@ impl AdbManager {
 
     /// Wait up to [`WAIT_TIMEOUT`] for a fully-authorized ADB device.
     ///
-    /// Returns `AdbError::Timeout` on expiry instead of spinning forever —
-    /// important for GUI flows where the user might have toggled `skip_adb`
-    /// or the device got stuck in `unauthorized` state that will never
-    /// promote without user action.
+    /// Returns `AdbError::Timeout` on expiry instead of spinning forever.
     pub fn wait_for_device(&mut self) -> Result<()> {
         self.wait_for_device_or(|| false).map(|_| ())
     }
@@ -334,16 +325,12 @@ impl AdbManager {
     /// appeared in time. `bail` is checked before each device probe so EDL
     /// detection takes priority over a transient ADB probe error.
     pub fn wait_for_device_or<F: FnMut() -> bool>(&mut self, mut bail: F) -> Result<bool> {
-        if self.skip_adb {
-            return Err(AdbError::DeviceNotFound);
-        }
         let deadline = std::time::Instant::now() + WAIT_TIMEOUT;
         loop {
             if bail() {
                 return Ok(false);
             }
             if self.check_device()? {
-                self.connected_once = true;
                 return Ok(true);
             }
             if std::time::Instant::now() >= deadline {

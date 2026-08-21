@@ -132,7 +132,7 @@ impl App {
             "settings_qcom_driver_mode_help"
         };
         let driver_help_icon = widget::tooltip(
-            container(text("?").size(11).style(label_style))
+            container(text("?").size(11).style(muted_style))
                 .padding([2, 6])
                 .style(|t: &Theme| {
                     let p = pal_of(t);
@@ -204,7 +204,7 @@ impl App {
         // Default EDL loader used to auto-fill loader pickers.
         let default_loader_help = self.t("settings_default_loader_help").to_string();
         let help_icon = widget::tooltip(
-            container(text("?").size(11).style(label_style))
+            container(text("?").size(11).style(muted_style))
                 .padding([2, 6])
                 .style(|t: &Theme| {
                     let p = pal_of(t);
@@ -371,7 +371,7 @@ impl App {
         let cleanup_enabled =
             !self.busy && !self.cleaning_temp && matches!(self.temp_files_bytes, Some(b) if b > 0);
         let cleanup_help_icon = widget::tooltip(
-            container(text("?").size(11).style(label_style))
+            container(text("?").size(11).style(muted_style))
                 .padding([2, 6])
                 .style(|t: &Theme| {
                     let p = pal_of(t);

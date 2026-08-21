@@ -1,5 +1,5 @@
 //! Minimal Fastboot over nusb — only the commands LTBox uses
-//! (getvar, oem edl, reboot, reboot-bootloader, detect). Protocol:
+//! (getvar, reboot, reboot-bootloader, detect). Protocol:
 //! ASCII command → bulk write → read OKAY/FAIL/DATA/INFO.
 
 use nusb::Endpoint;
@@ -15,8 +15,6 @@ pub enum FastbootError {
     DeviceNotFound,
     #[error("Command failed: {0}")]
     CommandFailed(String),
-    #[error("Timeout")]
-    Timeout,
 }
 
 type Result<T> = std::result::Result<T, FastbootError>;
@@ -255,10 +253,6 @@ impl FastbootDevice {
             vars.product = p;
         }
         Ok(vars)
-    }
-
-    pub fn oem_edl(&mut self) -> Result<()> {
-        self.command("oem edl").map(|_| ())
     }
 
     pub fn reboot(&mut self) -> Result<()> {

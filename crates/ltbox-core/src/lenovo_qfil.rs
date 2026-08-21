@@ -36,12 +36,8 @@ pub struct QfilPackage {
     pub version: String,
     /// Archive file name (`server_version_name`).
     pub file_name: String,
-    /// Model this package targets (`product_model`).
-    pub product_model: String,
     /// SoC platform label (`platform`, e.g. "高通" / "联发科"). Raw UTF-8.
     pub platform: String,
-    /// First-published unix time (`add_time`), seconds. `None` if absent.
-    pub add_time: Option<i64>,
     /// Last-updated unix time (`upd_time`), seconds. `None` if absent.
     pub upd_time: Option<i64>,
 }
@@ -108,9 +104,7 @@ fn parse_entry(v: &serde_json::Value) -> QfilPackage {
         download_url: s("download_url"),
         version: s("latest_version"),
         file_name: s("server_version_name"),
-        product_model: s("product_model"),
         platform: s("platform"),
-        add_time: i("add_time"),
         upd_time: i("upd_time"),
     }
 }
@@ -125,9 +119,7 @@ mod tests {
             "download_url": "http://example.invalid/x.7z",
             "latest_version": "TB000_ZUXOS_1.0",
             "server_version_name": "TB000_ZUXOS_1.0_Tool.7z",
-            "product_model": "TB000FC",
             "platform": "高通",
-            "add_time": 1_700_000_000i64,
             "upd_time": "1710000000",
             "flashing_machine_method": "ignored"
         });
@@ -135,9 +127,7 @@ mod tests {
         assert_eq!(p.download_url, "http://example.invalid/x.7z");
         assert_eq!(p.version, "TB000_ZUXOS_1.0");
         assert_eq!(p.file_name, "TB000_ZUXOS_1.0_Tool.7z");
-        assert_eq!(p.product_model, "TB000FC");
         assert_eq!(p.platform, "高通");
-        assert_eq!(p.add_time, Some(1_700_000_000));
         // String timestamps are coerced.
         assert_eq!(p.upd_time, Some(1_710_000_000));
     }
@@ -146,7 +136,6 @@ mod tests {
     fn parse_entry_tolerates_missing_fields() {
         let p = parse_entry(&serde_json::json!({}));
         assert!(p.download_url.is_empty());
-        assert_eq!(p.add_time, None);
         assert_eq!(p.upd_time, None);
     }
 

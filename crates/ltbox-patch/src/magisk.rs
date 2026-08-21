@@ -13,9 +13,6 @@ use ltbox_core::{LtboxError, Result, tr_args};
 use crate::boot;
 use crate::root_pipeline::RootImageTarget;
 
-/// Files extracted from the APK and staged for the magiskboot cpio pass.
-pub const PAYLOAD_FILES: &[&str] = &["magisk", "magiskinit", "init-ld", "stub.apk"];
-
 /// Map the three crypto getprops to the `encrypt_type` v2 uses to gate
 /// `/data` eligibility. `"none"` = unencrypted, `"file"` = FBE,
 /// `"block"` = full-disk, `"metadata"` = metadata crypto. Matches the
@@ -150,7 +147,7 @@ pub fn resolve_preinit_device(mountinfo: &str, encrypt_type: &str) -> Option<Str
 }
 
 /// Extract Magisk payload from `apk_path` into `staging_dir`, overwriting
-/// existing files. Only the entries in [`PAYLOAD_FILES`] are written.
+/// existing files.
 /// Accepts both `libmagisk.so` (newer) and `libmagisk64.so` (older) for `magisk`.
 pub fn extract_apk_payload(apk_path: &Path, staging_dir: &Path) -> Result<()> {
     fs::create_dir_all(staging_dir)?;
@@ -170,7 +167,6 @@ pub fn extract_apk_payload(apk_path: &Path, staging_dir: &Path) -> Result<()> {
         (&["assets/stub.apk"], "stub.apk"),
     ];
 
-    let mut found_any = Vec::with_capacity(mapping.len());
     for (candidates, dst_name) in mapping {
         let mut staged = false;
         for entry_name in candidates.iter() {
@@ -193,9 +189,7 @@ pub fn extract_apk_payload(apk_path: &Path, staging_dir: &Path) -> Result<()> {
                 "APK missing entry for {dst_name} (checked {candidates:?})"
             )));
         }
-        found_any.push(dst_name);
     }
-    let _ = found_any;
     Ok(())
 }
 

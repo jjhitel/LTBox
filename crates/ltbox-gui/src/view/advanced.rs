@@ -32,7 +32,7 @@ impl App {
             content = content.push(
                 text(self.t(section.title_key).to_string())
                     .size(11)
-                    .style(label_style),
+                    .style(muted_style),
             );
             let mut rows = column![].spacing(8);
             for chunk in section.items.chunks(3) {

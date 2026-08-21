@@ -14,14 +14,6 @@ use crate::settings_store::RecentPaths;
 pub enum PickerKind {
     /// Folder containing the fixed-name EDL loader `xbl_s_devprg_ns.melf`.
     LoaderFolder,
-    /// Folder with loader + `rawprogram*.xml` (rescue-style firmware).
-    /// Currently unused — Boot Recovery moved to a single-`.melf`
-    /// file picker (matching the root flow) since it resolves
-    /// vendor_boot / vbmeta via GPT, not rawprogram XML. Kept so the
-    /// user's existing JSON-stored recents keyed `loader_rawprogram_folder`
-    /// don't get orphaned and the storage_key contract stays stable.
-    #[allow(dead_code)]
-    LoaderRawprogramFolder,
     /// Full QFIL firmware folder (programmer + all XML + partition images).
     QfilFirmwareFolder,
     /// Folder with encrypted `rawprogram*.x` files.
@@ -39,7 +31,6 @@ impl PickerKind {
     pub fn storage_key(self) -> &'static str {
         match self {
             Self::LoaderFolder => "loader_folder",
-            Self::LoaderRawprogramFolder => "loader_rawprogram_folder",
             Self::QfilFirmwareFolder => "qfil_firmware_folder",
             Self::EncryptedRawprogramFolder => "encrypted_rawprogram_folder",
             Self::OutputFolder => "output_folder",
@@ -50,27 +41,6 @@ impl PickerKind {
     /// `true` iff the picker opens a folder dialog (vs a file dialog).
     pub fn is_folder(self) -> bool {
         !matches!(self, Self::File)
-    }
-
-    /// i18n key for the unified Browse-button description. Resolves to
-    /// the localised `[X]을 선택하세요` (or equivalent) string.
-    ///
-    /// File picks use `FilePickSpec::target_i18n_key` instead since the
-    /// `[X]` slot varies per call — not per kind.
-    ///
-    /// NOTE: currently unused by the view code — views still render the
-    /// original `btn_browse_*` keys. Kept wired so localisation + view
-    /// reshuffle can land as one follow-up without re-threading the enum.
-    #[allow(dead_code)]
-    pub fn browse_label_key(self) -> &'static str {
-        match self {
-            Self::LoaderFolder => "picker_browse_loader_folder",
-            Self::LoaderRawprogramFolder => "picker_browse_loader_rawprogram_folder",
-            Self::QfilFirmwareFolder => "picker_browse_qfil_firmware_folder",
-            Self::EncryptedRawprogramFolder => "picker_browse_encrypted_rawprogram_folder",
-            Self::OutputFolder => "picker_browse_output_folder",
-            Self::File => "picker_browse_file", // unused — file picks use spec key
-        }
     }
 }
 
@@ -84,33 +54,24 @@ pub struct FilePickSpec {
     pub filter_label: String,
     /// `true` for multi-select (`pick_files`), `false` for single (`pick_file`).
     pub multi: bool,
-    /// i18n key that fills the `[X]` slot in the localised
-    /// `[X]을 선택하세요` description above the Browse button.
-    ///
-    /// Threaded through but not yet consumed by views — same deferred-
-    /// rollout note as [`PickerKind::browse_label_key`].
-    #[allow(dead_code)]
-    pub target_i18n_key: &'static str,
 }
 
 impl FilePickSpec {
-    /// Single-file, no filter, custom description target.
-    pub fn single(target_i18n_key: &'static str) -> Self {
+    /// Single-file, no filter.
+    pub fn single() -> Self {
         Self {
             exts: Vec::new(),
             filter_label: String::new(),
             multi: false,
-            target_i18n_key,
         }
     }
 
-    /// Multi-file, no filter, custom description target.
-    pub fn multi(target_i18n_key: &'static str) -> Self {
+    /// Multi-file, no filter.
+    pub fn multi() -> Self {
         Self {
             exts: Vec::new(),
             filter_label: String::new(),
             multi: true,
-            target_i18n_key,
         }
     }
 
@@ -230,7 +191,6 @@ mod tests {
     fn storage_keys_are_unique_and_stable() {
         let all = [
             PickerKind::LoaderFolder,
-            PickerKind::LoaderRawprogramFolder,
             PickerKind::QfilFirmwareFolder,
             PickerKind::EncryptedRawprogramFolder,
             PickerKind::OutputFolder,
@@ -251,7 +211,6 @@ mod tests {
     fn is_folder_only_false_for_file() {
         for k in [
             PickerKind::LoaderFolder,
-            PickerKind::LoaderRawprogramFolder,
             PickerKind::QfilFirmwareFolder,
             PickerKind::EncryptedRawprogramFolder,
             PickerKind::OutputFolder,
@@ -262,26 +221,23 @@ mod tests {
     }
 
     #[test]
-    fn spec_builder_sets_filter_and_keeps_target() {
-        let s = FilePickSpec::single("picker_target_partition_image")
-            .with_filter("Partition image", &["img", "bin"]);
+    fn spec_builder_sets_filter() {
+        let s = FilePickSpec::single().with_filter("Partition image", &["img", "bin"]);
         assert!(!s.multi);
-        assert_eq!(s.target_i18n_key, "picker_target_partition_image");
         assert_eq!(s.exts, vec!["img".to_string(), "bin".to_string()]);
         assert_eq!(s.filter_label, "Partition image");
     }
 
     #[test]
     fn spec_multi_builder() {
-        let s =
-            FilePickSpec::multi("picker_target_kpm_modules").with_filter("KPM modules", &["kpm"]);
+        let s = FilePickSpec::multi().with_filter("KPM modules", &["kpm"]);
         assert!(s.multi);
         assert_eq!(s.exts, vec!["kpm".to_string()]);
     }
 
     #[test]
     fn spec_without_filter_leaves_exts_empty() {
-        let s = FilePickSpec::single("picker_target_any");
+        let s = FilePickSpec::single();
         assert!(s.exts.is_empty());
         assert!(s.filter_label.is_empty());
     }

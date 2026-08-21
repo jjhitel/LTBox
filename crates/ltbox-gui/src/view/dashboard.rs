@@ -89,7 +89,6 @@ impl App {
                 .into()
         };
         let can_resume = busy_navigation_target(self.busy, self.busy_view).is_some();
-        let _log_preview_len = self.log_lines.len();
 
         // Title + divider dropped — sidebar already labels the active view,
         // so the duplicate header was eating vertical space without telling
@@ -160,7 +159,7 @@ impl App {
             text(self.t("dash_device").to_string())
                 .size(theme::text_size::TITLE_SMALL)
                 .font(theme::emphasis::medium())
-                .style(label_style)
+                .style(muted_style)
                 .line_height(1.0),
         );
         device_col = device_col.push(Space::new().height(4));

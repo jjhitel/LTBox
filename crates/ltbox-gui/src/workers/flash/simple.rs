@@ -15,7 +15,6 @@ use super::*;
 pub(crate) fn simple_flash_worker(
     conn: ConnectionStatus,
     fw_folder: String,
-    ll: LiveLabels,
     phases: PhaseReporter,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
@@ -64,8 +63,8 @@ pub(crate) fn simple_flash_worker(
     //    current transport rather than trusting the captured snapshot), then
     //    open the session — same entry path normal firmware flashing uses.
     live!(log, "[SimpleFlash] {}", phases.marker(2));
-    transition_to_edl(conn, &ll, &mut log)?;
-    let mut session = open_edl_session(&loader, true, &mut log)?;
+    transition_to_edl(conn, &mut log)?;
+    let mut session = open_edl_session(&loader, &mut log)?;
 
     // 6. Flash verbatim — no FP check, no signing-key check, no region / ARB /
     //    country edits, no keep-data skip.

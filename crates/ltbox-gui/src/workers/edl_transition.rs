@@ -57,10 +57,9 @@ pub(crate) fn wait_for_edl_ready(tag: &str, log: &mut Vec<String>) -> Result<(),
 /// before the caller aborts. Use for the FIRST session open of any operation.
 pub(crate) fn open_edl_session(
     loader: &std::path::Path,
-    auto_reset: bool,
     log: &mut Vec<String>,
 ) -> Result<ltbox_device::edl::EdlSession, String> {
-    match ltbox_device::edl::EdlSession::open(loader, auto_reset, log) {
+    match ltbox_device::edl::EdlSession::open(loader, log) {
         Ok(session) => Ok(session),
         Err(e) => {
             ltbox_core::live!(

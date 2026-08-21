@@ -106,7 +106,7 @@ impl App {
             toolbar = toolbar.push(
                 text(self.t("konabess_table_modified").to_string())
                     .size(11)
-                    .style(label_style),
+                    .style(muted_style),
             );
         }
         toolbar = toolbar.push(revert_button).push(import_button);
@@ -334,7 +334,7 @@ impl App {
             text(self.t("konabess_target_subtitle").to_string())
                 .size(12)
                 .style(muted_style),
-            text(summary).size(11).style(label_style),
+            text(summary).size(11).style(muted_style),
             widget::rule::horizontal(1),
             scrollable(candidates)
                 .style(m3_scrollable_style)
@@ -680,7 +680,7 @@ fn group_heading_text_style(theme: &Theme, warning: bool) -> iced::widget::text:
     if warning {
         warning_container_text_style(theme)
     } else {
-        label_style(theme)
+        muted_style(theme)
     }
 }
 
@@ -881,7 +881,7 @@ fn target_note_style(
             color: Some(pal_of(theme).on_secondary_container),
         }
     } else {
-        label_style(theme)
+        muted_style(theme)
     }
 }
 
@@ -953,7 +953,7 @@ mod tests {
         );
         assert_eq!(
             target_note_style(&theme, false, false).color,
-            label_style(&theme).color
+            muted_style(&theme).color
         );
         assert_eq!(
             target_shape_style(&theme, false, false).color,

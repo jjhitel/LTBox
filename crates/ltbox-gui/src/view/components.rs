@@ -41,7 +41,7 @@ pub(crate) fn m3_log_text_field<'a>(
             .size(theme::text_size::TITLE_SMALL)
             .font(theme::emphasis::medium())
             .line_height(1.0)
-            .style(label_style),
+            .style(muted_style),
     )
     .padding(iced::Padding {
         top: 12.0,
@@ -331,7 +331,7 @@ fn card_content<'a>(title: &str, content: impl Into<Element<'a, Message>>) -> El
         text(title.to_string())
             .size(theme::text_size::TITLE_SMALL)
             .font(theme::emphasis::medium())
-            .style(label_style)
+            .style(muted_style)
             .line_height(1.0),
         content.into(),
     ]
@@ -371,7 +371,8 @@ pub(crate) fn clickable_card<'a>(
             let p = pal_of(t);
             button::Style {
                 background: Some(
-                    blend(p.surface_container, p.primary, theme::state_alpha(status)).into(),
+                    theme::mix_color(p.surface_container, p.primary, theme::state_alpha(status))
+                        .into(),
                 ),
                 text_color: p.on_surface,
                 border: iced::Border {
@@ -390,7 +391,7 @@ pub(crate) fn info_kv<'a>(label: &str, value: &str) -> Element<'a, Message> {
     column![
         text(label.to_string())
             .size(theme::text_size::LABEL_SMALL)
-            .style(label_style),
+            .style(muted_style),
         // Value outranks its caption on weight and color rather than
         // size — at `BODY_LARGE` the kv grid competed with the device
         // name above it, which is what pushed that name oversized in the
@@ -407,7 +408,7 @@ pub(crate) fn info_kv_center<'a>(label: &str, value: &str) -> Element<'a, Messag
     column![
         text(label.to_string())
             .size(11)
-            .style(label_style)
+            .style(muted_style)
             .width(Length::Fill)
             .center(),
         // `WordOrGlyph` so a long, space-less file path wraps at glyph
@@ -435,7 +436,7 @@ pub(crate) fn info_kv_center_action<'a>(
     let inner = column![
         text(label.to_string())
             .size(11)
-            .style(label_style)
+            .style(muted_style)
             .width(Length::Fill)
             .center(),
         text(value.to_string())
@@ -483,7 +484,7 @@ pub(crate) fn info_kv_center_editable<'a>(
     let inner = column![
         text(label.to_string())
             .size(11)
-            .style(label_style)
+            .style(muted_style)
             .width(Length::Fill)
             .center(),
         text(value.to_string())
@@ -917,7 +918,7 @@ impl Provider {
             Self::KernelSU => include_bytes!("../../assets/icons/kernelsu.svg"),
             Self::KernelSUNext => include_bytes!("../../assets/icons/kernelsu_next.svg"),
             Self::SukiSU => include_bytes!("../../assets/icons/sukisu.svg"),
-            Self::ReSukiSU => include_bytes!("../../assets/icons/resukisu.svg"),
+            Self::ReSukiSU => include_bytes!("../../assets/icons/sukisu.svg"),
             Self::APatch => include_bytes!("../../assets/icons/apatch.svg"),
             Self::FolkPatch => include_bytes!("../../assets/icons/folkpatch.svg"),
         };

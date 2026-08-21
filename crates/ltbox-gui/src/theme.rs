@@ -3,11 +3,6 @@
 //! Roles per m3.material.io/styles/color/roles. All hand-picked colors
 //! go through [`Palette`] so light/dark + re-theming live in one place.
 
-// Design-system scaffolding: palette roles, state-layer alphas, shape
-// and type-scale tokens are kept complete even when a given binding is
-// not yet referenced, so future UI work can pull from a stable surface.
-#![allow(dead_code)]
-
 use iced::{Color, color};
 use std::sync::RwLock;
 
@@ -20,14 +15,11 @@ pub struct Palette {
     pub on_primary_container: Color,
 
     pub secondary: Color,
-    pub on_secondary: Color,
     pub secondary_container: Color,
     pub on_secondary_container: Color,
 
     pub tertiary: Color,
     pub on_tertiary: Color,
-    pub tertiary_container: Color,
-    pub on_tertiary_container: Color,
 
     pub error: Color,
     pub on_error: Color,
@@ -41,11 +33,8 @@ pub struct Palette {
     pub on_warning_container: Color,
 
     pub background: Color,
-    pub on_background: Color,
 
     pub surface: Color,
-    pub surface_dim: Color,
-    pub surface_bright: Color,
     pub surface_container_lowest: Color,
     pub surface_container_low: Color,
     pub surface_container: Color,
@@ -69,14 +58,11 @@ pub const LIGHT: Palette = Palette {
     on_primary_container: color!(0x001A43),
 
     secondary: color!(0x5B5D72),
-    on_secondary: color!(0xFFFFFF),
     secondary_container: color!(0xE0E1F9),
     on_secondary_container: color!(0x181A2C),
 
     tertiary: color!(0x76546F),
     on_tertiary: color!(0xFFFFFF),
-    tertiary_container: color!(0xFFD7F5),
-    on_tertiary_container: color!(0x2C1229),
 
     error: color!(0xBA1A1A),
     on_error: color!(0xFFFFFF),
@@ -89,11 +75,8 @@ pub const LIGHT: Palette = Palette {
     on_warning_container: color!(0x241A00),
 
     background: color!(0xFBF8FD),
-    on_background: color!(0x1B1B21),
 
     surface: color!(0xFBF8FD),
-    surface_dim: color!(0xDBD9E0),
-    surface_bright: color!(0xFBF8FD),
     surface_container_lowest: color!(0xFFFFFF),
     surface_container_low: color!(0xF5F2F7),
     surface_container: color!(0xEFECF1),
@@ -117,14 +100,11 @@ pub const DARK: Palette = Palette {
     on_primary_container: color!(0xDDE1FF),
 
     secondary: color!(0xC4C5DD),
-    on_secondary: color!(0x2D2F42),
     secondary_container: color!(0x434559),
     on_secondary_container: color!(0xE0E1F9),
 
     tertiary: color!(0xE5BAD8),
     on_tertiary: color!(0x44263F),
-    tertiary_container: color!(0x5C3D56),
-    on_tertiary_container: color!(0xFFD7F5),
 
     error: color!(0xFFB4AB),
     on_error: color!(0x690005),
@@ -137,11 +117,8 @@ pub const DARK: Palette = Palette {
     on_warning_container: color!(0xFFDFA3),
 
     background: color!(0x131318),
-    on_background: color!(0xE4E1E9),
 
     surface: color!(0x131318),
-    surface_dim: color!(0x131318),
-    surface_bright: color!(0x3A393F),
     surface_container_lowest: color!(0x0E0E13),
     surface_container_low: color!(0x1B1B21),
     surface_container: color!(0x201F26),
@@ -165,14 +142,11 @@ pub const TEAL_LIGHT: Palette = Palette {
     on_primary_container: color!(0x002020),
 
     secondary: color!(0x4A6363),
-    on_secondary: color!(0xFFFFFF),
     secondary_container: color!(0xCCE8E7),
     on_secondary_container: color!(0x051F1F),
 
     tertiary: color!(0x4B607C),
     on_tertiary: color!(0xFFFFFF),
-    tertiary_container: color!(0xD3E4FF),
-    on_tertiary_container: color!(0x041C35),
 
     error: LIGHT.error,
     on_error: LIGHT.on_error,
@@ -185,11 +159,8 @@ pub const TEAL_LIGHT: Palette = Palette {
     on_warning_container: LIGHT.on_warning_container,
 
     background: color!(0xF7FAF9),
-    on_background: LIGHT.on_background,
 
     surface: color!(0xF7FAF9),
-    surface_dim: color!(0xD7DBDA),
-    surface_bright: color!(0xF7FAF9),
     surface_container_lowest: color!(0xFFFFFF),
     surface_container_low: color!(0xF0F4F3),
     surface_container: color!(0xEAEEED),
@@ -212,14 +183,11 @@ pub const TEAL_DARK: Palette = Palette {
     on_primary_container: color!(0x9CF1EF),
 
     secondary: color!(0xB0CCCB),
-    on_secondary: color!(0x1B3534),
     secondary_container: color!(0x324B4A),
     on_secondary_container: color!(0xCCE8E7),
 
     tertiary: color!(0xB3C8E9),
     on_tertiary: color!(0x1C314C),
-    tertiary_container: color!(0x334865),
-    on_tertiary_container: color!(0xD3E4FF),
 
     error: DARK.error,
     on_error: DARK.on_error,
@@ -232,11 +200,8 @@ pub const TEAL_DARK: Palette = Palette {
     on_warning_container: DARK.on_warning_container,
 
     background: color!(0x111414),
-    on_background: DARK.on_background,
 
     surface: color!(0x111414),
-    surface_dim: color!(0x111414),
-    surface_bright: color!(0x363A39),
     surface_container_lowest: color!(0x0C0F0F),
     surface_container_low: color!(0x191C1C),
     surface_container: color!(0x1D2020),
@@ -260,14 +225,11 @@ pub const ROSE_LIGHT: Palette = Palette {
     on_primary_container: color!(0x3E001D),
 
     secondary: color!(0x74565F),
-    on_secondary: color!(0xFFFFFF),
     secondary_container: color!(0xFFD9E3),
     on_secondary_container: color!(0x2B151D),
 
     tertiary: color!(0x7D5635),
     on_tertiary: color!(0xFFFFFF),
-    tertiary_container: color!(0xFFDCC2),
-    on_tertiary_container: color!(0x301400),
 
     error: LIGHT.error,
     on_error: LIGHT.on_error,
@@ -280,11 +242,8 @@ pub const ROSE_LIGHT: Palette = Palette {
     on_warning_container: LIGHT.on_warning_container,
 
     background: color!(0xFFFBFF),
-    on_background: LIGHT.on_background,
 
     surface: color!(0xFFFBFF),
-    surface_dim: color!(0xE5D7DC),
-    surface_bright: color!(0xFFFBFF),
     surface_container_lowest: color!(0xFFFFFF),
     surface_container_low: color!(0xFCF0F4),
     surface_container: color!(0xF6EAEE),
@@ -307,14 +266,11 @@ pub const ROSE_DARK: Palette = Palette {
     on_primary_container: color!(0xFFD9E3),
 
     secondary: color!(0xE3BDC8),
-    on_secondary: color!(0x422A33),
     secondary_container: color!(0x5A3F49),
     on_secondary_container: color!(0xFFD9E3),
 
     tertiary: color!(0xF2BD91),
     on_tertiary: color!(0x49290D),
-    tertiary_container: color!(0x633F20),
-    on_tertiary_container: color!(0xFFDCC2),
 
     error: DARK.error,
     on_error: DARK.on_error,
@@ -327,11 +283,8 @@ pub const ROSE_DARK: Palette = Palette {
     on_warning_container: DARK.on_warning_container,
 
     background: color!(0x171216),
-    on_background: DARK.on_background,
 
     surface: color!(0x171216),
-    surface_dim: color!(0x171216),
-    surface_bright: color!(0x3F373B),
     surface_container_lowest: color!(0x120D10),
     surface_container_low: color!(0x211A1E),
     surface_container: color!(0x261E23),
@@ -356,8 +309,6 @@ pub enum ThemeSeed {
 }
 
 impl ThemeSeed {
-    pub const ALL: [Self; 3] = [Self::Indigo, Self::Teal, Self::Rose];
-
     pub const fn label_key(self) -> &'static str {
         match self {
             Self::Indigo => "theme_seed_indigo",
@@ -417,11 +368,6 @@ pub fn runtime_dark() -> bool {
     runtime_theme().dark_mode
 }
 
-/// Active palette for the current dark-mode flag.
-pub const fn palette(dark_mode: bool) -> &'static Palette {
-    if dark_mode { &DARK } else { &LIGHT }
-}
-
 pub fn palette_for(seed: ThemeSeed, dark_mode: bool) -> Palette {
     match (seed, dark_mode) {
         (ThemeSeed::Indigo, false) => LIGHT,
@@ -431,11 +377,6 @@ pub fn palette_for(seed: ThemeSeed, dark_mode: bool) -> Palette {
         (ThemeSeed::Rose, false) => ROSE_LIGHT,
         (ThemeSeed::Rose, true) => ROSE_DARK,
     }
-}
-
-pub fn active_palette() -> Palette {
-    let runtime = runtime_theme();
-    palette_for(runtime.seed, runtime.dark_mode)
 }
 
 pub fn active_palette_for(t: &iced::Theme) -> Palette {
@@ -488,9 +429,7 @@ pub fn mix_color(base: Color, overlay: Color, alpha: f32) -> Color {
 /// M3 state-layer alphas.
 pub mod state {
     pub const HOVER: f32 = 0.08;
-    pub const FOCUS: f32 = 0.10;
     pub const PRESSED: f32 = 0.12;
-    pub const DRAGGED: f32 = 0.16;
 }
 
 /// M3 state-layer alpha for an `iced::widget::button::Status` — `0.0`
@@ -543,158 +482,6 @@ pub fn tooltip_style(t: &iced::Theme, radius: f32) -> iced::widget::container::S
     }
 }
 
-/// M3 Expressive motion-physics tokens.
-///
-/// The expressive update replaced the easing/duration system with
-/// springs; M3 now calls the old easing and duration tokens "the legacy
-/// system", so they are deliberately not carried here. What this module
-/// holds instead are the two preset schemes' spring tokens, expressed
-/// through M3's own published spring-to-curve conversion for platforms
-/// without a spring runtime — which is what iced is.
-pub mod motion {
-    /// `cubic-bezier(x1, y1, x2, y2)` — outer control points.
-    pub type Easing = (f32, f32, f32, f32);
-
-    /// One spring token expressed the way M3 publishes it for platforms
-    /// without a spring runtime: an equivalent cubic-bezier plus a
-    /// duration.
-    #[derive(Debug, Clone, Copy, PartialEq)]
-    pub struct Spring {
-        pub curve: Easing,
-        pub duration_ms: u32,
-    }
-
-    impl Spring {
-        /// Progress at `elapsed_ms`. **Spatial springs overshoot**, so
-        /// this can legitimately exceed `1.0` before settling — callers
-        /// interpolating a position must not clamp it or they throw the
-        /// bounce away.
-        pub fn progress(self, elapsed_ms: f32) -> f32 {
-            if self.duration_ms == 0 {
-                return 1.0;
-            }
-            eval(self.curve, elapsed_ms / self.duration_ms as f32)
-        }
-
-        /// Whether the token has settled at `elapsed_ms`.
-        pub fn is_done(self, elapsed_ms: f32) -> bool {
-            elapsed_ms >= self.duration_ms as f32
-        }
-    }
-
-    /// Expressive motion scheme — M3's opinionated default, "used for
-    /// most situations, particularly hero moments and key interactions".
-    ///
-    /// **Spatial** tokens animate things that move: position, rotation,
-    /// size, corner radius. They overshoot and bounce into place.
-    /// **Effects** tokens animate colour and opacity, where overshoot
-    /// would be wrong, so they never exceed their target.
-    ///
-    /// Speed picks by element size: `FAST` for small components, the
-    /// default for partial-screen changes, `SLOW` for full-screen ones.
-    ///
-    /// Values are M3's own spring-to-curve conversion table for
-    /// non-spring platforms. iced has no spring runtime, so this is the
-    /// supported way to run the physics system here.
-    pub mod expressive {
-        use super::Spring;
-
-        pub const SPATIAL_FAST: Spring = Spring {
-            curve: (0.42, 1.67, 0.21, 0.90),
-            duration_ms: 350,
-        };
-        pub const SPATIAL_DEFAULT: Spring = Spring {
-            curve: (0.38, 1.21, 0.22, 1.00),
-            duration_ms: 500,
-        };
-        pub const SPATIAL_SLOW: Spring = Spring {
-            curve: (0.39, 1.29, 0.35, 0.98),
-            duration_ms: 650,
-        };
-
-        pub const EFFECTS_FAST: Spring = Spring {
-            curve: (0.31, 0.94, 0.34, 1.00),
-            duration_ms: 150,
-        };
-        pub const EFFECTS_DEFAULT: Spring = Spring {
-            curve: (0.34, 0.80, 0.34, 1.00),
-            duration_ms: 200,
-        };
-        pub const EFFECTS_SLOW: Spring = Spring {
-            curve: (0.34, 0.88, 0.34, 1.00),
-            duration_ms: 300,
-        };
-    }
-
-    /// Standard motion scheme — "more functional with minimal bounce",
-    /// for utilitarian moments. Its spatial tokens share one curve and
-    /// differ only in duration; the effects tokens are identical to the
-    /// expressive ones.
-    pub mod standard {
-        use super::Spring;
-
-        pub const SPATIAL_FAST: Spring = Spring {
-            curve: (0.27, 1.06, 0.18, 1.00),
-            duration_ms: 350,
-        };
-        pub const SPATIAL_DEFAULT: Spring = Spring {
-            curve: (0.27, 1.06, 0.18, 1.00),
-            duration_ms: 500,
-        };
-        pub const SPATIAL_SLOW: Spring = Spring {
-            curve: (0.27, 1.06, 0.18, 1.00),
-            duration_ms: 750,
-        };
-
-        pub const EFFECTS_FAST: Spring = super::expressive::EFFECTS_FAST;
-        pub const EFFECTS_DEFAULT: Spring = super::expressive::EFFECTS_DEFAULT;
-        pub const EFFECTS_SLOW: Spring = super::expressive::EFFECTS_SLOW;
-    }
-
-    /// Cubic Bézier basis with the endpoints pinned at `P0 = 0` and
-    /// `P3 = 1`, which is the form every CSS/M3 easing token uses.
-    fn basis(a: f32, b: f32, s: f32) -> f32 {
-        let u = 1.0 - s;
-        3.0 * u * u * s * a + 3.0 * u * s * s * b + s * s * s
-    }
-
-    /// Derivative of [`basis`] with respect to `s`.
-    fn basis_slope(a: f32, b: f32, s: f32) -> f32 {
-        3.0 * a * (1.0 - s) * (1.0 - 3.0 * s) + 3.0 * b * s * (2.0 - 3.0 * s) + 3.0 * s * s
-    }
-
-    /// Progress `y` at elapsed fraction `x`, per the CSS `cubic-bezier`
-    /// definition the M3 tokens are written in.
-    ///
-    /// The curve is parametric, so `x` is *not* the Bézier parameter:
-    /// reading `y(t)` directly skews the result badly on the asymmetric
-    /// tokens. Newton–Raphson inverts `x(s)` first; these curves are
-    /// monotonic in `x` and well conditioned, so a handful of iterations
-    /// converge well inside sub-pixel tolerance.
-    ///
-    /// The output is deliberately **not** clamped to `1.0`: spatial
-    /// springs have a `y1` above 1 and are supposed to overshoot.
-    pub fn eval(curve: Easing, x: f32) -> f32 {
-        let x = x.clamp(0.0, 1.0);
-        let (p1x, p1y, p2x, p2y) = curve;
-        let mut s = x;
-        for _ in 0..8 {
-            let err = basis(p1x, p2x, s) - x;
-            if err.abs() < 1e-5 {
-                break;
-            }
-            let slope = basis_slope(p1x, p2x, s);
-            // Flat spot — Newton would diverge; the current estimate is
-            // the best available.
-            if slope.abs() < 1e-6 {
-                break;
-            }
-            s = (s - err / slope).clamp(0.0, 1.0);
-        }
-        basis(p1y, p2y, s)
-    }
-}
-
 /// M3 shape scale (corner radius in px).
 ///
 /// These are the spec values — extra-large is 28, not the 24 this module
@@ -706,20 +493,12 @@ pub mod motion {
 /// cards and panels, `XL` for dialogs, `FULL` for buttons, FABs and the
 /// nav indicator.
 pub mod shape {
-    pub const NONE: f32 = 0.0;
     pub const XS: f32 = 4.0;
     pub const SM: f32 = 8.0;
-    pub const MD: f32 = 12.0;
     pub const LG: f32 = 16.0;
-    /// `large-increased`. One of the three steps the Expressive update
-    /// added; they sit between the old stops precisely so a hero surface
-    /// can break from its neighbours without jumping a whole step.
-    pub const LG_INCREASED: f32 = 20.0;
     pub const XL: f32 = 28.0;
     /// `extra-large-increased`.
     pub const XL_INCREASED: f32 = 32.0;
-    /// `extra-extra-large` — the top of the scale, for hero containers.
-    pub const XXL: f32 = 48.0;
     pub const FULL: f32 = 9999.0;
 }
 
@@ -808,12 +587,7 @@ pub mod emphasis {
 
 /// M3 type scale (font size in px).
 pub mod text_size {
-    pub const DISPLAY_LARGE: f32 = 57.0;
-    pub const DISPLAY_MEDIUM: f32 = 45.0;
-    pub const DISPLAY_SMALL: f32 = 36.0;
-    pub const HEADLINE_LARGE: f32 = 32.0;
     pub const HEADLINE_MEDIUM: f32 = 28.0;
-    pub const HEADLINE_SMALL: f32 = 24.0;
     pub const TITLE_LARGE: f32 = 22.0;
     pub const TITLE_MEDIUM: f32 = 16.0;
     pub const TITLE_SMALL: f32 = 14.0;
@@ -821,7 +595,6 @@ pub mod text_size {
     pub const BODY_MEDIUM: f32 = 14.0;
     pub const BODY_SMALL: f32 = 12.0;
     pub const LABEL_LARGE: f32 = 14.0;
-    pub const LABEL_MEDIUM: f32 = 12.0;
     pub const LABEL_SMALL: f32 = 11.0;
     /// Tighter than HEADLINE_SMALL. Not a formal M3 token.
     pub const WIZARD_STEP_TITLE: f32 = 20.0;
@@ -830,14 +603,8 @@ pub mod text_size {
 /// Which palette surface container the card fills with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceLevel {
-    /// `surface_container_low` — sidebar, subtle secondary panels.
-    Low,
     /// `surface_container` — default card surface.
     Default,
-    /// `surface_container_high` — raised dialogs / popovers.
-    High,
-    /// `surface_container_highest` — topmost modal sheets.
-    Highest,
     /// `surface_container_lowest` — disabled rescue card / log panels.
     Lowest,
     /// The brightest container for the current mode, which M3 reserves
@@ -853,10 +620,7 @@ impl SurfaceLevel {
     fn bg(self, p: &Palette, dark: bool) -> iced::Color {
         match self {
             Self::Lowest => p.surface_container_lowest,
-            Self::Low => p.surface_container_low,
             Self::Default => p.surface_container,
-            Self::High => p.surface_container_high,
-            Self::Highest => p.surface_container_highest,
             Self::Brightest => {
                 if dark {
                     p.surface_container_highest

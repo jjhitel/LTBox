@@ -374,10 +374,10 @@ impl App {
         ));
 
         // Nav column fills; update pill anchored below.
-        let body: Element<'_, Message> = if let Some(release) = self.update_available.as_ref() {
+        let body: Element<'_, Message> = if let Some(_release) = self.update_available.as_ref() {
             column![
                 container(col).width(Length::Fill).height(Length::Fill),
-                self.update_available_pill(release),
+                self.update_available_pill(),
             ]
             .width(Length::Fill)
             .height(Length::Fill)

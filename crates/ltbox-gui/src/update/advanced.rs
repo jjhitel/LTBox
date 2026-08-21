@@ -5,15 +5,11 @@ use iced::Task;
 use ltbox_core::tr_args;
 
 impl App {
-    #[allow(unreachable_code)]
     pub(crate) fn update_dump_phys(&mut self, msg: DumpPhysMsg) -> Task<Message> {
         match msg {
-            DumpPhysMsg::DumpPhysSelectLoader => {
-                return self.pick_loader_with_default(|__v| {
-                    Message::DumpPhys(DumpPhysMsg::DumpPhysLoaderChosen(__v))
-                });
-                Task::none()
-            }
+            DumpPhysMsg::DumpPhysSelectLoader => self.pick_loader_with_default(|__v| {
+                Message::DumpPhys(DumpPhysMsg::DumpPhysLoaderChosen(__v))
+            }),
             DumpPhysMsg::DumpPhysLoaderChosen(path) => {
                 if let Some(p) = path {
                     match self.resolve_loader_input(&p) {
@@ -51,12 +47,11 @@ impl App {
             }
             DumpPhysMsg::DumpPhysSelectFolder => {
                 // Dump destination — see DumpPartsSelectFolder.
-                return pick_folder_task(
+                pickers::pick_folder_for(
                     pickers::PickerKind::OutputFolder,
                     &self.recent_paths,
                     |__v| Message::DumpPhys(DumpPhysMsg::DumpPhysFolderChosen(__v)),
-                );
-                Task::none()
+                )
             }
             DumpPhysMsg::DumpPhysFolderChosen(path) => {
                 if let Some(folder) = path {
@@ -100,15 +95,11 @@ impl App {
         }
     }
 
-    #[allow(unreachable_code)]
     pub(crate) fn update_flash_phys(&mut self, msg: FlashPhysMsg) -> Task<Message> {
         match msg {
-            FlashPhysMsg::FlashPhysSelectLoader => {
-                return self.pick_loader_with_default(|__v| {
-                    Message::FlashPhys(FlashPhysMsg::FlashPhysLoaderChosen(__v))
-                });
-                Task::none()
-            }
+            FlashPhysMsg::FlashPhysSelectLoader => self.pick_loader_with_default(|__v| {
+                Message::FlashPhys(FlashPhysMsg::FlashPhysLoaderChosen(__v))
+            }),
             FlashPhysMsg::FlashPhysLoaderChosen(path) => {
                 if let Some(p) = path {
                     match self.resolve_loader_input(&p) {
@@ -128,12 +119,11 @@ impl App {
                 Task::none()
             }
             FlashPhysMsg::FlashPhysPickRowFile(idx) => {
-                let spec = pickers::FilePickSpec::single("picker_target_storage_image")
+                let spec = pickers::FilePickSpec::single()
                     .with_filter("Storage image", &["img", "bin", "mbn", "melf", "elf"]);
-                return pickers::pick_file_for(spec, &self.recent_paths, move |path| {
+                pickers::pick_file_for(spec, &self.recent_paths, move |path| {
                     Message::FlashPhys(FlashPhysMsg::FlashPhysRowFileChosen(idx, path))
-                });
-                Task::none()
+                })
             }
             FlashPhysMsg::FlashPhysRowFileChosen(idx, path) => {
                 if idx < PHYS_LUN_COUNT
@@ -179,15 +169,14 @@ impl App {
                     "[FlashPhys] {}",
                     tr_args!("log_flashphys_starting", count = pairs.len())
                 ));
-                return task_heavy(
+                task_heavy(
                     move || flash_physical_execute(conn, loader, pairs, phases),
                     |result| match result {
                         Ok(lines) => Message::FlashPhys(FlashPhysMsg::FlashPhysExecDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
                     |e| Err(format!("[FlashPhys] {e}")),
-                );
-                Task::none()
+                )
             }
             FlashPhysMsg::FlashPhysExecDone(lines) => {
                 self.flush_exec_done_log(lines);
@@ -197,15 +186,11 @@ impl App {
         }
     }
 
-    #[allow(unreachable_code)]
     pub(crate) fn update_dump_parts(&mut self, msg: DumpPartsMsg) -> Task<Message> {
         match msg {
-            DumpPartsMsg::DumpPartsSelectLoader => {
-                return self.pick_loader_with_default(|__v| {
-                    Message::DumpParts(DumpPartsMsg::DumpPartsLoaderChosen(__v))
-                });
-                Task::none()
-            }
+            DumpPartsMsg::DumpPartsSelectLoader => self.pick_loader_with_default(|__v| {
+                Message::DumpParts(DumpPartsMsg::DumpPartsLoaderChosen(__v))
+            }),
             DumpPartsMsg::DumpPartsLoaderChosen(path) => {
                 if let Some(p) = path {
                     match self.resolve_loader_input(&p) {
@@ -276,7 +261,7 @@ impl App {
                     "[DumpParts] {}",
                     ltbox_core::i18n::tr("live_dumpparts_scan_start")
                 ));
-                return task_heavy(
+                task_heavy(
                     move || dump_parts_scan(conn, loader),
                     |__v| Message::DumpParts(DumpPartsMsg::DumpPartsScanDone(__v)),
                     |e| DumpPartsScanResult {
@@ -284,8 +269,7 @@ impl App {
                         rows: Vec::new(),
                         error: Some(e),
                     },
-                );
-                Task::none()
+                )
             }
             DumpPartsMsg::DumpPartsScanDone(result) => {
                 self.flush_exec_done_log(result.logs);
@@ -325,12 +309,11 @@ impl App {
                 // Dump destination, not a firmware source — goes to the
                 // `OutputFolder` bucket so the MRU list doesn't mix input
                 // firmware dirs with output dump dirs.
-                return pick_folder_task(
+                pickers::pick_folder_for(
                     pickers::PickerKind::OutputFolder,
                     &self.recent_paths,
                     |__v| Message::DumpParts(DumpPartsMsg::DumpPartsFolderChosen(__v)),
-                );
-                Task::none()
+                )
             }
             DumpPartsMsg::DumpPartsFolderChosen(path) => {
                 if let Some(folder) = path {
@@ -369,15 +352,11 @@ impl App {
         }
     }
 
-    #[allow(unreachable_code)]
     pub(crate) fn update_flash_parts(&mut self, msg: FlashPartsMsg) -> Task<Message> {
         match msg {
-            FlashPartsMsg::FlashPartsSelectLoader => {
-                return self.pick_loader_with_default(|__v| {
-                    Message::FlashParts(FlashPartsMsg::FlashPartsLoaderChosen(__v))
-                });
-                Task::none()
-            }
+            FlashPartsMsg::FlashPartsSelectLoader => self.pick_loader_with_default(|__v| {
+                Message::FlashParts(FlashPartsMsg::FlashPartsLoaderChosen(__v))
+            }),
             FlashPartsMsg::FlashPartsLoaderChosen(path) => {
                 if let Some(p) = path {
                     match self.resolve_loader_input(&p) {
@@ -397,15 +376,13 @@ impl App {
                 Task::none()
             }
             FlashPartsMsg::FlashPartsPickRowFile(idx) => {
-                let spec = pickers::FilePickSpec::single("picker_target_partition_image")
-                    .with_filter(
-                        "Partition image",
-                        &["img", "bin", "mbn", "melf", "elf", "efi"],
-                    );
-                return pickers::pick_file_for(spec, &self.recent_paths, move |path| {
+                let spec = pickers::FilePickSpec::single().with_filter(
+                    "Partition image",
+                    &["img", "bin", "mbn", "melf", "elf", "efi"],
+                );
+                pickers::pick_file_for(spec, &self.recent_paths, move |path| {
                     Message::FlashParts(FlashPartsMsg::FlashPartsRowFileChosen(idx, path))
-                });
-                Task::none()
+                })
             }
             FlashPartsMsg::FlashPartsRowFileChosen(idx, path) => {
                 if let Some(p) = path {
@@ -480,7 +457,7 @@ impl App {
                     "[FlashParts] {}",
                     ltbox_core::i18n::tr("live_flashparts_scan_start")
                 ));
-                return task_heavy(
+                task_heavy(
                     move || flash_parts_scan(conn, loader),
                     |__v| Message::FlashParts(FlashPartsMsg::FlashPartsScanDone(__v)),
                     |e| FlashPartsScanResult {
@@ -488,8 +465,7 @@ impl App {
                         rows: Vec::new(),
                         error: Some(e),
                     },
-                );
-                Task::none()
+                )
             }
             FlashPartsMsg::FlashPartsScanDone(result) => {
                 self.flush_exec_done_log(result.logs);
@@ -538,15 +514,14 @@ impl App {
                         erase_count = erase_cnt.to_string()
                     )
                 ));
-                return task_heavy(
+                task_heavy(
                     move || flash_parts_execute(loader, rows, phases),
                     |result| match result {
                         Ok(lines) => Message::FlashParts(FlashPartsMsg::FlashPartsExecDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
                     |e| Err(format!("[FlashParts] {e}")),
-                );
-                Task::none()
+                )
             }
             FlashPartsMsg::FlashPartsExecDone(lines) => {
                 self.flush_exec_done_log(lines);
@@ -556,7 +531,6 @@ impl App {
         }
     }
 
-    #[allow(unreachable_code)]
     pub(crate) fn update_simple_flash(&mut self, msg: SimpleFlashMsg) -> Task<Message> {
         match msg {
             SimpleFlashMsg::SimpleFlashNext => {
@@ -583,14 +557,11 @@ impl App {
                 self.simple_flash.reset();
                 Task::none()
             }
-            SimpleFlashMsg::SimpleFlashSelectFolder => {
-                return pick_folder_task(
-                    pickers::PickerKind::QfilFirmwareFolder,
-                    &self.recent_paths,
-                    |__v| Message::SimpleFlash(SimpleFlashMsg::SimpleFlashFolderChosen(__v)),
-                );
-                Task::none()
-            }
+            SimpleFlashMsg::SimpleFlashSelectFolder => pickers::pick_folder_for(
+                pickers::PickerKind::QfilFirmwareFolder,
+                &self.recent_paths,
+                |__v| Message::SimpleFlash(SimpleFlashMsg::SimpleFlashFolderChosen(__v)),
+            ),
             SimpleFlashMsg::SimpleFlashFolderChosen(path) => {
                 if let Some(folder) = path {
                     self.remember_recent(pickers::PickerKind::QfilFirmwareFolder, &folder);
@@ -611,13 +582,12 @@ impl App {
                     .firmware_folder
                     .clone()
                     .unwrap_or_default();
-                let ll = self.live_labels();
                 self.log_push(format!(
                     "[SimpleFlash] {}",
                     tr_args!("live_flash_firmware_folder", path = fw_folder.clone())
                 ));
-                return task_heavy(
-                    move || simple_flash_worker(conn, fw_folder, ll, phases),
+                task_heavy(
+                    move || simple_flash_worker(conn, fw_folder, phases),
                     |result| match result {
                         Ok(lines) => {
                             Message::SimpleFlash(SimpleFlashMsg::SimpleFlashExecDone(lines))
@@ -625,8 +595,7 @@ impl App {
                         Err(e) => Message::OperationError(e),
                     },
                     Err,
-                );
-                Task::none()
+                )
             }
             SimpleFlashMsg::SimpleFlashExecDone(lines) => {
                 self.flush_exec_done_log(lines);
@@ -636,7 +605,6 @@ impl App {
         }
     }
 
-    #[allow(unreachable_code)]
     pub(crate) fn update_adv(&mut self, msg: AdvMsg) -> Task<Message> {
         match msg {
             AdvMsg::AdvConfirm(a) => {
@@ -644,30 +612,29 @@ impl App {
                 if matches!(a, AdvAction::FlashPartitions) {
                     self.flash_parts.reset();
                     self.advanced_wizard_open = AdvancedWizardOpen::FlashParts;
-                    return self.apply_default_loader_to_advanced_wizard();
+                    self.apply_default_loader_to_advanced_wizard()
                 } else if matches!(a, AdvAction::DumpPartitions) {
                     self.dump_parts.reset();
                     self.advanced_wizard_open = AdvancedWizardOpen::DumpParts;
-                    return self.apply_default_loader_to_advanced_wizard();
+                    self.apply_default_loader_to_advanced_wizard()
                 } else if matches!(a, AdvAction::DumpPhysical) {
                     self.dump_phys.reset();
                     self.advanced_wizard_open = AdvancedWizardOpen::DumpPhys;
-                    return self.apply_default_loader_to_advanced_wizard();
+                    self.apply_default_loader_to_advanced_wizard()
                 } else if matches!(a, AdvAction::FlashPhysical) {
                     self.flash_phys.reset();
                     self.advanced_wizard_open = AdvancedWizardOpen::FlashPhys;
-                    return self.apply_default_loader_to_advanced_wizard();
+                    self.apply_default_loader_to_advanced_wizard()
                 } else if matches!(a, AdvAction::SimpleFlash) {
                     // Dedicated wizard: intro (description) → folder picker →
                     // confirm → flash. No loader step (the loader comes from
                     // the firmware folder), so no default-loader fold-through.
                     self.simple_flash.reset();
                     self.advanced_wizard_open = AdvancedWizardOpen::SimpleFlash;
-                    return Task::none();
+                    Task::none()
                 } else {
-                    return self.update(Message::Adv(AdvMsg::AdvWizOpen(a)));
+                    self.update(Message::Adv(AdvMsg::AdvWizOpen(a)))
                 }
-                Task::none()
             }
             AdvMsg::AdvWizOpen(a) => {
                 self.adv_wizard.open(a);
@@ -681,9 +648,6 @@ impl App {
                 {
                     self.adv_wizard.file_path = Some(resolved);
                 }
-                // Mirror into legacy fields so AdvFileSelected /
-                // AdvExecDone keep working unchanged.
-                self.adv_confirm = Some(a);
                 self.adv_confirm_path = None;
                 Task::none()
             }
@@ -691,7 +655,6 @@ impl App {
                 if self.adv_wizard.step == 0 {
                     // Back on step 0 closes the wizard.
                     self.adv_wizard.reset();
-                    self.adv_confirm = None;
                     self.adv_confirm_path = None;
                 } else {
                     self.adv_wizard.back();
@@ -869,29 +832,26 @@ impl App {
             }
             AdvMsg::AdvWizBrowse => {
                 if self.adv_wizard.is_image_info() {
-                    let spec =
-                        pickers::FilePickSpec::multi(self.adv_wizard.picker_target_i18n_key())
-                            .with_filter("Android image (*.img)", &["img"]);
+                    let spec = pickers::FilePickSpec::multi()
+                        .with_filter("Android image (*.img)", &["img"]);
                     return pickers::pick_files_for(spec, &self.recent_paths, |__v| {
                         Message::Adv(AdvMsg::AdvWizBrowseManyDone(__v))
                     });
                 }
                 let kind = self.adv_wizard.picker_kind();
                 if kind.is_folder() {
-                    return pick_folder_task(kind, &self.recent_paths, |__v| {
+                    return pickers::pick_folder_for(kind, &self.recent_paths, |__v| {
                         Message::Adv(AdvMsg::AdvWizBrowseDone(__v))
                     });
                 }
                 let (filter_label, filter_exts) = self.adv_wizard.accepted_exts();
-                let target_key = self.adv_wizard.picker_target_i18n_key();
-                let mut spec = pickers::FilePickSpec::single(target_key);
+                let mut spec = pickers::FilePickSpec::single();
                 if !filter_exts.is_empty() {
                     spec = spec.with_filter(filter_label, filter_exts);
                 }
-                return pickers::pick_file_for(spec, &self.recent_paths, |__v| {
+                pickers::pick_file_for(spec, &self.recent_paths, |__v| {
                     Message::Adv(AdvMsg::AdvWizBrowseDone(__v))
-                });
-                Task::none()
+                })
             }
             AdvMsg::AdvWizBrowseDone(path) => {
                 if let Some(p) = path {
@@ -1000,7 +960,6 @@ impl App {
             AdvMsg::AdvExec(action) => {
                 // Picker ran in AdvConfirm; replay the saved path.
                 let Some(path) = self.adv_confirm_path.clone() else {
-                    self.adv_confirm = None;
                     return Task::none();
                 };
                 self.update(Message::Adv(AdvMsg::AdvFileSelected(action, Some(path))))
@@ -1018,7 +977,6 @@ impl App {
                     self.error_msg = None;
                     let action_label = self.t(action.label_key()).to_string();
                     self.log_push(format!("[Advanced] {}: {}", action_label, input_path));
-                    let _conn = self.connection;
                     // PatchDevinfo only — unused otherwise.
                     let adv_country: Option<String> =
                         self.wf_config.country_action.target().map(str::to_string);
@@ -1057,12 +1015,11 @@ impl App {
                         },
                     );
                 }
-                self.adv_confirm = None;
                 Task::none()
             }
             AdvMsg::AdvExecDone(lines) => {
                 self.flush_exec_done_log(lines);
-                // Leave adv_wizard / adv_confirm* intact so the exec
+                // Leave adv_wizard / adv_confirm_path intact so the exec
                 // screen stays visible with Done/Failed until StartOver.
                 self.end_op();
                 Task::none()
@@ -1077,7 +1034,7 @@ impl App {
                 let scanning = tr_args!("adv_image_info_scanning", count = paths.len().to_string());
                 self.set_image_info_log(scanning);
                 self.begin_silent_op(View::Advanced);
-                return Task::perform(
+                Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             ltbox_core::runtime::run_heavy(move || {
@@ -1090,8 +1047,7 @@ impl App {
                         .unwrap_or_else(|e| Err(tr_args!("err_task_failed_with_error", error = e)))
                     },
                     |__v| Message::Adv(AdvMsg::AdvImageInfoExecDone(__v)),
-                );
-                Task::none()
+                )
             }
             AdvMsg::AdvImageInfoExecDone(result) => {
                 self.end_silent_op();
@@ -1121,7 +1077,7 @@ impl App {
                 let i_reboot_fastboot = self.t("live_arb_reboot_to_fastboot").to_string();
                 let i_reboot_system = self.t("live_arb_reboot_to_system").to_string();
                 let i_edl_dump = self.t("live_arb_edl_dump").to_string();
-                return task_heavy(
+                task_heavy(
                     move || {
                         let mut log = Vec::new();
                         match detect_arb_run(
@@ -1142,8 +1098,7 @@ impl App {
                     },
                     |__v| Message::Adv(AdvMsg::AdvDetectArbExecDone(__v)),
                     Err,
-                );
-                Task::none()
+                )
             }
             AdvMsg::AdvDetectArbExecDone(result) => {
                 match result {

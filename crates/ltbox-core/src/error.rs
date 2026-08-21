@@ -4,9 +4,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum LtboxError {
-    #[error("Device error: {0}")]
-    Device(String),
-
     #[error("Patch error: {0}")]
     Patch(String),
 
@@ -15,9 +12,6 @@ pub enum LtboxError {
 
     #[error("Boot image error: {0}")]
     BootImage(String),
-
-    #[error("EDL error: {0}")]
-    Edl(String),
 
     #[error("Download error: {0}")]
     Download(String),

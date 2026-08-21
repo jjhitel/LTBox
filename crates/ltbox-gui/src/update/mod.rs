@@ -322,7 +322,6 @@ impl App {
                         self.flash_phys.reset();
                         self.simple_flash.reset();
                         self.adv_wizard.reset();
-                        self.adv_confirm = None;
                         self.adv_confirm_path = None;
                         self.set_image_info_log(String::new());
                     }

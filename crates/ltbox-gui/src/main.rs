@@ -1333,7 +1333,6 @@ fn read_device_rollback_index_via_edl(
 /// the captured `conn` stale.
 pub(crate) fn transition_to_edl(
     conn: ConnectionStatus,
-    _ll: &LiveLabels,
     log: &mut Vec<String>,
 ) -> std::result::Result<(), String> {
     let live = probe_connection_for_edl().unwrap_or(conn);
@@ -1358,23 +1357,7 @@ fn probe_connection_for_edl() -> Option<ConnectionStatus> {
     }
 }
 
-/// `Task<Message>` wrapping `rfd::AsyncFileDialog::pick_folder` for
-/// direct `return` from an update handler.
-///
-/// `kind` selects the recents bucket — the dialog seeds its starting
-/// directory from the kind's most-recent path so users land where they
-/// last worked. Call-sites that don't fit one of the 4 folder categories
-/// should use [`PickerKind::OutputFolder`] rather than introducing a new
-/// kind silently.
-fn pick_folder_task(
-    kind: pickers::PickerKind,
-    recents: &settings_store::RecentPaths,
-    on_pick: fn(Option<String>) -> Message,
-) -> Task<Message> {
-    pickers::pick_folder_for(kind, recents, on_pick)
-}
-
-fn loader_file_spec(target_i18n_key: &'static str) -> pickers::FilePickSpec {
+fn loader_file_spec() -> pickers::FilePickSpec {
     // LTBox-supported devices ship `xbl_s_devprg_ns.melf` as the only
     // viable Firehose loader, so the picker accepts `.melf`. TB323FU
     // uses a multi-image manifest instead — a
@@ -1383,7 +1366,7 @@ fn loader_file_spec(target_i18n_key: &'static str) -> pickers::FilePickSpec {
     // not enforced for the .melf case; the model-aware resolver
     // upgrades a TB323FU `.melf` selection to the manifest sitting
     // next to it.
-    pickers::FilePickSpec::single(target_i18n_key).with_filter(
+    pickers::FilePickSpec::single().with_filter(
         "EDL loader (.melf / .mbn / .elf / .xml / .x)",
         LOADER_PICKER_EXTS,
     )
@@ -1549,12 +1532,9 @@ struct App {
     flash: FlashWizard,
     sysupdate: SysUpdateWizard,
     unroot: UnrootWizard,
-    adv_confirm: Option<AdvAction>,
     /// Staged path for the pending advanced action — replayed into the
     /// exec path on Start so no second dialog fires.
     adv_confirm_path: Option<String>,
-    /// Advanced wizard state. Mirrors into `adv_confirm*` on exec so
-    /// the legacy handlers stay oblivious.
     adv_wizard: AdvWizard,
     /// Dedicated EDL-based KonaBess flow; target-popup state is owned here.
     konabess: KonaBessWizard,
@@ -1828,7 +1808,6 @@ impl Default for App {
             flash: FlashWizard::default(),
             sysupdate: SysUpdateWizard::default(),
             unroot: UnrootWizard::default(),
-            adv_confirm: None,
             adv_confirm_path: None,
             adv_wizard: AdvWizard::default(),
             konabess: KonaBessWizard::default(),
@@ -2067,13 +2046,8 @@ impl App {
 
     /// Bulk append; one truncation pass.
     fn log_extend<I: IntoIterator<Item = String>>(&mut self, lines: I) {
-        // Adjacent dedup against the existing tail. The `live!` macro
-        // now both prints (for the stdout tap) and pushes to the
-        // closure's local Vec (for *ExecDone resilience), so the same
-        // line can arrive twice — once via tap drain in real time, then
-        // again when the closure returns and the Vec is `log_extend`ed.
-        // Skipping over a matching prefix collapses the dup back to one
-        // entry without losing lines that the tap actually missed.
+        // Adjacent dedup against the existing tail collapses repeated
+        // streamed lines without duplicating the visible transcript.
         let mut prev_tail = self.log_lines.last().cloned();
         let mut accepted: Vec<String> = Vec::new();
         for line in lines {
@@ -2117,7 +2091,6 @@ impl App {
         self.active_op_kind = None;
         self.clear_flash_progress();
         // Single START banner; no closing rule.
-        let _ = v;
         let label = self.t("log_separator_start").to_string();
         self.log_separator(Some(&label));
     }
@@ -2519,11 +2492,7 @@ impl App {
         if let Some(path) = self.resolved_default_loader() {
             return self.update(on_chosen(Some(path)));
         }
-        pickers::pick_file_for(
-            loader_file_spec("picker_target_edl_loader"),
-            &self.recent_paths,
-            on_chosen,
-        )
+        pickers::pick_file_for(loader_file_spec(), &self.recent_paths, on_chosen)
     }
 
     /// Record the picked flash firmware folder and flag whether it ships an EDL
@@ -3076,10 +3045,7 @@ impl App {
 
     /// Bottom-of-sidebar pill linking to the GitHub release when a
     /// newer stable build is available.
-    fn update_available_pill(
-        &self,
-        _release: &ltbox_core::github::StableRelease,
-    ) -> Element<'_, Message> {
+    fn update_available_pill(&self) -> Element<'_, Message> {
         let label = self.t("sidebar_update_available").to_string();
         // Pill label rides the same opacity tween as nav-button labels
         // for visual coherence. Mount text at any non-zero alpha so it
@@ -4361,51 +4327,6 @@ mod tests {
         assert!(result.contains("wizard_primary_extended_fab"));
         assert!(!result.contains("wizard_surface_fab"));
         assert!(!result.contains("wizard_error_fab"));
-    }
-
-    /// `eval` takes the elapsed fraction `x`, not the Bézier parameter,
-    /// and must land exactly on both endpoints.
-    #[test]
-    fn motion_eval_inverts_x_before_reading_the_curve() {
-        use theme::motion::{eval, expressive};
-
-        for spring in [expressive::SPATIAL_DEFAULT, expressive::EFFECTS_DEFAULT] {
-            assert!(eval(spring.curve, 0.0).abs() < 1e-3);
-            assert!((eval(spring.curve, 1.0) - 1.0).abs() < 1e-3);
-        }
-    }
-
-    /// Spatial springs overshoot and effects springs must not — that is
-    /// the whole reason M3 splits them, so clamping `eval` or picking the
-    /// wrong family would silently flatten the motion.
-    #[test]
-    fn spatial_springs_overshoot_and_effects_springs_do_not() {
-        use theme::motion::{eval, expressive};
-
-        let peak = |s: theme::motion::Spring| {
-            (0..=100).fold(0.0f32, |acc, i| acc.max(eval(s.curve, i as f32 / 100.0)))
-        };
-
-        assert!(
-            peak(expressive::SPATIAL_DEFAULT) > 1.0,
-            "spatial springs bounce past their target"
-        );
-        assert!(
-            peak(expressive::EFFECTS_DEFAULT) <= 1.0 + 1e-3,
-            "colour and opacity must never overshoot"
-        );
-    }
-
-    /// `progress` maps wall-clock time onto the curve and reports
-    /// settling at the token's own duration.
-    #[test]
-    fn spring_progress_tracks_its_duration() {
-        use theme::motion::expressive::SPATIAL_FAST;
-
-        assert!(SPATIAL_FAST.progress(0.0).abs() < 1e-3);
-        assert!((SPATIAL_FAST.progress(350.0) - 1.0).abs() < 1e-3);
-        assert!(!SPATIAL_FAST.is_done(349.0));
-        assert!(SPATIAL_FAST.is_done(350.0));
     }
 
     /// An unidentified device must not be reported as rollback-protected:

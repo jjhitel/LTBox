@@ -9,5 +9,3 @@ pub mod controller;
 pub mod driver;
 pub mod edl;
 pub mod fastboot;
-
-pub use qdl;

@@ -67,7 +67,7 @@ impl App {
                 ])
             }
             SettingsMsg::SettingsPickDefaultLoader => {
-                let spec = loader_file_spec("picker_target_edl_loader");
+                let spec = loader_file_spec();
                 pickers::pick_file_for(spec, &self.recent_paths, |__v| {
                     Message::Settings(SettingsMsg::SettingsDefaultLoaderChosen(__v))
                 })

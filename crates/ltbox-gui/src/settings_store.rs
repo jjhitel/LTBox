@@ -23,7 +23,7 @@ pub const LEGACY_FILES_KEY: &str = "legacy.files";
 pub const LEGACY_FOLDERS_KEY: &str = "legacy.folders";
 
 /// Per-category MRU path lists. Category keys are stable strings (see
-/// `PickerKind::storage_key` in main.rs) so the JSON roundtrips without
+/// `PickerKind::storage_key` in pickers.rs) so the JSON roundtrips without
 /// coupling persistence to enum Variant ordering.
 ///
 /// `BTreeMap` (not `HashMap`) for deterministic JSON output — diffing the
@@ -127,7 +127,7 @@ pub struct PersistedSettings {
     pub qcom_driver_mode: String,
     /// Last window size (logical pixels) recorded on resize. Restored on
     /// next launch so the user's preferred geometry survives restarts.
-    /// `None` on first run → the default 820×620 in `main` applies.
+    /// `None` on first run → the default 820×720 in `main` applies.
     #[serde(default)]
     pub window_size: Option<(f32, f32)>,
     /// User dismissed the optional Qualcomm USB driver *update* prompt via

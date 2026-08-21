@@ -5,7 +5,6 @@ use iced::Task;
 use ltbox_core::tr_args;
 
 impl App {
-    #[allow(unreachable_code)]
     pub(crate) fn update_root(&mut self, msg: RootMsg) -> Task<Message> {
         match msg {
             RootMsg::RootFamily(f) => {
@@ -89,11 +88,9 @@ impl App {
                     // (`gki::patch_boot` unpacks the .img with
                     // magiskboot in a scratch subdir to pull the kernel
                     // out, then reuses the existing repack path).
-                    pickers::FilePickSpec::single("picker_target_kernel_image")
-                        .with_filter("Kernel image", &["zip", "img"])
+                    pickers::FilePickSpec::single().with_filter("Kernel image", &["zip", "img"])
                 } else {
-                    pickers::FilePickSpec::single("picker_target_apatch_apk")
-                        .with_filter("APK", &["apk"])
+                    pickers::FilePickSpec::single().with_filter("APK", &["apk"])
                 };
                 pickers::pick_file_for(spec, &self.recent_paths, Message::FileSelected)
             }
@@ -106,12 +103,11 @@ impl App {
                     return Task::none();
                 }
                 self.picker_target = PickerTarget::RootLoader;
-                return pickers::pick_file_for(
-                    loader_file_spec("picker_target_edl_loader"),
+                pickers::pick_file_for(
+                    loader_file_spec(),
                     &self.recent_paths,
                     Message::FileSelected,
-                );
-                Task::none()
+                )
             }
             RootMsg::RootNext => {
                 if self.root.step == 6 {
@@ -178,12 +174,10 @@ impl App {
             RootMsg::RootSelectKpm => {
                 // Multi-select; paths merge-dedup into the list so
                 // the user can Browse multiple times.
-                let spec = pickers::FilePickSpec::multi("picker_target_kpm_modules")
-                    .with_filter("KPM modules", &["kpm"]);
-                return pickers::pick_files_for(spec, &self.recent_paths, |__v| {
+                let spec = pickers::FilePickSpec::multi().with_filter("KPM modules", &["kpm"]);
+                pickers::pick_files_for(spec, &self.recent_paths, |__v| {
                     Message::Root(RootMsg::RootKpmSelected(__v))
-                });
-                Task::none()
+                })
             }
             RootMsg::RootKpmSelected(paths) => {
                 if let Some(paths) = paths {
@@ -468,7 +462,7 @@ impl App {
                 };
                 let ll = self.live_labels();
 
-                return Task::perform(
+                Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             ltbox_core::runtime::run_heavy(move || {
@@ -499,8 +493,7 @@ impl App {
                         Ok(lines) => Message::Root(RootMsg::RootExecDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
-                );
-                Task::none()
+                )
             }
             RootMsg::RootExecDone(lines) => {
                 self.flush_exec_done_log(lines);

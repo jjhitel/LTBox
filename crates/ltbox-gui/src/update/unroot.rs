@@ -4,7 +4,6 @@ use crate::*;
 use iced::Task;
 
 impl App {
-    #[allow(unreachable_code)]
     pub(crate) fn update_unroot(&mut self, msg: UnrootMsg) -> Task<Message> {
         match msg {
             UnrootMsg::SetUnrootType(t) => {
@@ -13,19 +12,15 @@ impl App {
             }
             UnrootMsg::UnrootSelectFolder => {
                 self.picker_target = PickerTarget::UnrootFolder;
-                return pick_folder_task(
+                pickers::pick_folder_for(
                     pickers::PickerKind::QfilFirmwareFolder,
                     &self.recent_paths,
                     Message::FolderSelected,
-                );
-                Task::none()
+                )
             }
-            UnrootMsg::UnrootSelectLoader => {
-                return self.pick_loader_with_default(|__v| {
-                    Message::Unroot(UnrootMsg::UnrootLoaderChosen(__v))
-                });
-                Task::none()
-            }
+            UnrootMsg::UnrootSelectLoader => self.pick_loader_with_default(|__v| {
+                Message::Unroot(UnrootMsg::UnrootLoaderChosen(__v))
+            }),
             UnrootMsg::UnrootLoaderChosen(path) => {
                 if let Some(p) = path {
                     self.remember_recent(pickers::PickerKind::File, &p);
@@ -83,7 +78,7 @@ impl App {
                     tr_args!("log_op_starting", what = self.t(unroot_type.label_key()))
                 ));
                 let ll = self.live_labels();
-                return Task::perform(
+                Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
                             ltbox_core::runtime::run_heavy(move || {
@@ -105,8 +100,7 @@ impl App {
                         Ok(lines) => Message::Unroot(UnrootMsg::UnrootExecDone(lines)),
                         Err(e) => Message::OperationError(e),
                     },
-                );
-                Task::none()
+                )
             }
             UnrootMsg::UnrootExecDone(lines) => {
                 self.flush_exec_done_log(lines);

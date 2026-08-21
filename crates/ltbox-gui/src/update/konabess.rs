@@ -32,7 +32,7 @@ impl App {
                 Task::none()
             }
             KonaBessMsg::KonaBessSelectImport => pickers::pick_file_for(
-                pickers::FilePickSpec::single("picker_target_konabess_export").with_filter(
+                pickers::FilePickSpec::single().with_filter(
                     self.t("picker_target_konabess_export").to_string(),
                     &["txt"],
                 ),
