@@ -19,6 +19,10 @@ mod window;
 
 impl App {
     pub(crate) fn update(&mut self, msg: Message) -> Task<Message> {
+        #[cfg(feature = "demo")]
+        if demo::blocks_device_action(self, &msg) {
+            return Task::none();
+        }
         match msg {
             // Window chrome (titlebar buttons, cursor-drag move/resize,
             // persisted geometry) delegated to a focused handler so the
@@ -414,6 +418,10 @@ impl App {
             }
             // Device polling
             Message::PollDevice => {
+                #[cfg(feature = "demo")]
+                if let Some(result) = demo::poll_result(self) {
+                    return Task::done(Message::DevicePolled(result));
+                }
                 return Task::perform(
                     async {
                         tokio::task::spawn_blocking(|| {

@@ -126,6 +126,9 @@ jobs:
         # same world rustc will compile against.
         run: cargo xwin clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc
 
+      - name: cargo xwin clippy (demo)
+        run: cargo xwin clippy -p ltbox-gui --features demo --all-targets --locked --target x86_64-pc-windows-msvc
+
   cargo-deny:
     name: cargo-deny
     runs-on: ubuntu-latest

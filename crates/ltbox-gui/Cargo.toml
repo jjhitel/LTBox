@@ -8,6 +8,10 @@ license.workspace = true
 name = "ltbox"
 path = "src/main.rs"
 
+[features]
+default = []
+demo = []
+
 [dependencies]
 ltbox-core = { path = "../ltbox-core" }
 ltbox-device = { path = "../ltbox-device" }

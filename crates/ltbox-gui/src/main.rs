@@ -17,6 +17,8 @@
 mod icon;
 mod arb;
 mod arb_overlay;
+#[cfg(feature = "demo")]
+mod demo;
 mod device_name;
 mod loader;
 mod message;
@@ -1719,6 +1721,8 @@ struct App {
     /// Latest live firmware flash progress snapshot for the shared exec card.
     flash_progress: Option<ltbox_device::edl::FlashProgress>,
     log_popup_open: bool,
+    #[cfg(feature = "demo")]
+    demo_scene: Option<demo::Scene>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1891,6 +1895,8 @@ impl Default for App {
             active_op_kind: None,
             flash_progress: None,
             log_popup_open: false,
+            #[cfg(feature = "demo")]
+            demo_scene: None,
         }
     }
 }
@@ -1899,8 +1905,16 @@ impl App {
     fn new() -> (Self, Task<Message>) {
         // Window-id + driver check + update check all fire in parallel.
         let app = Self::default();
+        #[cfg(feature = "demo")]
+        let mut app = app;
+        #[cfg(feature = "demo")]
+        demo::initialize(&mut app);
         let win =
             iced::window::latest().map(|__v| Message::Window(WindowMsg::WindowIdReceived(__v)));
+        #[cfg(feature = "demo")]
+        if demo::is_active(&app) {
+            return (app, win);
+        }
         let driver_check = Task::perform(
             async {
                 tokio::task::spawn_blocking(ltbox_device::driver::check_required_drivers)

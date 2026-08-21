@@ -1,0 +1,351 @@
+//! Launch-time screenshot scenes for the opt-in `demo` feature.
+//!
+//! `LTBOX_DEMO` accepts dashboard scenes `dashboard`, `drivers-missing`, and
+//! `adb-conflict`, plus wizard scenes `<flow>:<step>` where `flow` is `same` or
+//! `other` and `step` is `region`, `target`, `data`, `country`, `folder`,
+//! `confirm`, or `flash`.
+
+use crate::*;
+
+const FIRMWARE_FOLDER: &str =
+    "/Users/ltbox/Firmware/TB520FU_ROW_OPEN_USER_Q00002.0_W_ZUI_17.5.10.096_ST_251127";
+
+pub(crate) const VALID_SCENES: &[&str] = &[
+    "dashboard",
+    "drivers-missing",
+    "adb-conflict",
+    "same:region",
+    "same:target",
+    "same:data",
+    "same:country",
+    "same:folder",
+    "same:confirm",
+    "same:flash",
+    "other:region",
+    "other:target",
+    "other:data",
+    "other:country",
+    "other:folder",
+    "other:confirm",
+    "other:flash",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scene {
+    Dashboard,
+    DriversMissing,
+    AdbConflict,
+    Wizard { flow: Flow, step: WizardStep },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Flow {
+    Same,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WizardStep {
+    Region,
+    Target,
+    Data,
+    Country,
+    Folder,
+    Confirm,
+    Flash,
+}
+
+impl Scene {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "dashboard" => Some(Self::Dashboard),
+            "drivers-missing" => Some(Self::DriversMissing),
+            "adb-conflict" => Some(Self::AdbConflict),
+            _ => {
+                let (flow, step) = value.split_once(':')?;
+                let flow = match flow {
+                    "same" => Flow::Same,
+                    "other" => Flow::Other,
+                    _ => return None,
+                };
+                let step = match step {
+                    "region" => WizardStep::Region,
+                    "target" => WizardStep::Target,
+                    "data" => WizardStep::Data,
+                    "country" => WizardStep::Country,
+                    "folder" => WizardStep::Folder,
+                    "confirm" => WizardStep::Confirm,
+                    "flash" => WizardStep::Flash,
+                    _ => return None,
+                };
+                Some(Self::Wizard { flow, step })
+            }
+        }
+    }
+
+    fn poll_result(self) -> DevicePollResult {
+        match self {
+            Self::DriversMissing => return DevicePollResult::default(),
+            Self::AdbConflict => {
+                return DevicePollResult {
+                    status: ConnectionStatus::AdbServerBlocking,
+                    ..DevicePollResult::default()
+                };
+            }
+            Self::Dashboard | Self::Wizard { .. } => {}
+        }
+
+        DevicePollResult {
+            status: ConnectionStatus::Adb,
+            model: "TB520FU".to_string(),
+            slot: "_a".to_string(),
+            firmware: "ZUXOS_1.5.10.186_ST_260408".to_string(),
+            firmware_full: "ZUXOS_1.5.10.186_ST_260408".to_string(),
+            arb: "arb_yes".to_string(),
+            ram: "12 GB".to_string(),
+            storage: "256 GB".to_string(),
+            market_name: "YOGA Pad Pro".to_string(),
+            platform_supported: Some(true),
+            ..DevicePollResult::default()
+        }
+    }
+}
+
+pub(crate) fn initialize(app: &mut App) {
+    let Some(value) = std::env::var_os("LTBOX_DEMO") else {
+        return;
+    };
+    let value = value.to_string_lossy();
+    let Some(scene) = Scene::parse(&value) else {
+        tracing::warn!(
+            "unrecognized LTBOX_DEMO={value:?}; valid scenes: {}",
+            VALID_SCENES.join(", ")
+        );
+        return;
+    };
+
+    app.demo_scene = Some(scene);
+    app.driver_status = Some(match scene {
+        Scene::DriversMissing => ltbox_device::driver::DriverStatus::Missing(vec!["qcserlib.inf"]),
+        _ => ltbox_device::driver::DriverStatus::Present,
+    });
+    app.online = Some(true);
+    drop(app.update(Message::DevicePolled(scene.poll_result())));
+
+    if let Scene::Wizard { flow, step } = scene {
+        apply_wizard_scene(app, flow, step);
+    }
+}
+
+fn apply_wizard_scene(app: &mut App, flow: Flow, step: WizardStep) {
+    let (target, data_mode, modify_region, modify_rollback, wipe) = match flow {
+        Flow::Same => (
+            FlashTarget::SameRegion,
+            DataMode::Keep,
+            false,
+            RollbackSetting::Auto,
+            false,
+        ),
+        Flow::Other => (
+            FlashTarget::OtherRegion,
+            DataMode::Wipe,
+            true,
+            RollbackSetting::On,
+            true,
+        ),
+    };
+    let config = WorkflowConfig {
+        modify_region,
+        device_region: Some(DeviceRegion::Prc),
+        modify_rollback,
+        wipe,
+        country_action: CountryAction::Set("US".to_string()),
+    };
+
+    app.current_view = View::Flash;
+    app.flash = FlashWizard {
+        step: match step {
+            WizardStep::Region => 0,
+            WizardStep::Target => 1,
+            WizardStep::Data => 2,
+            WizardStep::Country | WizardStep::Folder => 3,
+            WizardStep::Confirm => 4,
+            WizardStep::Flash => 5,
+        },
+        device_region: Some(DeviceRegion::Prc),
+        target: Some(target),
+        data_mode: Some(data_mode),
+        firmware_folder: Some(FIRMWARE_FOLDER.to_string()),
+        ..FlashWizard::default()
+    };
+    app.wf_config = config.clone();
+    app.confirm_baseline = Some(config);
+    app.country_popup_open = step == WizardStep::Country;
+
+    if step == WizardStep::Flash {
+        let _ = app.begin_phased_op(View::Flash, OperationPhaseKind::Flash);
+        app.current_op_step = OperationPhaseKind::Flash
+            .firmware_progress_step()
+            .expect("flash operations have a firmware-writing phase")
+            - 1;
+    }
+}
+
+pub(crate) fn is_active(app: &App) -> bool {
+    app.demo_scene.is_some()
+}
+
+pub(crate) fn poll_result(app: &App) -> Option<DevicePollResult> {
+    app.demo_scene.map(Scene::poll_result)
+}
+
+pub(crate) fn blocks_flash_execution(app: &App) -> bool {
+    app.demo_scene.is_some()
+}
+
+pub(crate) fn blocks_device_action(app: &App, message: &Message) -> bool {
+    app.demo_scene.is_some()
+        && matches!(
+            message,
+            Message::Flash(_)
+                | Message::Root(_)
+                | Message::Unroot(_)
+                | Message::Sys(_)
+                | Message::Adv(_)
+                | Message::KonaBess(_)
+                | Message::FlashParts(_)
+                | Message::DumpParts(_)
+                | Message::DumpPhys(_)
+                | Message::FlashPhys(_)
+                | Message::SimpleFlash(_)
+                | Message::Reboot(_)
+                | Message::KillAdbServer
+                | Message::InstallDrivers
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_documented_scene_parses() {
+        for scene in VALID_SCENES {
+            assert!(Scene::parse(scene).is_some(), "failed to parse {scene}");
+        }
+        assert!(Scene::parse("same:unknown").is_none());
+        assert!(Scene::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn fabricated_model_uses_the_tb520fu_portrait() {
+        let result = Scene::Dashboard.poll_result();
+        assert_eq!(result.model, "TB520FU");
+        assert!(matches!(
+            device_portrait(&result.model),
+            DevicePortrait::Png(_)
+        ));
+    }
+
+    #[test]
+    fn dashboard_identity_is_populated_but_unreadable_scenes_stay_empty() {
+        let mut dashboard = App::default();
+        drop(dashboard.update(Message::DevicePolled(Scene::Dashboard.poll_result())));
+        assert_eq!(dashboard.connection, ConnectionStatus::Adb);
+        assert_eq!(dashboard.device_model, "TB520FU");
+        assert_eq!(dashboard.device_market_name, "YOGA Pad Pro");
+        assert_eq!(dashboard.device_ram, "12 GB");
+        assert_eq!(dashboard.device_storage, "256 GB");
+        assert_eq!(dashboard.device_slot, "_a");
+        assert_eq!(dashboard.device_arb, "arb_yes");
+        assert_eq!(dashboard.device_firmware, "ZUXOS_1.5.10.186_ST_260408");
+        assert_eq!(dashboard.device_firmware_full, "ZUXOS_1.5.10.186_ST_260408");
+
+        for (scene, status) in [
+            (Scene::DriversMissing, ConnectionStatus::None),
+            (Scene::AdbConflict, ConnectionStatus::AdbServerBlocking),
+        ] {
+            let mut app = App::default();
+            for _ in 0..2 {
+                drop(app.update(Message::DevicePolled(scene.poll_result())));
+                assert_eq!(app.connection, status);
+                assert!(app.device_model.is_empty());
+                assert!(app.device_market_name.is_empty());
+                assert!(app.device_ram.is_empty());
+                assert!(app.device_storage.is_empty());
+                assert!(app.device_slot.is_empty());
+                assert!(app.device_arb.is_empty());
+                assert!(app.device_firmware.is_empty());
+                assert!(app.device_firmware_full.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn flash_scene_is_busy_on_the_firmware_write_phase() {
+        let mut app = App {
+            demo_scene: Some(Scene::Wizard {
+                flow: Flow::Other,
+                step: WizardStep::Flash,
+            }),
+            ..App::default()
+        };
+        apply_wizard_scene(&mut app, Flow::Other, WizardStep::Flash);
+
+        assert_eq!(app.current_view, View::Flash);
+        assert_eq!(app.flash.step, 5);
+        assert!(app.busy);
+        assert_eq!(app.busy_view, Some(View::Flash));
+        assert_eq!(app.active_op_kind, Some(OperationPhaseKind::Flash));
+        assert_eq!(app.current_op_step, 6);
+        assert_eq!(app.op_steps.len(), 9);
+        assert!(blocks_flash_execution(&app));
+    }
+
+    #[test]
+    fn active_demo_scene_short_circuits_flash_execution() {
+        let mut app = App {
+            demo_scene: Some(Scene::Dashboard),
+            ..App::default()
+        };
+
+        drop(app.update_flash(FlashMsg::FlashExecStart));
+
+        assert!(!app.busy);
+        assert!(app.op_steps.is_empty());
+        assert_eq!(app.active_op_kind, None);
+    }
+
+    #[test]
+    fn active_demo_scene_blocks_every_device_workflow_family() {
+        let app = App {
+            demo_scene: Some(Scene::Dashboard),
+            ..App::default()
+        };
+        let blocked = [
+            Message::Flash(FlashMsg::FlashBack),
+            Message::Root(RootMsg::RootBack),
+            Message::Unroot(UnrootMsg::UnrootBack),
+            Message::Sys(SysMsg::SysBack),
+            Message::Adv(AdvMsg::AdvWizBack),
+            Message::KonaBess(KonaBessMsg::KonaBessBack),
+            Message::FlashParts(FlashPartsMsg::FlashPartsBack),
+            Message::DumpParts(DumpPartsMsg::DumpPartsBack),
+            Message::DumpPhys(DumpPhysMsg::DumpPhysBack),
+            Message::FlashPhys(FlashPhysMsg::FlashPhysBack),
+            Message::SimpleFlash(SimpleFlashMsg::SimpleFlashBack),
+            Message::Reboot(RebootMsg::RebootDismiss),
+            Message::KillAdbServer,
+            Message::InstallDrivers,
+        ];
+
+        for message in blocked {
+            assert!(blocks_device_action(&app, &message));
+        }
+        assert!(!blocks_device_action(&app, &Message::PollDevice));
+        assert!(!blocks_device_action(
+            &app,
+            &Message::Navigate(View::Dashboard)
+        ));
+    }
+}

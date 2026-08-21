@@ -182,6 +182,10 @@ impl App {
                 Task::none()
             }
             FlashMsg::FlashExecStart => {
+                #[cfg(feature = "demo")]
+                if demo::blocks_flash_execution(self) {
+                    return Task::none();
+                }
                 let phases = self.begin_phased_op(View::Flash, OperationPhaseKind::Flash);
                 self.error_msg = None;
                 let cfg = self.wf_config.clone();
