@@ -338,6 +338,8 @@ impl ThemeSeed {
 #[derive(Debug, Clone, Copy)]
 struct RuntimeTheme {
     seed: ThemeSeed,
+    /// Read only via `runtime_dark`, whose sole consumer is macOS-gated.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     dark_mode: bool,
 }
 
@@ -364,6 +366,10 @@ fn runtime_theme() -> RuntimeTheme {
 
 /// Current runtime dark-mode flag (kept in sync by `sync_runtime_theme`). Lets
 /// view code pick light/dark assets without an `&iced::Theme` in hand.
+///
+/// Only consumed by the macOS About-view app-icon selection, so it is dead on
+/// every other target.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn runtime_dark() -> bool {
     runtime_theme().dark_mode
 }
