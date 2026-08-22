@@ -287,9 +287,8 @@ pub(crate) const fn exec_action_layout(
     }
 }
 
-/// True for the localized "Start" / "Dump" labels — the primary-action button
-/// shown only on a wizard's confirm/start screen (intermediate steps use
-/// "Next" / "Scan"). Drives the red Cancel button in the footer helpers.
+/// True for the localized "Start" / "Dump" labels. Drives the red Cancel
+/// button in the footer helpers.
 pub(crate) fn is_start_label(label: &str) -> bool {
     label == ltbox_core::i18n::tr("btn_start").as_str()
         || label == ltbox_core::i18n::tr("btn_dump").as_str()
@@ -305,7 +304,7 @@ pub(crate) fn wizard_nav_layout(next_label: &str) -> WizardNavLayout {
     let confirmation = is_start_label(next_label);
     WizardNavLayout {
         grouped_leading: confirmation,
-        extended_primary: confirmation,
+        extended_primary: true,
     }
 }
 
@@ -1334,6 +1333,6 @@ mod tests {
         let next_label = ltbox_core::i18n::tr("btn_next");
         let next = wizard_nav_layout(next_label.as_str());
         assert!(!next.grouped_leading);
-        assert!(!next.extended_primary);
+        assert!(next.extended_primary);
     }
 }
