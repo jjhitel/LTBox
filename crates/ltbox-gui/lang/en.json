@@ -1080,7 +1080,7 @@
   "sysupdate_disable_desc": "Prevent automatic OTA updates",
   "sysupdate_enable": "Enable OTA",
   "sysupdate_enable_desc": "Restore OTA update functionality",
-  "sysupdate_rescue": "boot recovery",
+  "sysupdate_rescue": "Boot Recovery",
   "sysupdate_rescue_desc": "Fix boot failure after OTA on converted device",
   "sysupdate_rescue_req": "Requires Qualcomm device",
   "sysupdate_step_action": "Action",
