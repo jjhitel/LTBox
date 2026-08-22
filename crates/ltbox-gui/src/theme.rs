@@ -508,10 +508,10 @@ pub mod shape {
     pub const FULL: f32 = 9999.0;
 }
 
-/// Broadest of the three bundled faces: the only one carrying Hangul, and it
-/// covers Latin, Cyrillic, Greek, kana and Han as well. Used for every language
-/// whose script it renders idiomatically — the Japanese and Chinese faces exist
-/// for the regional Han forms, not for coverage.
+/// Broadest of the three bundled families: the only one carrying Hangul, and it
+/// covers Latin and Cyrillic as well. Used for every language whose script it
+/// renders idiomatically — the Japanese and Chinese families exist for their
+/// regional CJK forms, not for Latin or Cyrillic coverage.
 const DEFAULT_FONT_FAMILY: &str = "Noto Sans KR";
 
 /// UI font family for this run, bound by [`set_font_family`].
@@ -519,7 +519,7 @@ static FONT_FAMILY: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new
 
 /// The active UI font family — always one the app itself registers.
 ///
-/// This has to name a family `fn main` actually loads from `noto-fonts-dl`
+/// This has to name a family `fn main` actually registers
 /// (`Noto Sans JP` / `Noto Sans KR` / `Noto Sans SC`). Naming a family it does
 /// not — `Noto Sans CJK KR`, the separate Source Han release — resolved only on
 /// machines that happened to have that family installed. Everywhere else
@@ -560,15 +560,9 @@ pub fn font_family_for_language(language_code: &str) -> &'static str {
 
 /// M3 Expressive type emphasis.
 ///
-/// Expressive carries hierarchy on weight contrast as much as on size.
-/// The catch in this stack: the bundled faces ship **Regular only**, and
-/// cosmic-text 0.15 synthesizes *italic* (a skew transform) but not bold — a
-/// `Weight::Bold` request with no bold face resolves back to Regular. That is
-/// only a *silent* no-op while the family resolves; see [`font_family`] for
-/// what a weighted request does when it does not. These helpers therefore
-/// state the intent and light up wherever a real bold face is installed, while
-/// the hierarchy that must hold on every machine is carried by [`text_size`]
-/// steps and the `on_surface` / `on_surface_variant` color pair.
+/// Expressive carries hierarchy on weight contrast as much as on size. Each
+/// bundled family provides regular, medium and bold faces so these requests
+/// resolve within the active family.
 pub mod emphasis {
     use iced::Font;
     use iced::font::Weight;
@@ -710,36 +704,57 @@ pub fn elevation(level: u8, dark_mode: bool) -> iced::Shadow {
 #[cfg(test)]
 mod font_family_tests {
     use iced::advanced::graphics::text::cosmic_text::fontdb;
+    use iced::font::Weight;
 
     /// Every family the UI can ask for must be one the app itself registers.
     ///
     /// The database here holds *only* the bundled faces — no system fonts — so
-    /// this fails exactly when a family name drifts from what `noto-fonts-dl`
-    /// ships. That drift is invisible on a developer machine that happens to
-    /// have the named family installed, and it is what sent weighted text to
-    /// an arbitrary 500-weight face on everyone else's.
+    /// this fails when a family name or required weight drifts from the faces
+    /// the application registers.
     #[test]
-    fn every_language_resolves_against_the_bundled_faces_alone() {
+    fn every_language_and_weight_resolves_against_the_bundled_faces_alone() {
         let mut db = fontdb::Database::new();
-        for (_, bytes) in noto_fonts_dl::load_fonts() {
-            db.load_font_data(bytes.clone());
+        for bytes in [
+            include_bytes!("../fonts/noto/NotoSansKR-Regular.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansKR-Medium.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansKR-Bold.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansJP-Regular.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansJP-Medium.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansJP-Bold.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansSC-Regular.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansSC-Medium.subset.otf") as &[u8],
+            include_bytes!("../fonts/noto/NotoSansSC-Bold.subset.otf") as &[u8],
+        ] {
+            db.load_font_data(bytes.to_vec());
         }
         assert!(!db.is_empty(), "the bundle must carry at least one face");
 
         for code in ["en", "ko", "zh", "ru", "ja"] {
             let family = super::font_family_for_language(code);
-            let query = fontdb::Query {
-                families: &[fontdb::Family::Name(family)],
-                ..Default::default()
-            };
-            assert!(
-                db.query(&query).is_some(),
-                "{code} asks for {family:?}, which the bundled fonts do not declare; \
-                 declared families: {:?}",
-                db.faces()
-                    .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()))
-                    .collect::<Vec<_>>()
-            );
+            for (requested, requested_db_weight) in [
+                (Weight::Normal, fontdb::Weight::NORMAL),
+                (Weight::Medium, fontdb::Weight::MEDIUM),
+                (Weight::Bold, fontdb::Weight::BOLD),
+            ] {
+                let query = fontdb::Query {
+                    families: &[fontdb::Family::Name(family)],
+                    weight: requested_db_weight,
+                    ..Default::default()
+                };
+                let face_id = db.query(&query).unwrap_or_else(|| {
+                    panic!(
+                        "{code} asks for {family:?} at {requested:?}, which the bundled fonts do not declare; declared families: {:?}",
+                        db.faces()
+                            .flat_map(|face| face.families.iter().map(|(name, _)| name.clone()))
+                            .collect::<Vec<_>>()
+                    )
+                });
+                let matched_weight = db.face(face_id).expect("matched face must exist").weight;
+                assert_eq!(
+                    matched_weight, requested_db_weight,
+                    "{code} asks for {family:?} at {requested:?}, but the bundled family matched {matched_weight:?}"
+                );
+            }
         }
     }
 

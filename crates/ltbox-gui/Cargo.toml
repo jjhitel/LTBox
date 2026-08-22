@@ -28,7 +28,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 camino = { workspace = true }
-noto-fonts-dl = { workspace = true }
 dark-light = { workspace = true }
 sys-locale = { workspace = true }
 semver = { workspace = true }

@@ -293,8 +293,8 @@ fn main() -> iced::Result {
         ..Default::default()
     };
     // Bundle Noto Sans CJK at compile time so cosmic-text can fall
-    // back for Hangul / Hanzi glyphs. Noto's Latin + Cyrillic + Greek
-    // cover English and Russian UI through the same family.
+    // back for Hangul / Hanzi glyphs. Noto's Latin + Cyrillic cover
+    // English and Russian UI through the same family.
     let mut app = iced::application(App::new, App::update, App::view)
         .title("LTBox")
         // Application id propagates to winit:
@@ -314,8 +314,18 @@ fn main() -> iced::Result {
         .theme(App::theme)
         .subscription(App::subscription)
         .window(window_settings);
-    for (_, bytes) in noto_fonts_dl::load_fonts() {
-        app = app.font(bytes.clone());
+    for bytes in [
+        include_bytes!("../fonts/noto/NotoSansKR-Regular.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansKR-Medium.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansKR-Bold.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansJP-Regular.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansJP-Medium.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansJP-Bold.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansSC-Regular.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansSC-Medium.subset.otf") as &[u8],
+        include_bytes!("../fonts/noto/NotoSansSC-Bold.subset.otf") as &[u8],
+    ] {
+        app = app.font(bytes);
     }
     // Subset Lucide TTF generated at build time from
     // `fonts/lucide.toml`. Registered under the family `"lucide"` so
