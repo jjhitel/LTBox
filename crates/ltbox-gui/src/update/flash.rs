@@ -110,6 +110,7 @@ impl App {
                         } else {
                             RollbackSetting::Auto
                         },
+                        manual_rollback_indices: None,
                         wipe: self.flash.data_mode == Some(DataMode::Wipe),
                         country_action: CountryAction::Unset,
                     };
@@ -193,6 +194,12 @@ impl App {
                 let device_model = self.device_model.clone();
                 let fw_folder = self.flash.firmware_folder.clone().unwrap_or_default();
                 let loader_override = self.flash.loader_override.clone();
+                let manual_indices = (cfg.modify_rollback == RollbackSetting::Manual)
+                    .then_some(cfg.manual_rollback_indices)
+                    .flatten();
+                let Some(manual_indices) = manual_indices else {
+                    return Task::none();
+                };
                 let rollback_label = self.t(cfg.modify_rollback.label_key()).to_string();
                 // Split the old single "Starting: modify_region=… rollback=…
                 // wipe=…" line into three labelled, translated lines — the
@@ -237,6 +244,7 @@ impl App {
                                     fw_folder,
                                     loader_override,
                                     rb_mode,
+                                    Some(manual_indices),
                                     ll,
                                     phases,
                                 )
@@ -324,8 +332,58 @@ impl App {
                 Task::none()
             }
             FlashMsg::FlashConfirmSetRollback(s) => {
-                self.wf_config.modify_rollback = s;
+                if s == RollbackSetting::Manual {
+                    if self.flash.firmware_rollback_indices.is_some() {
+                        self.open_manual_rollback_editor()
+                    } else {
+                        Task::none()
+                    }
+                } else {
+                    self.wf_config.modify_rollback = s;
+                    self.confirm_edit_field = None;
+                    Task::none()
+                }
+            }
+            FlashMsg::FlashManualRollbackOpen => self.open_manual_rollback_editor(),
+            FlashMsg::FlashManualRollbackInput(field, value) => {
+                if let Some(buffers) = &mut self.manual_rollback_buffers {
+                    match field {
+                        ManualRollbackEditor::Boot => buffers.0 = value,
+                        ManualRollbackEditor::VbmetaSystem => buffers.1 = value,
+                    }
+                }
+                Task::none()
+            }
+            FlashMsg::FlashManualRollbackCycleFormat => {
+                self.rollback_value_format = self.rollback_value_format.next();
+                Task::none()
+            }
+            FlashMsg::FlashManualRollbackCancel => {
                 self.confirm_edit_field = None;
+                self.manual_rollback_editor = None;
+                self.manual_rollback_buffers = None;
+                Task::none()
+            }
+            FlashMsg::FlashManualRollbackConfirm => {
+                let Some((boot_buffer, vbmeta_buffer)) = self.manual_rollback_buffers.clone()
+                else {
+                    return Task::none();
+                };
+                let (Ok(boot_index), Ok(vbmeta_index)) = (
+                    self.parse_manual_rollback(&boot_buffer),
+                    self.parse_manual_rollback(&vbmeta_buffer),
+                ) else {
+                    return Task::none();
+                };
+
+                self.wf_config.modify_rollback = RollbackSetting::Manual;
+                self.wf_config.manual_rollback_indices = Some(ManualRollbackIndices {
+                    boot: boot_index,
+                    vbmeta_system: vbmeta_index,
+                });
+                self.confirm_edit_field = None;
+                self.manual_rollback_editor = None;
+                self.manual_rollback_buffers = None;
                 Task::none()
             }
         }

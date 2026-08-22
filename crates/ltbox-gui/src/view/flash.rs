@@ -397,10 +397,19 @@ impl App {
             .t(match cfg.modify_rollback {
                 RollbackSetting::On => "flash_confirm_rb_on",
                 RollbackSetting::Auto => "flash_confirm_rb_auto",
+                RollbackSetting::Manual => "flash_confirm_rb_manual",
                 RollbackSetting::Off => "flash_confirm_rb_off",
             })
             .to_string();
         let rollback_changed = base.is_some_and(|b| b.modify_rollback != cfg.modify_rollback);
+
+        let rollback_caution = if cfg.modify_rollback == RollbackSetting::Manual
+            && self.manual_rollback_downgrade_warning().is_some()
+        {
+            self.t("flash_confirm_rb_manual_downgrade").to_string()
+        } else {
+            caution.clone()
+        };
 
         // Destructive-op callout, hoisted above the summary so the hazard
         // reads before the device details. Amber `warning` colour — not an
@@ -453,8 +462,12 @@ impl App {
             self.t("flash_confirm_rollback"),
             &rollback,
             rollback_changed,
-            &caution,
-            open(ConfirmField::Rollback),
+            &rollback_caution,
+            if cfg.modify_rollback == RollbackSetting::Manual {
+                Message::Flash(FlashMsg::FlashManualRollbackOpen)
+            } else {
+                open(ConfirmField::Rollback)
+            },
         );
 
         let country_changed = base.is_some_and(|b| b.country_action != cfg.country_action);

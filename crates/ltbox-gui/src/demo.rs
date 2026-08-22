@@ -179,6 +179,7 @@ fn apply_wizard_scene(app: &mut App, flow: Flow, step: WizardStep) {
         modify_region,
         device_region: Some(DeviceRegion::Prc),
         modify_rollback,
+        manual_rollback_indices: None,
         wipe,
         country_action: CountryAction::Set("US".to_string()),
     };

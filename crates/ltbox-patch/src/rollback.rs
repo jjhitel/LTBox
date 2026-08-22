@@ -2,8 +2,9 @@
 //!
 //! Device indices come from fastboot `stored_rollback_index:N`. A two-entry
 //! non-recovery layout is classified per partition; other layouts retain the
-//! legacy `max(v > 1)` aggregate. Tri-state [`RollbackMode`]: `ON` always
-//! patches, `AUTO` patches only when behind, `OFF` skips.
+//! legacy `max(v > 1)` aggregate. [`RollbackMode`] selects automatic or
+//! device-floor-driven patching; `OFF` skips, and `MANUAL` is reserved for a
+//! caller that supplies its own target index.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -20,6 +21,7 @@ pub enum RollbackMode {
     On,
     Auto,
     Off,
+    Manual,
 }
 
 /// Fastboot rollback floors classified from two meaningful non-recovery
@@ -78,7 +80,7 @@ pub fn compute_device_rollback_index(stored: &HashMap<u32, u64>) -> Option<u64> 
 /// calling — unreachable under `ON` should abort at the wizard level.
 pub fn needs_patch(mode: RollbackMode, image_index: u64, device_index: Option<u64>) -> bool {
     match mode {
-        RollbackMode::Off => false,
+        RollbackMode::Off | RollbackMode::Manual => false,
         RollbackMode::On => device_index.is_some(),
         RollbackMode::Auto => match device_index {
             Some(d) => image_index < d,
@@ -275,5 +277,9 @@ mod tests {
         assert!(!needs_patch(RollbackMode::Auto, 5, Some(5)));
         assert!(!needs_patch(RollbackMode::Auto, 7, Some(5)));
         assert!(!needs_patch(RollbackMode::Auto, 0, None));
+        // Manual never consults a device floor; its caller supplies targets.
+        assert!(!needs_patch(RollbackMode::Manual, 0, Some(10)));
+        assert!(!needs_patch(RollbackMode::Manual, 100, Some(10)));
+        assert!(!needs_patch(RollbackMode::Manual, 0, None));
     }
 }

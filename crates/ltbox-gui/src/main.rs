@@ -1014,6 +1014,7 @@ fn busy_navigation_target(busy: bool, busy_view: Option<View>) -> Option<View> {
 pub(crate) enum RollbackSetting {
     On,
     Auto,
+    Manual,
     #[default]
     Off,
 }
@@ -1022,17 +1023,32 @@ impl RollbackSetting {
         match self {
             Self::On => "rollback_on",
             Self::Auto => "rollback_auto",
+            Self::Manual => "rollback_manual",
             Self::Off => "rollback_off",
         }
     }
-    /// Map the wizard tri-state to `rollback::RollbackMode`.
+    /// Map the wizard setting to the worker's rollback mode.
     fn to_mode(self) -> ltbox_patch::rollback::RollbackMode {
         match self {
             Self::On => ltbox_patch::rollback::RollbackMode::On,
             Self::Auto => ltbox_patch::rollback::RollbackMode::Auto,
+            Self::Manual => ltbox_patch::rollback::RollbackMode::Manual,
             Self::Off => ltbox_patch::rollback::RollbackMode::Off,
         }
     }
+}
+
+/// Explicit per-partition rollback targets for `RollbackMode::Manual`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ManualRollbackIndices {
+    pub(crate) boot: u64,
+    pub(crate) vbmeta_system: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ManualRollbackEditor {
+    Boot,
+    VbmetaSystem,
 }
 
 #[derive(Debug, Clone)]
@@ -1054,6 +1070,8 @@ pub(crate) struct WorkflowConfig {
     pub(crate) modify_region: bool,
     pub(crate) device_region: Option<DeviceRegion>,
     pub(crate) modify_rollback: RollbackSetting,
+    /// Explicit rollback targets used only by `RollbackMode::Manual`.
+    pub(crate) manual_rollback_indices: Option<ManualRollbackIndices>,
     pub(crate) wipe: bool,
     pub(crate) country_action: CountryAction,
 }
@@ -1262,6 +1280,92 @@ impl RollbackValueFormat {
             Self::Date => "rollback_format_date",
         }
     }
+
+    /// Parse user input using the same convention used for rendering:
+    /// raw is `0x…` hexadecimal, Unix is decimal, and Date is a UTC
+    /// calendar day represented at midnight.
+    pub(crate) fn parse(self, input: &str) -> Result<u64, String> {
+        let trimmed = input.trim();
+        match self {
+            Self::Raw => {
+                let digits = trimmed
+                    .strip_prefix("0x")
+                    .or_else(|| trimmed.strip_prefix("0X"))
+                    .ok_or_else(|| "rollback_manual_error_prefix".to_string())?;
+                u64::from_str_radix(digits, 16).map_err(|_| "rollback_manual_error_hex".to_string())
+            }
+            Self::Unix => trimmed
+                .parse::<u64>()
+                .map_err(|_| "rollback_manual_error_decimal".to_string()),
+            Self::Date => {
+                let bytes = trimmed.as_bytes();
+                if trimmed.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+                    return Err("rollback_manual_error_date_shape".to_string());
+                }
+                let (year, rest) = trimmed.split_at(4);
+                if rest.len() != 6 || !rest.starts_with('-') {
+                    return Err("rollback_manual_error_date_shape".to_string());
+                }
+                let month = &rest[1..3];
+                let day = &rest[4..6];
+                let year: i32 = year
+                    .parse()
+                    .map_err(|_| "rollback_manual_error_date_value".to_string())?;
+                let month: u32 = month
+                    .parse()
+                    .ok()
+                    .filter(|month| (1..=12).contains(month))
+                    .ok_or_else(|| "rollback_manual_error_date_value".to_string())?;
+                let day: u32 = day
+                    .parse()
+                    .ok()
+                    .filter(|day| (1..=31).contains(day))
+                    .ok_or_else(|| "rollback_manual_error_date_value".to_string())?;
+
+                let days_since_epoch = civil_from_days_ordinal(year, month, day)
+                    .ok_or_else(|| "rollback_manual_error_date_value".to_string())?;
+                let timestamp = days_since_epoch * 86_400;
+                u64::try_from(timestamp).map_err(|_| "rollback_manual_error_date_value".to_string())
+            }
+        }
+    }
+}
+
+/// Convert a proleptic Gregorian UTC date to days since the Unix epoch
+/// using the inverse of `civil_from_days`. Returns `None` for impossible
+/// dates such as February 30.
+fn civil_from_days_ordinal(year: i32, month: u32, day: u32) -> Option<i64> {
+    const DAYS_IN_MONTH: [u32; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let leap_year = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let mut days_in_month = DAYS_IN_MONTH;
+    if leap_year {
+        days_in_month[1] = 29;
+    }
+    let month_index = usize::try_from(month.checked_sub(1)?).ok()?;
+    if day > days_in_month[month_index] {
+        return None;
+    }
+
+    let adjusted_year = if month <= 2 { year - 1 } else { year };
+    let era = if adjusted_year >= 0 {
+        adjusted_year
+    } else {
+        adjusted_year - 399
+    } / 400;
+    let era = i64::from(era);
+    let year_of_era = i64::from(adjusted_year) - era * 400;
+    let month_shifted = i64::from(if month > 2 { month - 3 } else { month + 9 });
+    let day_of_year = (153 * month_shifted + 2) / 5 + i64::from(day) - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    Some(era * 146_097 + day_of_era - 719_468)
+}
+
+/// Current Unix timestamp in whole seconds.
+pub(crate) fn current_unix_timestamp() -> Option<u64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs())
 }
 
 /// Rollback-protection answer for a model, or `""` when the model is
@@ -1558,6 +1662,12 @@ struct App {
     /// A confirm row is rendered as "changed" (accent background + hover
     /// caution) when its field diverges from this baseline.
     confirm_baseline: Option<WorkflowConfig>,
+    /// Confirm-step manual rollback editor. `Some` only while open; its
+    /// values become `wf_config` targets only after a valid confirm.
+    manual_rollback_editor: Option<ManualRollbackEditor>,
+    /// In-flight text for the two manual rollback fields. Kept outside the
+    /// editor so a cancelled popup cannot mutate the confirmed targets.
+    manual_rollback_buffers: Option<(String, String)>,
     country_popup_open: bool,
     /// Routes `SelectCountry` back to the Advanced wizard instead of
     /// the Flash flow when PatchDevinfo opened the popup.
@@ -1828,6 +1938,8 @@ impl Default for App {
             wf_config: WorkflowConfig::default(),
             confirm_edit_field: None,
             confirm_baseline: None,
+            manual_rollback_editor: None,
+            manual_rollback_buffers: None,
             country_popup_open: false,
             adv_needs_country: false,
             region_target_popup_open: false,
@@ -2018,6 +2130,45 @@ impl App {
         self.log_lines.push(s);
         self.trim_log();
         self.log_dirty = true;
+    }
+
+    fn parse_manual_rollback(&self, input: &str) -> Result<u64, String> {
+        let index = self.rollback_value_format.parse(input)?;
+        let now =
+            current_unix_timestamp().ok_or_else(|| "rollback_manual_error_clock".to_string())?;
+        if index < now {
+            Ok(index)
+        } else {
+            Err("rollback_manual_error_future".to_string())
+        }
+    }
+
+    pub(crate) fn open_manual_rollback_editor(&mut self) -> Task<Message> {
+        let defaults = self.flash.firmware_rollback_indices.clone();
+        let Some(defaults) = defaults else {
+            return Task::none();
+        };
+
+        let seed = |result: &Result<u64, String>| -> String {
+            result.as_ref().ok().map_or_else(String::new, |index| {
+                self.rollback_value_format.render(*index)
+            })
+        };
+        self.confirm_edit_field = Some(ConfirmField::Rollback);
+        self.manual_rollback_editor = Some(ManualRollbackEditor::Boot);
+        self.manual_rollback_buffers = Some((seed(&defaults.0), seed(&defaults.1)));
+        Task::none()
+    }
+
+    /// Compare the confirmed Manual targets against the selected firmware's
+    /// own image indices. Device floors are intentionally not consulted.
+    pub(crate) fn manual_rollback_downgrade_warning(&self) -> Option<()> {
+        let targets = self.wf_config.manual_rollback_indices?;
+        let originals = self.flash.firmware_rollback_indices.as_ref()?;
+        let boot_lower = matches!(&originals.0, Ok(original) if targets.boot < *original);
+        let vbmeta_lower =
+            matches!(&originals.1, Ok(original) if targets.vbmeta_system < *original);
+        (boot_lower || vbmeta_lower).then_some(())
     }
 
     /// Tap + sink drain shared by `Message::DrainStdoutTap` and
@@ -2537,7 +2688,8 @@ impl App {
             None
         };
         self.flash.loader_error = None;
-        self.flash.firmware_folder = Some(path);
+        self.flash.firmware_folder = Some(path.clone());
+        self.flash.set_firmware_rollback_indices(&path);
         if self.flash.step == 4
             && self.flash.loader_required
             && self.flash.loader_override.is_none()
@@ -4412,6 +4564,92 @@ mod tests {
         assert_eq!(date.render(IDX), "2026-04-05");
 
         assert_eq!(date.next(), RollbackValueFormat::Raw);
+    }
+
+    #[test]
+    fn manual_rollback_format_round_trips_in_every_mode() {
+        const IDX: u64 = 0x69D1_A600;
+        let cases = [
+            (RollbackValueFormat::Raw, format!("0x{IDX:X}")),
+            (RollbackValueFormat::Unix, IDX.to_string()),
+            (RollbackValueFormat::Date, "2026-04-05".to_string()),
+        ];
+
+        for (format, rendered) in cases {
+            assert_eq!(format.render(IDX), rendered);
+            assert_eq!(format.parse(&rendered), Ok(IDX));
+        }
+    }
+
+    #[test]
+    fn manual_rollback_rejects_future_timestamps() {
+        let app = App {
+            rollback_value_format: RollbackValueFormat::Unix,
+            ..App::default()
+        };
+        let now = current_unix_timestamp().expect("clock is after the epoch");
+        let rejects_same_timestamp = (0..10).any(|_| {
+            app.parse_manual_rollback(&now.to_string())
+                == Err("rollback_manual_error_future".to_string())
+        });
+        assert!(
+            rejects_same_timestamp,
+            "same-second target must be rejected"
+        );
+        assert!(app.parse_manual_rollback("1775347199").is_ok());
+    }
+
+    #[test]
+    fn manual_rollback_requires_valid_confirm() {
+        install_core_translator(Language::En);
+        let mut app = App {
+            flash: FlashWizard {
+                step: 4,
+                firmware_folder: Some("firmware".into()),
+                firmware_rollback_indices: Some((Ok(100), Ok(200))),
+                ..FlashWizard::default()
+            },
+            wf_config: WorkflowConfig {
+                modify_rollback: RollbackSetting::Off,
+                ..WorkflowConfig::default()
+            },
+            confirm_edit_field: Some(ConfirmField::Rollback),
+            ..App::default()
+        };
+        app.manual_rollback_editor = Some(ManualRollbackEditor::Boot);
+        app.manual_rollback_buffers = Some(("99".to_string(), "199".to_string()));
+
+        // A future target is valid decimal but fails the time gate.
+        let future = current_unix_timestamp().map(|now| now + 1).unwrap_or(0);
+        app.manual_rollback_buffers = Some((future.to_string(), "199".to_string()));
+        let _ = app.update_flash(FlashMsg::FlashManualRollbackConfirm);
+        assert_eq!(app.wf_config.modify_rollback, RollbackSetting::Off);
+        assert_eq!(app.wf_config.manual_rollback_indices, None);
+
+        let _ = app.update(Message::Flash(FlashMsg::FlashConfirmSetRollback(
+            RollbackSetting::Manual,
+        )));
+        assert_eq!(app.wf_config.modify_rollback, RollbackSetting::Off);
+        assert!(app.manual_rollback_editor.is_some());
+        app.manual_rollback_buffers = Some(("0x63".to_string(), "0x199".to_string()));
+        app.rollback_value_format = RollbackValueFormat::Unix;
+        let _ = app.update_flash(FlashMsg::FlashManualRollbackConfirm);
+        assert_ne!(app.wf_config.modify_rollback, RollbackSetting::Manual);
+        assert_eq!(app.wf_config.manual_rollback_indices, None);
+
+        app.rollback_value_format = RollbackValueFormat::Unix;
+        app.manual_rollback_buffers = Some(("99".to_string(), "199".to_string()));
+        let _ = app.update_flash(FlashMsg::FlashManualRollbackConfirm);
+        assert_eq!(app.wf_config.modify_rollback, RollbackSetting::Manual);
+        assert_eq!(
+            app.wf_config.manual_rollback_indices,
+            Some(ManualRollbackIndices {
+                boot: 99,
+                vbmeta_system: 199
+            })
+        );
+        assert_eq!(app.confirm_edit_field, None);
+        assert_eq!(app.manual_rollback_editor, None);
     }
 
     #[test]

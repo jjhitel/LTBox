@@ -513,6 +513,139 @@ impl App {
         m3_dialog(content.into())
     }
 
+    /// Manual rollback-index editor opened from the Flash-confirm rollback
+    /// picker. Reuses the dashboard breakdown's format cycle and row shape;
+    /// confirm stays disabled until both explicit targets are valid.
+    pub(crate) fn manual_rollback_popup_view(&self) -> Element<'_, Message> {
+        let Some((boot_buffer, vbmeta_buffer)) = self.manual_rollback_buffers.as_ref() else {
+            return container(text("")).into();
+        };
+
+        let title = text(self.t("rollback_popup_title").to_string())
+            .size(theme::text_size::WIZARD_STEP_TITLE)
+            .font(theme::emphasis::bold());
+        let desc = text(self.t("rollback_manual_desc").to_string())
+            .size(theme::text_size::BODY_MEDIUM)
+            .style(muted_style)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+
+        let format_hint = row![
+            text(self.t("rollback_format_label").to_string())
+                .size(theme::text_size::LABEL_SMALL)
+                .style(muted_style),
+            text(self.t(self.rollback_value_format.label_key()).to_string())
+                .size(theme::text_size::LABEL_SMALL)
+                .font(theme::emphasis::medium())
+                .style(accent_style),
+            Space::new().width(Length::Fill),
+            text(self.t("rollback_cycle_tip").to_string())
+                .size(theme::text_size::LABEL_SMALL)
+                .style(muted_style),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
+
+        let boot_result = self.parse_manual_rollback(boot_buffer);
+        let vbmeta_result = self.parse_manual_rollback(vbmeta_buffer);
+        let both_valid = boot_result.is_ok() && vbmeta_result.is_ok();
+        let boot_result = Box::leak(Box::new(boot_result));
+        let vbmeta_result = Box::leak(Box::new(vbmeta_result));
+        let boot_field = self.manual_rollback_input(
+            "boot",
+            boot_buffer,
+            boot_result,
+            ManualRollbackEditor::Boot,
+        );
+        let vbmeta_field = self.manual_rollback_input(
+            "vbmeta_system",
+            vbmeta_buffer,
+            vbmeta_result,
+            ManualRollbackEditor::VbmetaSystem,
+        );
+
+        let cancel_btn = m3_text_button(self.t("btn_cancel").to_string())
+            .on_press(Message::Flash(FlashMsg::FlashManualRollbackCancel));
+        let ok_btn = {
+            let btn = m3_filled_button(self.t("btn_ok").to_string());
+            if both_valid {
+                btn.on_press(Message::Flash(FlashMsg::FlashManualRollbackConfirm))
+            } else {
+                btn
+            }
+        };
+
+        let content = column![
+            title,
+            desc,
+            widget::rule::horizontal(1),
+            format_hint,
+            boot_field,
+            vbmeta_field,
+            row![Space::new().width(Length::Fill), cancel_btn, ok_btn]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+        ]
+        .spacing(14)
+        .padding(24)
+        .width(480);
+
+        m3_dialog(content.into())
+    }
+
+    fn manual_rollback_input<'a>(
+        &'a self,
+        partition: &'static str,
+        buffer: &str,
+        result: &'a Result<u64, String>,
+        field: ManualRollbackEditor,
+    ) -> Element<'a, Message> {
+        let format_button =
+            button(text(self.t(self.rollback_value_format.label_key()).to_string()).size(12))
+                .on_press(Message::Flash(FlashMsg::FlashManualRollbackCycleFormat))
+                .padding([4, 8])
+                .style(|t: &Theme, status| {
+                    let p = pal_of(t);
+                    button::Style {
+                        background: theme::state_layer_bg(status, p.on_surface).map(Into::into),
+                        text_color: p.on_surface,
+                        border: iced::Border {
+                            radius: theme::shape::SM.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                });
+        let input = iced::widget::text_input(self.t("rollback_manual_placeholder"), buffer)
+            .on_input(move |value| Message::Flash(FlashMsg::FlashManualRollbackInput(field, value)))
+            .padding([8, 12])
+            .size(theme::text_size::BODY_LARGE)
+            .width(Length::Fill)
+            .style(m3_text_input_style);
+
+        let status: Element<'_, Message> = match result {
+            Ok(index) => text(tr_args!(
+                "rollback_manual_original",
+                index = self.rollback_value_format.render(*index)
+            ))
+            .size(12)
+            .style(success_style)
+            .into(),
+            Err(reason) => text(self.t(reason)).size(12).style(warning_style).into(),
+        };
+
+        row![
+            text(partition)
+                .size(theme::text_size::BODY_MEDIUM)
+                .style(muted_style)
+                .width(Length::Fixed(150.0)),
+            column![row![input, format_button].spacing(8), status].spacing(4),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .into()
+    }
+
     /// PatchArb timestamp popup. Reads `adv_wizard.arb_index_buffer`
     /// for the in-flight typing and renders the UTC representation in
     /// real time once the buffer hits exactly 10 digits. OK is enabled
@@ -844,6 +977,7 @@ impl App {
                 })
                 .collect(),
             ConfirmField::Rollback => [
+                RollbackSetting::Manual,
                 RollbackSetting::On,
                 RollbackSetting::Auto,
                 RollbackSetting::Off,
@@ -852,6 +986,7 @@ impl App {
             .map(|s| {
                 (
                     self.t(match s {
+                        RollbackSetting::Manual => "flash_confirm_rb_manual",
                         RollbackSetting::On => "flash_confirm_rb_on",
                         RollbackSetting::Auto => "flash_confirm_rb_auto",
                         RollbackSetting::Off => "flash_confirm_rb_off",

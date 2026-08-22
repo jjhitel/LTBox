@@ -3,9 +3,9 @@
 
 use crate::{
     AdvAction, ConfirmField, DataMode, DevicePollResult, DeviceRegion, DumpPartsScanResult, Family,
-    FlashPartsScanResult, FlashTarget, GpuCellKey, Language, NightlySource, PartsSortColumn,
-    PickerTarget, Provider, RebootTarget, RescueRegion, RollbackSetting, RootMode, SkrootFlavor,
-    SysUpdateAction, ThemeChoice, ThemeSeed, UnrootType, VerChoice, View,
+    FlashPartsScanResult, FlashTarget, GpuCellKey, Language, ManualRollbackEditor, NightlySource,
+    PartsSortColumn, PickerTarget, Provider, RebootTarget, RescueRegion, RollbackSetting, RootMode,
+    SkrootFlavor, SysUpdateAction, ThemeChoice, ThemeSeed, UnrootType, VerChoice, View,
 };
 
 #[derive(Debug, Clone)]
@@ -213,6 +213,11 @@ pub(crate) enum FlashMsg {
     FlashConfirmSetData(DataMode),
     FlashConfirmSetRegionEdit(bool),
     FlashConfirmSetRollback(RollbackSetting),
+    FlashManualRollbackOpen,
+    FlashManualRollbackInput(ManualRollbackEditor, String),
+    FlashManualRollbackCycleFormat,
+    FlashManualRollbackCancel,
+    FlashManualRollbackConfirm,
     FlashExecStart,
     FlashExecDone(Vec<String>),
 }

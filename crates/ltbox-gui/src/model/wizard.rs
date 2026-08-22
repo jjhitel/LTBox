@@ -630,6 +630,9 @@ pub(crate) struct FlashWizard {
     pub(crate) target: Option<FlashTarget>,
     pub(crate) data_mode: Option<DataMode>,
     pub(crate) firmware_folder: Option<String>,
+    /// Original `boot` / `vbmeta_system` rollback indices read from the
+    /// selected firmware. Missing entries retain their reason for display.
+    pub(crate) firmware_rollback_indices: Option<(Result<u64, String>, Result<u64, String>)>,
     /// `true` when the selected firmware folder ships no EDL loader, so the
     /// folder step requires a separately-picked loader before advancing.
     pub(crate) loader_required: bool,
@@ -639,6 +642,19 @@ pub(crate) struct FlashWizard {
     /// Reason the last picked loader was rejected (e.g. a standalone `.melf` on
     /// TB323FU), shown in the folder step.
     pub(crate) loader_error: Option<String>,
+}
+
+impl FlashWizard {
+    pub(crate) fn set_firmware_rollback_indices(&mut self, folder: &str) {
+        let read = |filename: &str| -> Result<u64, String> {
+            ltbox_patch::avb::extract_image_avb_info(
+                std::path::Path::new(folder).join(filename).as_path(),
+            )
+            .map(|info| info.rollback_index)
+            .map_err(|error| error.to_string())
+        };
+        self.firmware_rollback_indices = Some((read("boot.img"), read("vbmeta_system.img")));
+    }
 }
 
 pub(crate) const FLASH_STEPS: &[&str] = &[
@@ -676,6 +692,10 @@ impl Wizard for FlashWizard {
             }
             _ => false,
         }
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 

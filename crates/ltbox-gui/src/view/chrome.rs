@@ -70,6 +70,9 @@ impl App {
         if let Some(field) = self.confirm_edit_field {
             layers.push(self.flash_confirm_edit_popup(field));
         }
+        if self.manual_rollback_editor.is_some() {
+            layers.push(self.manual_rollback_popup_view());
+        }
         if let Some(t) = self.reboot_confirm_target {
             layers.push(self.reboot_confirm_popup(t));
         }
