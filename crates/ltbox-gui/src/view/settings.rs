@@ -152,22 +152,29 @@ impl App {
             widget::tooltip::Position::Right,
         );
         let driver_control: Element<'_, Message> = if self.busy || !kernel_mode_supported {
-            container(text(current_driver_label).size(13).style(muted_style))
-                .padding([7, 12])
-                .width(160)
-                .style(|t: &Theme| {
-                    let p = pal_of(t);
-                    container::Style {
-                        background: Some(with_alpha(p.on_surface_variant, 0.06).into()),
-                        border: iced::Border {
-                            color: p.outline_variant,
-                            width: 1.0,
-                            radius: theme::shape::XS.into(),
-                        },
-                        ..Default::default()
-                    }
-                })
-                .into()
+            // Same geometry as the pick_list this replaces, at M3's disabled
+            // tones (38% content, 12% outline), so it reads as that control
+            // unavailable rather than as a different kind of field.
+            container(text(current_driver_label).size(13).style(|t: &Theme| {
+                iced::widget::text::Style {
+                    color: Some(with_alpha(pal_of(t).on_surface, 0.38)),
+                }
+            }))
+            .padding(M3_FIELD_PADDING)
+            .width(160)
+            .style(|t: &Theme| {
+                let p = pal_of(t);
+                container::Style {
+                    background: None,
+                    border: iced::Border {
+                        color: with_alpha(p.on_surface, 0.12),
+                        width: 1.0,
+                        radius: theme::shape::SM.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .into()
         } else {
             let driver_kernel_for_pick = driver_kernel.clone();
             widget::pick_list(
