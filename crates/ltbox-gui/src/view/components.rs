@@ -125,6 +125,9 @@ pub(crate) fn wizard_step_state(index: usize, current: usize) -> WizardStepState
     }
 }
 
+/// Step bar row height; the trailing rule adds one more pixel.
+const WIZARD_STEP_BAR_HEIGHT: f32 = 48.0;
+
 pub(crate) fn wizard_step_bar(steps: &[&str], current: usize) -> Element<'static, Message> {
     let labels: Vec<String> = steps.iter().map(|label| (*label).to_string()).collect();
     let steps_len = labels.len();
@@ -140,7 +143,7 @@ pub(crate) fn wizard_step_bar(steps: &[&str], current: usize) -> Element<'static
             .spacing(0)
             .align_y(iced::Alignment::Center)
             .padding([8, 24])
-            .height(Length::Fixed(48.0));
+            .height(Length::Fixed(WIZARD_STEP_BAR_HEIGHT));
 
         for (i, label) in labels.iter().enumerate() {
             if i > 0 {
@@ -272,6 +275,9 @@ pub(crate) fn wizard_step_bar(steps: &[&str], current: usize) -> Element<'static
         ]
         .into()
     })
+    // Responsive defaults to Length::Fill on both axes; left unbounded it eats
+    // the wizard body's vertical space and squashes the step content below it.
+    .height(Length::Fixed(WIZARD_STEP_BAR_HEIGHT + 1.0))
     .into()
 }
 
