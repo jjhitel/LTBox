@@ -3,7 +3,9 @@
 //! `LTBOX_DEMO` accepts dashboard scenes `dashboard`, `drivers-missing`, and
 //! `adb-conflict`, plus wizard scenes `<flow>:<step>` where `flow` is `same` or
 //! `other` and `step` is `region`, `target`, `data`, `country`, `folder`,
-//! `confirm`, or `flash`.
+//! `confirm`, or `flash`. It also accepts first-screen view scenes
+//! `view:root`, `view:unroot`, `view:sysupdate`, `view:konabess`,
+//! `view:reboot`, `view:advanced`, `view:settings`, and `view:about`.
 
 use crate::*;
 
@@ -28,6 +30,14 @@ pub(crate) const VALID_SCENES: &[&str] = &[
     "other:folder",
     "other:confirm",
     "other:flash",
+    "view:root",
+    "view:unroot",
+    "view:sysupdate",
+    "view:konabess",
+    "view:reboot",
+    "view:advanced",
+    "view:settings",
+    "view:about",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +46,7 @@ pub(crate) enum Scene {
     DriversMissing,
     AdbConflict,
     Wizard { flow: Flow, step: WizardStep },
+    View(View),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +72,14 @@ impl Scene {
             "dashboard" => Some(Self::Dashboard),
             "drivers-missing" => Some(Self::DriversMissing),
             "adb-conflict" => Some(Self::AdbConflict),
+            "view:root" => Some(Self::View(View::Root)),
+            "view:unroot" => Some(Self::View(View::Unroot)),
+            "view:sysupdate" => Some(Self::View(View::SystemUpdate)),
+            "view:konabess" => Some(Self::View(View::KonaBess)),
+            "view:reboot" => Some(Self::View(View::Reboot)),
+            "view:advanced" => Some(Self::View(View::Advanced)),
+            "view:settings" => Some(Self::View(View::Settings)),
+            "view:about" => Some(Self::View(View::About)),
             _ => {
                 let (flow, step) = value.split_once(':')?;
                 let flow = match flow {
@@ -92,7 +111,7 @@ impl Scene {
                     ..DevicePollResult::default()
                 };
             }
-            Self::Dashboard | Self::Wizard { .. } => {}
+            Self::Dashboard | Self::Wizard { .. } | Self::View(_) => {}
         }
 
         DevicePollResult {
@@ -134,6 +153,8 @@ pub(crate) fn initialize(app: &mut App) {
 
     if let Scene::Wizard { flow, step } = scene {
         apply_wizard_scene(app, flow, step);
+    } else if let Scene::View(view) = scene {
+        app.current_view = view;
     }
 }
 
@@ -245,6 +266,60 @@ mod tests {
             device_portrait(&result.model),
             DevicePortrait::Png(_)
         ));
+    }
+
+    #[test]
+    fn view_scenes_open_their_first_screen_with_populated_identity() {
+        let expected_views = [
+            (Scene::parse("view:root").unwrap(), View::Root),
+            (Scene::parse("view:unroot").unwrap(), View::Unroot),
+            (Scene::parse("view:sysupdate").unwrap(), View::SystemUpdate),
+            (Scene::parse("view:konabess").unwrap(), View::KonaBess),
+            (Scene::parse("view:reboot").unwrap(), View::Reboot),
+            (Scene::parse("view:advanced").unwrap(), View::Advanced),
+            (Scene::parse("view:settings").unwrap(), View::Settings),
+            (Scene::parse("view:about").unwrap(), View::About),
+        ];
+
+        for (scene, expected_view) in expected_views {
+            let mut app = App {
+                demo_scene: Some(scene),
+                ..App::default()
+            };
+            drop(app.update(Message::DevicePolled(scene.poll_result())));
+            if let Scene::View(view) = scene {
+                app.current_view = view;
+            }
+
+            assert_eq!(app.current_view, expected_view);
+            assert_eq!(app.connection, ConnectionStatus::Adb);
+            assert_eq!(app.device_model, "TB520FU");
+            assert_eq!(app.device_market_name, "YOGA Pad Pro");
+            assert_eq!(app.device_ram, "12 GB");
+            assert_eq!(app.device_storage, "256 GB");
+            assert_eq!(app.device_slot, "_a");
+            assert_eq!(app.device_arb, "arb_yes");
+            assert_eq!(app.device_firmware, "ZUXOS_1.5.10.186_ST_260408");
+            assert_eq!(app.device_firmware_full, "ZUXOS_1.5.10.186_ST_260408");
+
+            match expected_view {
+                View::Root => assert_eq!(app.root.step, 0),
+                View::Unroot => assert_eq!(app.unroot.step, 0),
+                View::SystemUpdate => assert_eq!(app.sysupdate.step, 0),
+                View::KonaBess => {
+                    assert_eq!(app.konabess.step, 0);
+                    assert!(app.konabess.loader_path.is_none());
+                    assert!(app.konabess.prepared.is_none());
+                }
+                View::Advanced => {
+                    assert_eq!(app.advanced_wizard_open, AdvancedWizardOpen::None);
+                    assert!(app.adv_wizard.action.is_none());
+                }
+                View::Reboot => assert!(app.reboot_confirm_target.is_none()),
+                View::Settings | View::About => {}
+                View::Dashboard | View::Flash => unreachable!(),
+            }
+        }
     }
 
     #[test]
