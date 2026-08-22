@@ -1,7 +1,7 @@
 //! Reusable view components (dialogs, cards, step bar, icon tiles, lucide helpers). Extracted from `main.rs`.
 
 use crate::*;
-use iced::widget::{self, Space, button, column, container, row, text};
+use iced::widget::{self, Space, button, column, container, responsive, row, text};
 use iced::{Element, Length, Theme};
 use theme::with_alpha;
 
@@ -125,122 +125,153 @@ pub(crate) fn wizard_step_state(index: usize, current: usize) -> WizardStepState
     }
 }
 
-pub(crate) fn wizard_step_bar<'a>(steps: &[&str], current: usize) -> Element<'a, Message> {
-    let mut r = row![]
-        .spacing(0)
-        .align_y(iced::Alignment::Center)
-        .padding([8, 24])
-        .height(Length::Fixed(48.0));
+pub(crate) fn wizard_step_bar(steps: &[&str], current: usize) -> Element<'static, Message> {
+    let labels: Vec<String> = steps.iter().map(|label| (*label).to_string()).collect();
+    let steps_len = labels.len();
 
-    for (i, &label) in steps.iter().enumerate() {
-        if i > 0 {
-            let completed = i <= current;
-            r = r.push(container(text("")).width(Length::Fill).height(2).style(
-                move |t: &Theme| {
-                    let p = pal_of(t);
-                    let color = if completed {
-                        p.primary
-                    } else {
-                        p.outline_variant
-                    };
-                    container::Style {
-                        background: Some(color.into()),
-                        ..Default::default()
-                    }
-                },
-            ));
-        }
+    responsive(move |size| {
+        // Per step: 32 marker + 8 gap + 8 connector + label. The widest bundled
+        // locale (ru) needs 801 px for the 7-step root flow and 651 px for the
+        // 6-step flash flow, so 118 px per step plus the row's 48 px padding and
+        // the active pill's 14 px tail clears every locale with margin. Scaling
+        // by step count matters because flows carry 5, 6 or 7 steps.
+        let wide = size.width >= steps_len as f32 * 118.0 + 80.0;
+        let mut r = row![]
+            .spacing(0)
+            .align_y(iced::Alignment::Center)
+            .padding([8, 24])
+            .height(Length::Fixed(48.0));
 
-        let state = wizard_step_state(i, current);
-        let marker_text = if state == WizardStepState::Completed {
-            "\u{2713}".to_string()
-        } else {
-            (i + 1).to_string()
-        };
-
-        let marker = container(text(marker_text).size(12).center().style(move |t: &Theme| {
-            let p = pal_of(t);
-            let color = match state {
-                WizardStepState::Completed => p.on_primary_container,
-                WizardStepState::Active => p.on_primary,
-                WizardStepState::Upcoming => p.on_surface_variant,
-            };
-            iced::widget::text::Style { color: Some(color) }
-        }))
-        .width(32)
-        .height(32)
-        .center_x(32)
-        .center_y(32)
-        .style(move |t: &Theme| {
-            let p = pal_of(t);
-            let (background, border_color) = match state {
-                WizardStepState::Completed => (p.primary_container, p.primary_container),
-                WizardStepState::Active => (p.primary, p.primary),
-                WizardStepState::Upcoming => (p.surface_container_high, p.outline_variant),
-            };
-            container::Style {
-                background: Some(background.into()),
-                border: iced::Border {
-                    color: border_color,
-                    width: 1.0,
-                    radius: theme::shape::FULL.into(),
-                },
-                ..Default::default()
+        for (i, label) in labels.iter().enumerate() {
+            if i > 0 {
+                let completed = i <= current;
+                r = r.push(container(text("")).width(Length::Fill).height(2).style(
+                    move |t: &Theme| {
+                        let p = pal_of(t);
+                        let color = if completed {
+                            p.primary
+                        } else {
+                            p.outline_variant
+                        };
+                        container::Style {
+                            background: Some(color.into()),
+                            ..Default::default()
+                        }
+                    },
+                ));
             }
-        });
 
-        let step_node: Element<'a, Message> = if state == WizardStepState::Active {
-            container(
+            let state = wizard_step_state(i, current);
+            let marker_text = if state == WizardStepState::Completed {
+                "\u{2713}".to_string()
+            } else {
+                (i + 1).to_string()
+            };
+
+            let marker = container(text(marker_text).size(12).center().style(move |t: &Theme| {
+                let p = pal_of(t);
+                let color = match state {
+                    WizardStepState::Completed => p.on_primary_container,
+                    WizardStepState::Active => p.on_primary,
+                    WizardStepState::Upcoming => p.on_surface_variant,
+                };
+                iced::widget::text::Style { color: Some(color) }
+            }))
+            .width(32)
+            .height(32)
+            .center_x(32)
+            .center_y(32)
+            .style(move |t: &Theme| {
+                let p = pal_of(t);
+                let (background, border_color) = match state {
+                    WizardStepState::Completed => (p.primary_container, p.primary_container),
+                    WizardStepState::Active => (p.primary, p.primary),
+                    WizardStepState::Upcoming => (p.surface_container_high, p.outline_variant),
+                };
+                container::Style {
+                    background: Some(background.into()),
+                    border: iced::Border {
+                        color: border_color,
+                        width: 1.0,
+                        radius: theme::shape::FULL.into(),
+                    },
+                    ..Default::default()
+                }
+            });
+
+            let step_node: Element<'static, Message> = if state == WizardStepState::Active {
+                container(
+                    row![
+                        marker,
+                        text(label.clone())
+                            .size(12)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .style(move |t: &Theme| iced::widget::text::Style {
+                                color: Some(pal_of(t).on_primary_container),
+                            }),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                )
+                .height(Length::Fixed(40.0))
+                .padding(iced::Padding {
+                    top: 4.0,
+                    right: 14.0,
+                    bottom: 4.0,
+                    left: 4.0,
+                })
+                .style(|t: &Theme| container::Style {
+                    background: Some(pal_of(t).primary_container.into()),
+                    border: iced::Border {
+                        radius: theme::shape::FULL.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .into()
+            } else if wide {
                 row![
                     marker,
-                    text(label.to_string())
+                    text(label.clone())
                         .size(12)
                         .wrapping(iced::widget::text::Wrapping::None)
-                        .style(move |t: &Theme| iced::widget::text::Style {
-                            color: Some(pal_of(t).on_primary_container),
+                        .style(move |t: &Theme| {
+                            let p = pal_of(t);
+                            let color = match state {
+                                WizardStepState::Completed => p.on_primary_container,
+                                WizardStepState::Upcoming => p.on_surface_variant,
+                                WizardStepState::Active => unreachable!(),
+                            };
+                            iced::widget::text::Style { color: Some(color) }
                         }),
                 ]
                 .spacing(8)
-                .align_y(iced::Alignment::Center),
-            )
-            .height(Length::Fixed(40.0))
-            .padding(iced::Padding {
-                top: 4.0,
-                right: 14.0,
-                bottom: 4.0,
-                left: 4.0,
-            })
-            .style(|t: &Theme| container::Style {
-                background: Some(pal_of(t).primary_container.into()),
-                border: iced::Border {
-                    radius: theme::shape::FULL.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            })
-            .into()
-        } else {
-            widget::tooltip(
-                marker,
-                container(text(label.to_string()).size(12))
-                    .padding([6, 10])
-                    .style(|t: &Theme| theme::tooltip_style(t, theme::shape::SM)),
-                widget::tooltip::Position::Bottom,
-            )
-            .into()
-        };
-        r = r.push(step_node);
-    }
+                .align_y(iced::Alignment::Center)
+                .into()
+            } else {
+                widget::tooltip(
+                    marker,
+                    container(text(label.clone()).size(12))
+                        .padding([6, 10])
+                        .style(|t: &Theme| theme::tooltip_style(t, theme::shape::SM)),
+                    widget::tooltip::Position::Bottom,
+                )
+                .into()
+            };
+            r = r.push(step_node);
+        }
 
-    column![
-        container(r)
-            .width(Length::Fill)
-            .style(|t: &Theme| container::Style {
-                background: Some(pal_of(t).surface_container_low.into()),
-                ..Default::default()
-            }),
-        widget::rule::horizontal(1).style(shell_rule_style),
-    ]
+        column![
+            container(r)
+                .width(Length::Fill)
+                .style(|t: &Theme| container::Style {
+                    background: Some(pal_of(t).surface_container_low.into()),
+                    ..Default::default()
+                }),
+            widget::rule::horizontal(1).style(shell_rule_style),
+        ]
+        .into()
+    })
     .into()
 }
 
