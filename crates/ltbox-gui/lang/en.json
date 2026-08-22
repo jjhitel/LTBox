@@ -956,7 +956,7 @@
   "reboot_edl_desc": "",
   "reboot_recovery": "Reboot to Recovery",
   "reboot_recovery_desc": "",
-  "reboot_subtitle": "Current connection: {conn}. Unavailable targets stay disabled.",
+  "reboot_subtitle": "Unavailable targets stay disabled.",
   "reboot_system": "Reboot to System",
   "reboot_system_desc": "",
   "reboot_target_bootloader": "Bootloader",

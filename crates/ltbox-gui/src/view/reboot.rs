@@ -9,7 +9,6 @@ use theme::with_alpha;
 impl App {
     pub(crate) fn view_reboot(&self) -> Element<'_, Message> {
         let conn = self.connection;
-        let conn_label = self.t(conn.label_key()).to_string();
         // 1 col × N rows — each target splits the vertical space.
         // Disabled cards: M3 tokens (12% surface alpha, 38% text alpha).
         let mut list = column![]
@@ -96,7 +95,7 @@ impl App {
         column![
             large_top_app_bar(
                 self.t("reboot_title").to_string(),
-                Some(tr_args!("reboot_subtitle", conn = conn_label)),
+                Some(self.t("reboot_subtitle").to_string()),
             ),
             body,
         ]

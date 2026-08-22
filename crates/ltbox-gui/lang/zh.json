@@ -956,7 +956,7 @@
   "reboot_edl_desc": "",
   "reboot_recovery": "重启到恢复模式",
   "reboot_recovery_desc": "",
-  "reboot_subtitle": "当前连接:{conn}。不可用的目标保持禁用。",
+  "reboot_subtitle": "不可用的目标保持禁用。",
   "reboot_system": "重启到系统",
   "reboot_system_desc": "",
   "reboot_target_bootloader": "引导加载程序",

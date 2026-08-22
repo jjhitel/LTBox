@@ -956,7 +956,7 @@
   "reboot_edl_desc": "",
   "reboot_recovery": "Перезагрузка в режим восстановления",
   "reboot_recovery_desc": "",
-  "reboot_subtitle": "Текущее соединение: {conn}. Недоступные цели остаются отключёнными.",
+  "reboot_subtitle": "Недоступные цели остаются отключёнными.",
   "reboot_system": "Перезагрузка в систему",
   "reboot_system_desc": "",
   "reboot_target_bootloader": "Загрузчик",

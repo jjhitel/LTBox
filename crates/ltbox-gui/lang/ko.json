@@ -956,7 +956,7 @@
   "reboot_edl_desc": "",
   "reboot_recovery": "복구 모드로 재부팅",
   "reboot_recovery_desc": "",
-  "reboot_subtitle": "현재 연결: {conn}. 이용 불가능한 대상은 비활성화됩니다.",
+  "reboot_subtitle": "이용 불가능한 대상은 비활성화됩니다.",
   "reboot_system": "시스템으로 재부팅",
   "reboot_system_desc": "",
   "reboot_target_bootloader": "부트로더",

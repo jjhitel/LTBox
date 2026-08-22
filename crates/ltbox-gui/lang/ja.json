@@ -956,7 +956,7 @@
   "reboot_edl_desc": "",
   "reboot_recovery": "リカバリに再起動",
   "reboot_recovery_desc": "",
-  "reboot_subtitle": "現在の接続: {conn}。利用できないターゲットは無効のままです。",
+  "reboot_subtitle": "利用できないターゲットは無効のままです。",
   "reboot_system": "システムに再起動",
   "reboot_system_desc": "",
   "reboot_target_bootloader": "ブートローダー",
