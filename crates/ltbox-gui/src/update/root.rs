@@ -5,6 +5,25 @@ use iced::Task;
 use ltbox_core::tr_args;
 
 impl App {
+    /// What to call this root run in the log.
+    ///
+    /// Family alone does not identify the route: Magisk and Magisk forks are
+    /// both the Magisk family but take different pipelines, so a report saying
+    /// only "Magisk" left the actual route to guesswork. The provider is set
+    /// exactly on the routes where it means something — GKI and SKRoot never
+    /// reach a provider picker — so append it whenever there is one.
+    fn root_route_label(&self) -> String {
+        let family = self
+            .root
+            .family
+            .map(|f| self.t(f.label_key()).to_string())
+            .unwrap_or_else(|| "?".to_string());
+        match self.root.provider {
+            Some(provider) => format!("{family} · {}", self.t(provider.label_key())),
+            None => family,
+        }
+    }
+
     pub(crate) fn update_root(&mut self, msg: RootMsg) -> Task<Message> {
         match msg {
             RootMsg::RootFamily(f) => {
@@ -396,12 +415,9 @@ impl App {
                         None
                     };
 
-                let fam_label = family
-                    .map(|f| self.t(f.label_key()).to_string())
-                    .unwrap_or_else(|| "?".to_string());
                 self.log_push(format!(
                     "[Root] {}",
-                    tr_args!("log_op_starting", what = fam_label)
+                    tr_args!("log_op_starting", what = self.root_route_label())
                 ));
                 // Resolve Magisk preinit device via /proc/self/mountinfo
                 // before ADB vanishes past EDL. Gates /data on the device's
@@ -673,5 +689,31 @@ mod tests {
         assert_eq!(app.busy_view, Some(View::Flash));
         // Must not have started a root op or clobbered the foreign reservation.
         assert!(app.op_steps.is_empty());
+    }
+
+    #[test]
+    fn root_route_label_separates_the_two_magisk_routes() {
+        let label = |provider| {
+            App {
+                root: RootWizard {
+                    family: Some(Family::Magisk),
+                    provider,
+                    ..RootWizard::default()
+                },
+                ..App::default()
+            }
+            .root_route_label()
+        };
+        // The pair that made #88 unreproducible from the reported log.
+        assert_ne!(
+            label(Some(Provider::Magisk)),
+            label(Some(Provider::MagiskForks))
+        );
+        assert!(
+            label(Some(Provider::MagiskForks))
+                .contains(ltbox_core::i18n::tr("provider_magisk_forks").as_str())
+        );
+        // GKI and SKRoot never reach a provider picker; family stands alone.
+        assert_eq!(label(None), ltbox_core::i18n::tr("family_magisk"));
     }
 }
