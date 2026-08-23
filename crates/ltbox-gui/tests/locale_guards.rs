@@ -377,3 +377,133 @@ fn english_locale_keys_match_rust_sources() {
 
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+/// Codepoints one bundled subset can actually render.
+///
+/// Parsed by hand rather than through a font crate: this file already tokenizes
+/// Rust by hand, and a guard whose whole job is to catch drift in a build input
+/// should not add a build input of its own. Reads `cmap` subtable formats 4 and
+/// 12, which is what `fontTools.subset` emits for these faces.
+fn subset_codepoints(path: &Path) -> BTreeSet<u32> {
+    let data = std::fs::read(path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+    let be16 = |at: usize| u16::from_be_bytes([data[at], data[at + 1]]) as usize;
+    let be32 = |at: usize| {
+        u32::from_be_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]]) as usize
+    };
+
+    let cmap = (0..be16(4))
+        .map(|index| 12 + index * 16)
+        .find(|&record| &data[record..record + 4] == b"cmap")
+        .map(|record| be32(record + 8))
+        .unwrap_or_else(|| panic!("{} has no cmap table", path.display()));
+
+    let mut covered = BTreeSet::new();
+    for encoding in 0..be16(cmap + 2) {
+        let record = cmap + 4 + encoding * 8;
+        let subtable = cmap + be32(record + 4);
+        match be16(subtable) {
+            4 => {
+                let segments = be16(subtable + 6) / 2;
+                for segment in 0..segments {
+                    let end = be16(subtable + 14 + segment * 2) as u32;
+                    let start = be16(subtable + 16 + segments * 2 + segment * 2) as u32;
+                    // The trailing 0xFFFF segment is a required sentinel.
+                    if start == 0xFFFF {
+                        continue;
+                    }
+                    covered.extend(start..=end);
+                }
+            }
+            12 => {
+                for group in 0..be32(subtable + 12) {
+                    let at = subtable + 16 + group * 12;
+                    covered.extend(be32(at) as u32..=be32(at + 4) as u32);
+                }
+            }
+            _ => {}
+        }
+    }
+    covered
+}
+
+/// Characters the subsets deliberately do not carry.
+///
+/// Emoji come from the platform emoji font on every OS LTBox ships to, so a CJK
+/// face carrying them would be dead weight. The list is explicit rather than an
+/// "is this emoji" predicate so that adding one is a decision someone made.
+const PLATFORM_FALLBACK_CHARS: &[char] = &['⛔'];
+
+#[test]
+fn every_localized_character_is_in_the_bundled_subset_for_its_locale() {
+    // Mirrors `theme::font_family_for_language`: a locale renders through
+    // exactly one bundled family, so coverage has to hold per locale rather
+    // than across the union of all three. It also has to hold per weight — a
+    // character present only in Regular renders through a fallback face
+    // wherever the UI asks for medium or bold, which is visible as one glyph
+    // in the wrong typeface inside an otherwise correct label.
+    let families = [
+        ("en", "KR"),
+        ("ru", "KR"),
+        ("ko", "KR"),
+        ("ja", "JP"),
+        ("zh", "SC"),
+    ];
+
+    let lang_dir = manifest_dir().join("lang");
+    let on_disk = std::fs::read_dir(&lang_dir)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", lang_dir.display()))
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            (path.extension()? == "json")
+                .then(|| path.file_stem()?.to_str().map(str::to_owned))
+                .flatten()
+        })
+        .collect::<BTreeSet<_>>();
+    let checked = families
+        .iter()
+        .map(|(locale, _)| (*locale).to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        on_disk, checked,
+        "a lang/*.json file is not covered by this guard; add it above with the family \
+         `theme::font_family_for_language` picks for it"
+    );
+
+    let mut failures = Vec::new();
+    for (locale, region) in families {
+        let mut used = BTreeSet::new();
+        for value in load_locale(locale).values() {
+            used.extend(value.chars());
+        }
+        used.retain(|ch| !ch.is_whitespace() && !PLATFORM_FALLBACK_CHARS.contains(ch));
+
+        for weight in ["Regular", "Medium", "Bold"] {
+            let face = format!("NotoSans{region}-{weight}.subset.otf");
+            let covered = subset_codepoints(&manifest_dir().join("fonts/noto").join(&face));
+            let missing = used
+                .iter()
+                .filter(|ch| !covered.contains(&(**ch as u32)))
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                failures.push(format!(
+                    "{face} cannot render characters used by lang/{locale}.json: {}",
+                    missing
+                        .iter()
+                        .map(|ch| format!("{ch} (U+{:04X})", **ch as u32))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "bundled font subsets are stale — a localized string uses a character they were not \
+         built with, so it renders through a fallback face:\n- {}\n\nRegenerate them:\n    cd \
+         crates/ltbox-gui/fonts/noto && python3 -m venv .venv && .venv/bin/pip install fonttools \
+         brotli && .venv/bin/python regenerate.py",
+        failures.join("\n- ")
+    );
+}
