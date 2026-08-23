@@ -226,6 +226,7 @@ impl App {
 
     /// Step 0 — Browse tile. Matches Flash/Root folder steps.
     pub(crate) fn adv_wiz_source_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let action = match self.adv_wizard.action {
             Some(a) => a,
             None => return container(text("")).into(),
@@ -256,18 +257,20 @@ impl App {
         let btn = button(
             container(
                 column![
-                    text(self.t(browse_key).to_string()).size(14).center(),
+                    text(self.t(browse_key).to_string())
+                        .size(d.text(14.0))
+                        .center(),
                     text(self.t(action.source_desc_key()).to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
-                .width(Length::Fixed(280.0))
+                .spacing(d.space(6.0))
+                .width(Length::Fixed(d.width(280.0)))
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(Length::Fixed(280.0))
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .width(Length::Shrink)
@@ -313,15 +316,15 @@ impl App {
         let col = column![
             btn_row,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(status_style)
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -335,6 +338,7 @@ impl App {
     /// Step 1 (PatchDevinfo only) — country picker tile; opens the
     /// shared country popup.
     pub(crate) fn adv_wiz_country_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.adv_wizard.country.is_some();
         let status = self
             .adv_wizard
@@ -345,22 +349,22 @@ impl App {
             container(
                 column![
                     text(self.t("btn_pick_country").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(tr_args!(
                         "adv_country_pick_count",
                         count = COUNTRY_CODES.len().to_string()
                     ))
-                    .size(11)
+                    .size(d.text(11.0))
                     .style(muted_style)
                     .center(),
                 ]
-                .spacing(6)
-                .width(Length::Fixed(280.0))
+                .spacing(d.space(6.0))
+                .width(Length::Fixed(d.width(280.0)))
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(Length::Fixed(280.0))
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .width(Length::Shrink)
@@ -381,14 +385,14 @@ impl App {
         let col = column![
             btn_row,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(status_style)
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -402,6 +406,7 @@ impl App {
     /// Step 1 for Change Country Code: pick the EDL loader (the device is
     /// transitioned to EDL with it). Same loader-browse the DetectArb step uses.
     pub(crate) fn adv_wiz_loader_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.adv_wizard.file_path.is_some();
         let status = self
             .adv_wizard
@@ -412,19 +417,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_loader").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.loader_picker_desc())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
-                .width(Length::Fixed(280.0))
+                .spacing(d.space(6.0))
+                .width(Length::Fixed(d.width(280.0)))
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(Length::Fixed(280.0))
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .width(Length::Shrink)
@@ -445,14 +450,14 @@ impl App {
             ]
             .align_y(iced::Alignment::Center),
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(status_style)
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         // The Settings default EDL loader was bypassed because its extension
@@ -461,7 +466,7 @@ impl App {
         if self.default_loader_path.is_some() && !self.default_loader_fits_model() {
             col = col.push(
                 text(self.t("loader_default_ext_unsupported").to_string())
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::Fill)
                     .style(|t: &Theme| iced::widget::text::Style {
                         color: Some(pal_of(t).error),
@@ -483,6 +488,7 @@ impl App {
     /// rendering stays consistent with the other "needs option"
     /// flow (PatchDevinfo).
     pub(crate) fn adv_wiz_region_target_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.adv_wizard.region_target.is_some();
         let status = match self.adv_wizard.region_target {
             Some(target) => self.t(target.label_key()).to_string(),
@@ -492,19 +498,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_pick_region_target").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.t("adv_region_target_desc").to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
-                .width(Length::Fixed(280.0))
+                .spacing(d.space(6.0))
+                .width(Length::Fixed(d.width(280.0)))
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(Length::Fixed(280.0))
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .width(Length::Shrink)
@@ -525,14 +531,14 @@ impl App {
         let col = column![
             btn_row,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(status_style)
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -548,18 +554,21 @@ impl App {
     /// the user can sanity-check the source before opening the
     /// timestamp popup. Next on this step opens the popup.
     pub(crate) fn adv_wiz_arb_inspect_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let (boot_idx, vbmeta_idx) = self.adv_wizard.arb_inspect.unwrap_or((0, 0));
         let mk_row = |label_key: &'static str, idx: u64| -> Element<'_, Message> {
             let utc = format_unix_timestamp_utc(idx);
             iced::widget::row![
                 text(self.t(label_key).to_string())
-                    .size(13)
+                    .size(d.text(13.0))
                     .style(muted_style)
-                    .width(220),
-                text(idx.to_string()).size(13).width(140),
-                text(utc).size(12).style(muted_style),
+                    .width(Length::Fixed(d.width(220.0))),
+                text(idx.to_string())
+                    .size(d.text(13.0))
+                    .width(Length::Fixed(d.width(140.0))),
+                text(utc).size(d.text(12.0)).style(muted_style),
             ]
-            .spacing(12)
+            .spacing(d.space(12.0))
             .align_y(iced::Alignment::Center)
             .into()
         };
@@ -567,8 +576,8 @@ impl App {
             mk_row("adv_arb_inspect_boot", boot_idx),
             mk_row("adv_arb_inspect_vbmeta", vbmeta_idx),
         ]
-        .spacing(8)
-        .padding(28)
+        .spacing(d.space(8.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -585,10 +594,11 @@ impl App {
     /// required); other models just see a Start prompt because the
     /// detection runs entirely over fastboot vars.
     pub(crate) fn adv_wiz_detect_arb_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let needs_loader = self.is_tb320fc();
         let mut col = column![]
-            .spacing(14)
-            .padding(28)
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         if needs_loader {
@@ -602,19 +612,19 @@ impl App {
                 container(
                     column![
                         text(self.t("btn_browse_loader").to_string())
-                            .size(14)
+                            .size(d.text(14.0))
                             .center(),
                         text(self.loader_picker_desc())
-                            .size(11)
+                            .size(d.text(11.0))
                             .style(muted_style)
                             .center(),
                     ]
-                    .spacing(6)
-                    .width(Length::Fixed(280.0))
+                    .spacing(d.space(6.0))
+                    .width(Length::Fixed(d.width(280.0)))
                     .align_x(iced::Alignment::Center),
                 )
-                .padding([20, 24])
-                .width(Length::Fixed(280.0))
+                .padding(d.padding(20.0, 24.0))
+                .width(Length::Fixed(d.width(280.0)))
                 .style(move |t: &Theme| sel_card_style(t, selected)),
             )
             .width(Length::Shrink)
@@ -637,7 +647,7 @@ impl App {
             };
             col = col.push(
                 text(status)
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::Fill)
                     .style(status_style)
                     .center()
@@ -647,7 +657,7 @@ impl App {
             if self.default_loader_path.is_some() && !self.default_loader_fits_model() {
                 col = col.push(
                     text(self.t("loader_default_ext_unsupported").to_string())
-                        .size(12)
+                        .size(d.text(12.0))
                         .width(Length::Fill)
                         .style(|t: &Theme| iced::widget::text::Style {
                             color: Some(pal_of(t).error),
@@ -719,9 +729,10 @@ impl App {
     }
 
     pub(crate) fn adv_image_info_exec_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let editor = iced::widget::text_editor(&self.image_info_log_editor)
             .on_action(Message::ImageInfoLogEditorAction)
-            .size(11)
+            .size(d.text(11.0))
             .height(Length::Fill)
             .padding(iced::Padding {
                 top: 0.0,
@@ -757,8 +768,8 @@ impl App {
             self.t("adv_image_info").to_string(),
             editor.into()
         )]
-        .spacing(12)
-        .padding(20)
+        .spacing(d.space(12.0))
+        .padding(d.space(20.0))
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -837,6 +848,7 @@ impl App {
     /// Source step — centered firmware-folder picker, matching the other
     /// Advanced source pickers.
     fn simple_flash_intro_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.simple_flash.firmware_folder.is_some();
         let status = self
             .simple_flash
@@ -847,19 +859,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_folder").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.t("flash_folder_desc").to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::SimpleFlash(
@@ -883,15 +895,15 @@ impl App {
         let col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(status_style)
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -908,6 +920,7 @@ impl App {
     /// Flash performs no detection or modification (the wipe outcome is
     /// decided solely by the firmware's own rawprogram).
     fn simple_flash_confirm_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let unknown = self.t("common_unknown").to_string();
         let off = self.t("flash_confirm_rb_off").to_string();
         let folder = self
@@ -916,7 +929,7 @@ impl App {
             .clone()
             .unwrap_or_else(|| "—".to_string());
         let warning = text(self.t("simple_flash_confirm_warning").to_string())
-            .size(13)
+            .size(d.text(13.0))
             .style(warning_style)
             .center()
             .width(Length::Fill);

@@ -4,10 +4,10 @@ use crate::*;
 use iced::widget::{self, Space, button, column, container, row, scrollable, text};
 use iced::{Element, Length, Theme};
 
-fn m3_erase_marker() -> Element<'static, Message> {
+fn m3_erase_marker(d: Density) -> Element<'static, Message> {
     let dash = container(Space::new())
-        .width(Length::Fixed(FLASH_PARTS_ERASE_DASH_WIDTH))
-        .height(Length::Fixed(FLASH_PARTS_ERASE_DASH_HEIGHT))
+        .width(Length::Fixed(d.width(FLASH_PARTS_ERASE_DASH_WIDTH)))
+        .height(Length::Fixed(d.size(FLASH_PARTS_ERASE_DASH_HEIGHT)))
         .style(|t: &Theme| {
             let p = pal_of(t);
             container::Style {
@@ -21,8 +21,8 @@ fn m3_erase_marker() -> Element<'static, Message> {
         });
 
     container(dash)
-        .width(Length::Fixed(FLASH_PARTS_MARKER_SIZE))
-        .height(Length::Fixed(FLASH_PARTS_MARKER_SIZE))
+        .width(Length::Fixed(d.size(d.size(FLASH_PARTS_MARKER_SIZE))))
+        .height(Length::Fixed(d.size(d.size(FLASH_PARTS_MARKER_SIZE))))
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center)
         .style(|t: &Theme| {
@@ -141,6 +141,7 @@ impl App {
         on_select: Message,
         on_chosen: impl Fn(String) -> Message,
     ) -> Element<'a, Message> {
+        let d = self.density();
         let selected = loader_path.is_some();
         let status = match (loader_path, loader_error) {
             (_, Some(e)) => format!("⚠ {e}"),
@@ -151,19 +152,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_loader").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.loader_picker_desc())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(on_select)
@@ -186,15 +187,15 @@ impl App {
         let col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(status_style)
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -219,13 +220,14 @@ impl App {
         &'a self,
         list: iced::widget::Column<'a, Message>,
     ) -> Element<'a, Message> {
+        let d = self.density();
         let scrolled = scrollable(list)
             .style(m3_scrollable_style)
             .height(Length::Fill)
             .width(Length::Fill);
         let col = column![scrolled,]
-            .spacing(10)
-            .padding(20)
+            .spacing(d.space(10.0))
+            .padding(d.space(20.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         container(col)
@@ -235,16 +237,19 @@ impl App {
     }
 
     pub(crate) fn flash_parts_select_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let active = self.flash_parts.sort_col;
         let desc = self.flash_parts.sort_desc;
         let mk_msg = |c: PartsSortColumn| Message::FlashParts(FlashPartsMsg::FlashPartsSortBy(c));
         let header = row![
-            text(" ").size(11).width(FLASH_PARTS_MARKER_CELL_WIDTH), // checkbox col
+            text(" ")
+                .size(d.text(11.0))
+                .width(Length::Fixed(d.width(FLASH_PARTS_MARKER_CELL_WIDTH))), // checkbox col
             parts_sort_header(
                 self.t("flash_parts_col_lun").to_string(),
                 active == PartsSortColumn::Lun,
                 desc,
-                Length::Fixed(50.0),
+                Length::Fixed(d.width(50.0)),
                 mk_msg(PartsSortColumn::Lun),
             ),
             parts_sort_header(
@@ -276,8 +281,8 @@ impl App {
                 mk_msg(PartsSortColumn::File),
             ),
         ]
-        .spacing(8)
-        .padding([6, 10])
+        .spacing(d.space(8.0))
+        .padding(d.padding(6.0, 10.0))
         .align_y(iced::Alignment::Center);
 
         let mut list = column![header, widget::rule::horizontal(1)].spacing(0);
@@ -285,25 +290,25 @@ impl App {
             // Fixed-width tri-state marker: skip, flash, or erase.
             let marker: Element<'_, Message> = match r.state {
                 FlashRowState::Unchecked => iced::widget::checkbox(false)
-                    .size(FLASH_PARTS_MARKER_SIZE)
+                    .size(d.size(FLASH_PARTS_MARKER_SIZE))
                     .on_toggle(move |_| {
                         Message::FlashParts(FlashPartsMsg::FlashPartsToggleRow(idx))
                     })
                     .style(m3_checkbox_style)
                     .into(),
                 FlashRowState::Flash => iced::widget::checkbox(true)
-                    .size(FLASH_PARTS_MARKER_SIZE)
+                    .size(d.size(FLASH_PARTS_MARKER_SIZE))
                     .on_toggle(move |_| {
                         Message::FlashParts(FlashPartsMsg::FlashPartsToggleRow(idx))
                     })
                     .style(m3_checkbox_style)
                     .into(),
-                FlashRowState::Erase => m3_erase_marker(),
+                FlashRowState::Erase => m3_erase_marker(d),
             };
             let marker_btn = button(
                 container(marker)
-                    .width(FLASH_PARTS_MARKER_CELL_WIDTH)
-                    .height(FLASH_PARTS_MARKER_CELL_HEIGHT)
+                    .width(Length::Fixed(d.width(FLASH_PARTS_MARKER_CELL_WIDTH)))
+                    .height(Length::Fixed(d.size(FLASH_PARTS_MARKER_CELL_HEIGHT)))
                     .center_x(Length::Fill)
                     .center_y(Length::Fill),
             )
@@ -327,19 +332,25 @@ impl App {
                 .unwrap_or_default();
 
             let data_row = iced::widget::row![
-                container(marker_btn).width(FLASH_PARTS_MARKER_CELL_WIDTH),
-                text(r.lun.to_string()).size(12).width(50),
-                text(r.label.clone()).size(12).width(Length::FillPortion(3)),
+                container(marker_btn).width(Length::Fixed(d.width(FLASH_PARTS_MARKER_CELL_WIDTH))),
+                text(r.lun.to_string())
+                    .size(d.text(12.0))
+                    .width(Length::Fixed(d.width(50.0))),
+                text(r.label.clone())
+                    .size(d.text(12.0))
+                    .width(Length::FillPortion(3)),
                 text(r.start_sector.to_string())
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::FillPortion(2)),
                 text(format_bytes_auto(r.size_bytes))
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::FillPortion(2)),
-                text(file_disp).size(12).width(Length::FillPortion(3)),
+                text(file_disp)
+                    .size(d.text(12.0))
+                    .width(Length::FillPortion(3)),
             ]
-            .spacing(8)
-            .padding([4, 10])
+            .spacing(d.space(8.0))
+            .padding(d.padding(4.0, 10.0))
             .align_y(iced::Alignment::Center);
 
             // Tint the whole row by its tri-state so flash/erase pop
@@ -371,6 +382,7 @@ impl App {
     }
 
     pub(crate) fn flash_parts_confirm_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let rows = self.flash_parts.active_rows();
         let erase_rows: Vec<&FlashPartRow> = rows
             .iter()
@@ -387,12 +399,12 @@ impl App {
         if !erase_rows.is_empty() {
             let mut erase_col = column![
                 text(self.t("flash_parts_confirm_erase_warn").to_string())
-                    .size(14)
+                    .size(d.text(14.0))
                     .style(|t: &Theme| iced::widget::text::Style {
                         color: Some(pal_of(t).error),
                     })
             ]
-            .spacing(4);
+            .spacing(d.space(4.0));
             for r in &erase_rows {
                 erase_col = erase_col.push(
                     text(format!(
@@ -401,7 +413,7 @@ impl App {
                         r.lun,
                         format_bytes_auto(r.size_bytes)
                     ))
-                    .size(13)
+                    .size(d.text(13.0))
                     .style(|t: &Theme| iced::widget::text::Style {
                         color: Some(pal_of(t).error),
                     }),
@@ -409,7 +421,7 @@ impl App {
             }
             leading.push(
                 container(erase_col)
-                    .padding(14)
+                    .padding(d.space(14.0))
                     .width(Length::Fill)
                     .style(move |t: &Theme| container::Style {
                         background: Some(iced::Background::Color(pal_of(t).error_container)),
@@ -429,10 +441,10 @@ impl App {
         if !flash_rows.is_empty() {
             let mut flash_col = column![
                 text(self.t("flash_parts_confirm_flash_hdr").to_string())
-                    .size(14)
+                    .size(d.text(14.0))
                     .style(on_surface_style)
             ]
-            .spacing(4);
+            .spacing(d.space(4.0));
             for r in &flash_rows {
                 let fname = r
                     .file_path
@@ -446,11 +458,16 @@ impl App {
                     .unwrap_or_default();
                 flash_col = flash_col.push(
                     text(format!("• {} (LUN {}) ← {}", r.label, r.lun, fname))
-                        .size(12)
+                        .size(d.text(12.0))
                         .style(muted_style),
                 );
             }
-            leading.push(container(flash_col).padding(14).width(Length::Fill).into());
+            leading.push(
+                container(flash_col)
+                    .padding(d.space(14.0))
+                    .width(Length::Fill)
+                    .into(),
+            );
         }
 
         self.confirm_step_frame(leading, vec![], vec![])
@@ -545,6 +562,7 @@ impl App {
     }
 
     pub(crate) fn dump_parts_select_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let active = self.dump_parts.sort_col;
         let desc = self.dump_parts.sort_desc;
         let mk_msg = |c: PartsSortColumn| Message::DumpParts(DumpPartsMsg::DumpPartsSortBy(c));
@@ -558,12 +576,12 @@ impl App {
             .style(m3_checkbox_style)
             .on_toggle(|_| Message::DumpParts(DumpPartsMsg::DumpPartsToggleAll));
         let header = row![
-            container(header_cb).width(32),
+            container(header_cb).width(Length::Fixed(d.width(32.0))),
             parts_sort_header(
                 self.t("flash_parts_col_lun").to_string(),
                 active == PartsSortColumn::Lun,
                 desc,
-                Length::Fixed(50.0),
+                Length::Fixed(d.width(50.0)),
                 mk_msg(PartsSortColumn::Lun),
             ),
             parts_sort_header(
@@ -588,8 +606,8 @@ impl App {
                 mk_msg(PartsSortColumn::Size),
             ),
         ]
-        .spacing(8)
-        .padding([6, 10])
+        .spacing(d.space(8.0))
+        .padding(d.padding(6.0, 10.0))
         .align_y(iced::Alignment::Center);
 
         let mut list = column![header, widget::rule::horizontal(1)].spacing(0);
@@ -598,20 +616,22 @@ impl App {
                 .style(m3_checkbox_style)
                 .on_toggle(move |_| Message::DumpParts(DumpPartsMsg::DumpPartsToggleRow(idx)));
             let data_row = iced::widget::row![
-                container(cb).width(32),
-                text(row.lun.to_string()).size(12).width(50),
+                container(cb).width(Length::Fixed(d.width(32.0))),
+                text(row.lun.to_string())
+                    .size(d.text(12.0))
+                    .width(Length::Fixed(d.width(50.0))),
                 text(row.label.clone())
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::FillPortion(3)),
                 text(row.start_sector.to_string())
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::FillPortion(2)),
                 text(format_bytes_auto(row.size_bytes))
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::FillPortion(2)),
             ]
-            .spacing(8)
-            .padding([4, 10])
+            .spacing(d.space(8.0))
+            .padding(d.padding(4.0, 10.0))
             .align_y(iced::Alignment::Center);
             // Tint selected rows so the dump set is visible at a glance.
             let selected = row.selected;
@@ -712,15 +732,18 @@ impl App {
     }
 
     pub(crate) fn dump_phys_select_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let header = row![
-            text(" ").size(11).width(32),
+            text(" ")
+                .size(d.text(11.0))
+                .width(Length::Fixed(d.width(32.0))),
             text(self.t("phys_col_storage").to_string())
-                .size(11)
+                .size(d.text(11.0))
                 .width(Length::Fill)
                 .style(muted_style),
         ]
-        .spacing(8)
-        .padding([6, 10])
+        .spacing(d.space(8.0))
+        .padding(d.padding(6.0, 10.0))
         .align_y(iced::Alignment::Center);
 
         let mut list = column![header, widget::rule::horizontal(1)].spacing(0);
@@ -730,11 +753,13 @@ impl App {
                 .style(m3_checkbox_style)
                 .on_toggle(move |_| Message::DumpPhys(DumpPhysMsg::DumpPhysToggleRow(idx)));
             let data_row = iced::widget::row![
-                container(cb).width(32),
-                text(format!("LUN {idx}")).size(12).width(Length::Fill),
+                container(cb).width(Length::Fixed(d.width(32.0))),
+                text(format!("LUN {idx}"))
+                    .size(d.text(12.0))
+                    .width(Length::Fill),
             ]
-            .spacing(8)
-            .padding([4, 10])
+            .spacing(d.space(8.0))
+            .padding(d.padding(4.0, 10.0))
             .align_y(iced::Alignment::Center);
             list = list.push(data_row);
         }
@@ -829,19 +854,22 @@ impl App {
     }
 
     pub(crate) fn flash_phys_select_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let header = row![
-            text(" ").size(11).width(32),
+            text(" ")
+                .size(d.text(11.0))
+                .width(Length::Fixed(d.width(32.0))),
             text(self.t("phys_col_storage").to_string())
-                .size(11)
+                .size(d.text(11.0))
                 .width(Length::FillPortion(2))
                 .style(muted_style),
             text(self.t("flash_parts_col_file").to_string())
-                .size(11)
+                .size(d.text(11.0))
                 .width(Length::FillPortion(3))
                 .style(muted_style),
         ]
-        .spacing(8)
-        .padding([6, 10])
+        .spacing(d.space(8.0))
+        .padding(d.padding(6.0, 10.0))
         .align_y(iced::Alignment::Center);
 
         let mut list = column![header, widget::rule::horizontal(1)].spacing(0);
@@ -862,14 +890,16 @@ impl App {
                 .unwrap_or_default();
 
             let data_row = iced::widget::row![
-                container(cb).width(32),
+                container(cb).width(Length::Fixed(d.width(32.0))),
                 text(format!("LUN {idx}"))
-                    .size(12)
+                    .size(d.text(12.0))
                     .width(Length::FillPortion(2)),
-                text(file_disp).size(12).width(Length::FillPortion(3)),
+                text(file_disp)
+                    .size(d.text(12.0))
+                    .width(Length::FillPortion(3)),
             ]
-            .spacing(8)
-            .padding([4, 10])
+            .spacing(d.space(8.0))
+            .padding(d.padding(4.0, 10.0))
             .align_y(iced::Alignment::Center);
 
             let clickable = iced::widget::mouse_area(data_row)
@@ -881,6 +911,7 @@ impl App {
     }
 
     pub(crate) fn flash_phys_confirm_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let pairs = self.flash_phys.active_pairs();
 
         let mut leading: Vec<Element<'_, Message>> = Vec::new();
@@ -888,10 +919,10 @@ impl App {
         if !pairs.is_empty() {
             let mut list = column![
                 text(self.t("flash_parts_confirm_flash_hdr").to_string())
-                    .size(14)
+                    .size(d.text(14.0))
                     .style(on_surface_style)
             ]
-            .spacing(4);
+            .spacing(d.space(4.0));
             for (lun, path) in &pairs {
                 let fname = std::path::Path::new(path)
                     .file_name()
@@ -899,11 +930,16 @@ impl App {
                     .unwrap_or_else(|| path.clone());
                 list = list.push(
                     text(format!("• LUN {lun} ← {fname}"))
-                        .size(12)
+                        .size(d.text(12.0))
                         .style(muted_style),
                 );
             }
-            leading.push(container(list).padding(14).width(Length::Fill).into());
+            leading.push(
+                container(list)
+                    .padding(d.space(14.0))
+                    .width(Length::Fill)
+                    .into(),
+            );
         }
 
         self.confirm_step_frame(leading, vec![], vec![])
