@@ -1095,9 +1095,9 @@ pub(crate) const REBOOT_PANEL_MAX_WIDTH: f32 = 760.0;
 /// translations.
 pub(crate) const SUB_ROW_HEIGHT: f32 = 32.0;
 
-/// Taller sub-row for the narrower square cards (~4 lines at size 11) so
-/// longer localized descriptions wrap without clipping. Fits within the
-/// square card's vertical slack below the icon + label.
+/// Taller sub-row for the narrower square cards so longer localized
+/// descriptions wrap without clipping. The widest bundled string reaches
+/// three lines at `BODY_SMALL` inside the narrowest card, needing ~49 px.
 pub(crate) const WIZARD_CARD_SQUARE_SUB_HEIGHT: f32 = 60.0;
 
 pub(crate) const FLASH_PARTS_MARKER_CELL_WIDTH: f32 = 32.0;

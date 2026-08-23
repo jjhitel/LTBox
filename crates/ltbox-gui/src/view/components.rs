@@ -826,10 +826,17 @@ fn option_card(
     // Sub text centres vertically inside the fixed box — top-aligning
     // left long gaps between short descs and the label above.
     let sub_text: Element<'static, Message> = if sub.is_empty() {
-        text(" ").size(11).width(Length::Fill).center().into()
+        text(" ")
+            .size(theme::text_size::BODY_SMALL)
+            .width(Length::Fill)
+            .center()
+            .into()
     } else {
+        // Supporting copy, so the body role rather than the label role the
+        // hardcoded 11 was borrowing. The widest localized description still
+        // wraps to three lines inside the narrowest card at this size.
         text(sub.to_string())
-            .size(11)
+            .size(theme::text_size::BODY_SMALL)
             .style(muted_style)
             .width(Length::Fill)
             .center()
