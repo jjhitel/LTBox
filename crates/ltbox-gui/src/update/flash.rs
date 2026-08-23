@@ -344,7 +344,6 @@ impl App {
                     Task::none()
                 }
             }
-            FlashMsg::FlashManualRollbackOpen => self.open_manual_rollback_editor(),
             FlashMsg::FlashManualRollbackInput(field, value) => {
                 let parsed = self.manual_rollback_format.parse(&value).ok();
                 if let Some(buffers) = &mut self.manual_rollback_buffers {

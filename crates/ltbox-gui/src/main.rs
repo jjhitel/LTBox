@@ -4644,6 +4644,13 @@ mod tests {
             "reopening must not revert to the image value"
         );
         assert_eq!(vbmeta, "1600000000");
+        // The hint under each field reads these, so reopening must leave them
+        // as the image reported them rather than adopting what the user typed.
+        assert_eq!(
+            app.flash.firmware_rollback_indices,
+            Some((Ok(1_500_000_000), Ok(1_500_000_000))),
+            "image indices are the hint's source and are not the user's values"
+        );
     }
 
     #[test]

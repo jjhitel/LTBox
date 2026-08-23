@@ -213,7 +213,6 @@ pub(crate) enum FlashMsg {
     FlashConfirmSetData(DataMode),
     FlashConfirmSetRegionEdit(bool),
     FlashConfirmSetRollback(RollbackSetting),
-    FlashManualRollbackOpen,
     FlashManualRollbackInput(ManualRollbackEditor, String),
     FlashManualRollbackCycleFormat,
     FlashManualRollbackCancel,

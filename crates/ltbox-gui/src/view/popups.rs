@@ -565,16 +565,22 @@ impl App {
         let boot_result = self.parse_manual_rollback(boot_buffer);
         let vbmeta_result = self.parse_manual_rollback(vbmeta_buffer);
         let both_valid = boot_result.is_ok() && vbmeta_result.is_ok();
+        // The hint under each field reports what the *image* carries, so it has
+        // to be read from the firmware every time. Deriving it from the field
+        // made it echo whatever the user had just typed.
+        let originals = self.flash.firmware_rollback_indices.as_ref();
         let boot_field = self.manual_rollback_input(
             "boot",
             boot_buffer,
             boot_result,
+            originals.map(|o| &o.0),
             ManualRollbackEditor::Boot,
         );
         let vbmeta_field = self.manual_rollback_input(
             "vbmeta_system",
             vbmeta_buffer,
             vbmeta_result,
+            originals.map(|o| &o.1),
             ManualRollbackEditor::VbmetaSystem,
         );
 
@@ -612,6 +618,7 @@ impl App {
         partition: &'static str,
         buffer: &str,
         result: Result<u64, String>,
+        original: Option<&Result<u64, String>>,
         field: ManualRollbackEditor,
     ) -> Element<'a, Message> {
         let format_button =
@@ -637,18 +644,26 @@ impl App {
             .width(Length::Fill)
             .style(m3_text_input_style);
 
-        let status: Element<'_, Message> = match &result {
-            Ok(index) => text(tr_args!(
+        let status: Element<'_, Message> = match (&result, original) {
+            // What the user typed is what they can act on, so its error wins
+            // the one line this row has.
+            (Err(reason), _) => text(self.t(reason).to_string())
+                .size(12)
+                .style(warning_style)
+                .into(),
+            (Ok(_), Some(Ok(index))) => text(tr_args!(
                 "rollback_manual_original",
                 index = self.manual_rollback_format.render(*index)
             ))
             .size(12)
             .style(success_style)
             .into(),
-            Err(reason) => text(self.t(reason).to_string())
+            // Unreadable image: say why rather than inventing an index.
+            (Ok(_), Some(Err(reason))) => text(self.t(reason).to_string())
                 .size(12)
-                .style(warning_style)
+                .style(muted_style)
                 .into(),
+            (Ok(_), None) => Space::new().into(),
         };
 
         row![

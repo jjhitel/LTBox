@@ -470,11 +470,10 @@ impl App {
             &rollback,
             rollback_changed,
             &rollback_caution,
-            if cfg.modify_rollback == RollbackSetting::Manual {
-                Message::Flash(FlashMsg::FlashManualRollbackOpen)
-            } else {
-                open(ConfirmField::Rollback)
-            },
+            // Always the setting list, Manual included: the row is how the user
+            // gets back to On/Auto/Off, and picking Manual there opens the
+            // editor anyway.
+            open(ConfirmField::Rollback),
         );
 
         let country_changed = base.is_some_and(|b| b.country_action != cfg.country_action);
