@@ -194,12 +194,13 @@ impl App {
                 let device_model = self.device_model.clone();
                 let fw_folder = self.flash.firmware_folder.clone().unwrap_or_default();
                 let loader_override = self.flash.loader_override.clone();
+                // `None` on every setting but Manual, and the worker refuses a
+                // Manual run that has no targets with a message the user can
+                // read. Bailing here instead left the phased op running with
+                // nothing behind it.
                 let manual_indices = (cfg.modify_rollback == RollbackSetting::Manual)
                     .then_some(cfg.manual_rollback_indices)
                     .flatten();
-                let Some(manual_indices) = manual_indices else {
-                    return Task::none();
-                };
                 let rollback_label = self.t(cfg.modify_rollback.label_key()).to_string();
                 // Split the old single "Starting: modify_region=… rollback=…
                 // wipe=…" line into three labelled, translated lines — the
@@ -244,7 +245,7 @@ impl App {
                                     fw_folder,
                                     loader_override,
                                     rb_mode,
-                                    Some(manual_indices),
+                                    manual_indices,
                                     ll,
                                     phases,
                                 )
@@ -406,6 +407,46 @@ impl App {
                 self.manual_rollback_buffers = None;
                 Task::none()
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn started_lines(setting: RollbackSetting) -> Vec<String> {
+        let mut app = App::default();
+        app.wf_config.modify_rollback = setting;
+        app.flash.firmware_folder = Some("/tmp/fw".to_string());
+        // The returned Task is never polled here, so the worker does not run —
+        // what matters is whether the handler got far enough to emit its
+        // opening log lines.
+        let _task = app.update_flash(FlashMsg::FlashExecStart);
+        app.log_lines.clone()
+    }
+
+    #[test]
+    fn every_rollback_setting_starts_the_flash() {
+        // Manual is the only setting that carries indices. Requiring them of
+        // the others aborted the run after the phased op had already begun,
+        // leaving the UI parked on phase 1 with an empty log.
+        for setting in [
+            RollbackSetting::On,
+            RollbackSetting::Auto,
+            RollbackSetting::Off,
+        ] {
+            let lines = started_lines(setting);
+            // Region / rollback / wipe - counted rather than matched on text so
+            // the assertion does not depend on the active locale.
+            let flash_lines = lines
+                .iter()
+                .filter(|line| line.starts_with("[Flash]"))
+                .count();
+            assert_eq!(
+                flash_lines, 3,
+                "{setting:?} never reached the opening log lines: {lines:?}"
+            );
         }
     }
 }
