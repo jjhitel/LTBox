@@ -3190,7 +3190,7 @@ checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
 
 [[package]]
 name = "ltbox-core"
-version = "3.2.5"
+version = "3.2.6"
 dependencies = [
  "aes",
  "cbc",
@@ -3209,7 +3209,7 @@ dependencies = [
 
 [[package]]
 name = "ltbox-device"
-version = "3.2.5"
+version = "3.2.6"
 dependencies = [
  "adb_client",
  "anyhow",
@@ -3231,7 +3231,7 @@ dependencies = [
 
 [[package]]
 name = "ltbox-gui"
-version = "3.2.5"
+version = "3.2.6"
 dependencies = [
  "camino",
  "dark-light",
@@ -3263,7 +3263,7 @@ dependencies = [
 
 [[package]]
 name = "ltbox-patch"
-version = "3.2.5"
+version = "3.2.6"
 dependencies = [
  "avbtool-rs",
  "digest 0.11.3",
