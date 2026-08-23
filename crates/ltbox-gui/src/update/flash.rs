@@ -346,16 +346,37 @@ impl App {
             }
             FlashMsg::FlashManualRollbackOpen => self.open_manual_rollback_editor(),
             FlashMsg::FlashManualRollbackInput(field, value) => {
+                let parsed = self.manual_rollback_format.parse(&value).ok();
                 if let Some(buffers) = &mut self.manual_rollback_buffers {
                     match field {
-                        ManualRollbackEditor::Boot => buffers.0 = value,
-                        ManualRollbackEditor::VbmetaSystem => buffers.1 = value,
+                        ManualRollbackEditor::Boot => {
+                            buffers.0 = value;
+                            self.manual_rollback_values.0 = parsed;
+                        }
+                        ManualRollbackEditor::VbmetaSystem => {
+                            buffers.1 = value;
+                            self.manual_rollback_values.1 = parsed;
+                        }
                     }
                 }
                 Task::none()
             }
             FlashMsg::FlashManualRollbackCycleFormat => {
-                self.rollback_value_format = self.rollback_value_format.next();
+                let from = self.manual_rollback_format;
+                let to = from.next();
+                self.manual_rollback_format = to;
+                // Re-express whatever is already typed in the new form. Parsing
+                // here is the plain format parse, not the validating one, so a
+                // value the user has not finished correcting still converts
+                // instead of being wiped. Anything unparsable is left alone.
+                let values = self.manual_rollback_values;
+                if let Some((boot, vbmeta)) = self.manual_rollback_buffers.as_mut() {
+                    for (buffer, value) in [(boot, values.0), (vbmeta, values.1)] {
+                        if let Some(index) = value {
+                            *buffer = to.render(index);
+                        }
+                    }
+                }
                 Task::none()
             }
             FlashMsg::FlashManualRollbackCancel => {

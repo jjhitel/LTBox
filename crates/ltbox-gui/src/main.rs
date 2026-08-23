@@ -1668,6 +1668,11 @@ struct App {
     /// In-flight text for the two manual rollback fields. Kept outside the
     /// editor so a cancelled popup cannot mutate the confirmed targets.
     manual_rollback_buffers: Option<(String, String)>,
+    /// Last value each buffer parsed to. Switching display format renders
+    /// from this rather than re-parsing the text, because the date form has
+    /// day granularity and a text round-trip would silently move a value
+    /// back to midnight.
+    manual_rollback_values: (Option<u64>, Option<u64>),
     country_popup_open: bool,
     /// Routes `SelectCountry` back to the Advanced wizard instead of
     /// the Flash flow when PatchDevinfo opened the popup.
@@ -1742,6 +1747,10 @@ struct App {
     /// Shared across both rows so `boot` and `vbmeta_system` stay
     /// directly comparable while cycling.
     rollback_value_format: RollbackValueFormat,
+    /// Separate from `rollback_value_format`: the dashboard parses fastboot
+    /// `getvar` output and so defaults to hex, while this editor mirrors
+    /// `avbtool info_image`, which prints a plain unix timestamp.
+    manual_rollback_format: RollbackValueFormat,
     /// Transient toast message; auto-cleared by a delayed task.
     toast_msg: Option<String>,
     /// Sidebar hover state — true when mouse is over the rail.
@@ -1940,6 +1949,7 @@ impl Default for App {
             confirm_baseline: None,
             manual_rollback_editor: None,
             manual_rollback_buffers: None,
+            manual_rollback_values: (None, None),
             country_popup_open: false,
             adv_needs_country: false,
             region_target_popup_open: false,
@@ -1969,6 +1979,7 @@ impl Default for App {
             device_rollback_floors: None,
             rollback_popup_open: false,
             rollback_value_format: RollbackValueFormat::default(),
+            manual_rollback_format: RollbackValueFormat::Unix,
             toast_msg: None,
             sidebar_expanded: false,
             sidebar_anim: 0.0,
@@ -2133,7 +2144,7 @@ impl App {
     }
 
     fn parse_manual_rollback(&self, input: &str) -> Result<u64, String> {
-        let index = self.rollback_value_format.parse(input)?;
+        let index = self.manual_rollback_format.parse(input)?;
         let now =
             current_unix_timestamp().ok_or_else(|| "rollback_manual_error_clock".to_string())?;
         if index < now {
@@ -2151,12 +2162,26 @@ impl App {
 
         let seed = |result: &Result<u64, String>| -> String {
             result.as_ref().ok().map_or_else(String::new, |index| {
-                self.rollback_value_format.render(*index)
+                self.manual_rollback_format.render(*index)
             })
+        };
+        // Values the user already confirmed win over the image defaults —
+        // reopening the editor to check a number must not silently discard it.
+        // The image index stays visible under each field either way.
+        let buffers = match self.wf_config.manual_rollback_indices {
+            Some(entered) => (
+                self.manual_rollback_format.render(entered.boot),
+                self.manual_rollback_format.render(entered.vbmeta_system),
+            ),
+            None => (seed(&defaults.0), seed(&defaults.1)),
         };
         self.confirm_edit_field = Some(ConfirmField::Rollback);
         self.manual_rollback_editor = Some(ManualRollbackEditor::Boot);
-        self.manual_rollback_buffers = Some((seed(&defaults.0), seed(&defaults.1)));
+        self.manual_rollback_values = (
+            self.manual_rollback_format.parse(&buffers.0).ok(),
+            self.manual_rollback_format.parse(&buffers.1).ok(),
+        );
+        self.manual_rollback_buffers = Some(buffers);
         Task::none()
     }
 
@@ -4597,6 +4622,71 @@ mod tests {
             "same-second target must be rejected"
         );
         assert!(app.parse_manual_rollback("1775347199").is_ok());
+    }
+
+    #[test]
+    fn reopening_the_manual_editor_keeps_what_the_user_confirmed() {
+        let mut app = App {
+            manual_rollback_format: RollbackValueFormat::Unix,
+            ..Default::default()
+        };
+        // Image defaults differ from what the user settled on.
+        app.flash.firmware_rollback_indices = Some((Ok(1_500_000_000), Ok(1_500_000_000)));
+        app.wf_config.manual_rollback_indices = Some(ManualRollbackIndices {
+            boot: 1_700_000_000,
+            vbmeta_system: 1_600_000_000,
+        });
+
+        let _ = app.open_manual_rollback_editor();
+        let (boot, vbmeta) = app.manual_rollback_buffers.clone().expect("buffers");
+        assert_eq!(
+            boot, "1700000000",
+            "reopening must not revert to the image value"
+        );
+        assert_eq!(vbmeta, "1600000000");
+    }
+
+    #[test]
+    fn manual_rollback_editor_defaults_to_unix_and_dashboard_to_raw() {
+        let app = App::default();
+        assert_eq!(app.manual_rollback_format, RollbackValueFormat::Unix);
+        assert_eq!(app.rollback_value_format, RollbackValueFormat::Raw);
+    }
+
+    #[test]
+    fn manual_rollback_cycle_reexpresses_the_typed_values() {
+        let mut app = App {
+            manual_rollback_format: RollbackValueFormat::Unix,
+            manual_rollback_buffers: Some(("1700000000".into(), "1600000000".into())),
+            manual_rollback_values: (Some(1_700_000_000), Some(1_600_000_000)),
+            ..Default::default()
+        };
+
+        let _ = app.update(Message::Flash(FlashMsg::FlashManualRollbackCycleFormat));
+        let (boot, vbmeta) = app.manual_rollback_buffers.clone().expect("buffers");
+        assert_eq!(app.manual_rollback_format, RollbackValueFormat::Date);
+        assert_eq!(boot, RollbackValueFormat::Date.render(1_700_000_000));
+        assert_eq!(vbmeta, RollbackValueFormat::Date.render(1_600_000_000));
+
+        let _ = app.update(Message::Flash(FlashMsg::FlashManualRollbackCycleFormat));
+        let (boot, _) = app.manual_rollback_buffers.clone().expect("buffers");
+        assert_eq!(app.manual_rollback_format, RollbackValueFormat::Raw);
+        assert_eq!(boot, RollbackValueFormat::Raw.render(1_700_000_000));
+    }
+
+    #[test]
+    fn manual_rollback_cycle_leaves_unparsable_text_alone() {
+        let mut app = App {
+            manual_rollback_format: RollbackValueFormat::Unix,
+            manual_rollback_buffers: Some(("not-a-number".into(), "1600000000".into())),
+            manual_rollback_values: (None, Some(1_600_000_000)),
+            ..Default::default()
+        };
+
+        let _ = app.update(Message::Flash(FlashMsg::FlashManualRollbackCycleFormat));
+        let (boot, vbmeta) = app.manual_rollback_buffers.clone().expect("buffers");
+        assert_eq!(boot, "not-a-number");
+        assert_eq!(vbmeta, RollbackValueFormat::Date.render(1_600_000_000));
     }
 
     #[test]

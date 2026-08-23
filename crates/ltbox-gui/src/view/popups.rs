@@ -534,7 +534,7 @@ impl App {
             text(self.t("rollback_format_label").to_string())
                 .size(theme::text_size::LABEL_SMALL)
                 .style(muted_style),
-            text(self.t(self.rollback_value_format.label_key()).to_string())
+            text(self.t(self.manual_rollback_format.label_key()).to_string())
                 .size(theme::text_size::LABEL_SMALL)
                 .font(theme::emphasis::medium())
                 .style(accent_style),
@@ -549,8 +549,6 @@ impl App {
         let boot_result = self.parse_manual_rollback(boot_buffer);
         let vbmeta_result = self.parse_manual_rollback(vbmeta_buffer);
         let both_valid = boot_result.is_ok() && vbmeta_result.is_ok();
-        let boot_result = Box::leak(Box::new(boot_result));
-        let vbmeta_result = Box::leak(Box::new(vbmeta_result));
         let boot_field = self.manual_rollback_input(
             "boot",
             boot_buffer,
@@ -597,11 +595,11 @@ impl App {
         &'a self,
         partition: &'static str,
         buffer: &str,
-        result: &'a Result<u64, String>,
+        result: Result<u64, String>,
         field: ManualRollbackEditor,
     ) -> Element<'a, Message> {
         let format_button =
-            button(text(self.t(self.rollback_value_format.label_key()).to_string()).size(12))
+            button(text(self.t(self.manual_rollback_format.label_key()).to_string()).size(12))
                 .on_press(Message::Flash(FlashMsg::FlashManualRollbackCycleFormat))
                 .padding([4, 8])
                 .style(|t: &Theme, status| {
@@ -623,15 +621,18 @@ impl App {
             .width(Length::Fill)
             .style(m3_text_input_style);
 
-        let status: Element<'_, Message> = match result {
+        let status: Element<'_, Message> = match &result {
             Ok(index) => text(tr_args!(
                 "rollback_manual_original",
-                index = self.rollback_value_format.render(*index)
+                index = self.manual_rollback_format.render(*index)
             ))
             .size(12)
             .style(success_style)
             .into(),
-            Err(reason) => text(self.t(reason)).size(12).style(warning_style).into(),
+            Err(reason) => text(self.t(reason).to_string())
+                .size(12)
+                .style(warning_style)
+                .into(),
         };
 
         row![
