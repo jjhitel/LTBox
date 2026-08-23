@@ -395,6 +395,7 @@ impl App {
         sub: &str,
         selected: bool,
         msg: Option<Message>,
+        metrics: ListRowMetrics,
     ) -> Element<'static, Message> {
         let enabled = msg.is_some();
         let label_style_fn = if enabled {
@@ -403,10 +404,10 @@ impl App {
             muted_style
         };
         let desc: Element<'static, Message> = if sub.is_empty() {
-            text(" ").size(12).width(Length::Fill).into()
+            text(" ").size(metrics.desc_size).width(Length::Fill).into()
         } else {
             text(sub.to_string())
-                .size(12)
+                .size(metrics.desc_size)
                 .style(muted_style)
                 .width(Length::Fill)
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
@@ -415,7 +416,7 @@ impl App {
         let text_block = container(
             column![
                 text(label.to_string())
-                    .size(16)
+                    .size(metrics.label_size)
                     .style(label_style_fn)
                     .width(Length::Fill),
                 desc,
@@ -433,13 +434,13 @@ impl App {
         let inner = container(body)
             .padding([10, 16])
             .width(Length::Fill)
-            .height(Length::Fixed(ROOT_WIZARD_LIST_CARD_HEIGHT))
-            .center_y(Length::Fixed(ROOT_WIZARD_LIST_CARD_HEIGHT))
+            .height(Length::Fixed(metrics.height))
+            .center_y(Length::Fixed(metrics.height))
             .style(move |t: &Theme| sel_card_style(t, selected && enabled));
         let btn = button(inner)
             .padding(0)
             .width(Length::Fill)
-            .height(Length::Fixed(ROOT_WIZARD_LIST_CARD_HEIGHT));
+            .height(Length::Fixed(metrics.height));
         match msg {
             Some(m) => btn
                 .on_press(m)
@@ -470,7 +471,8 @@ impl App {
             Family::APatch,
             Family::Skroot,
         ];
-        let icon_size = 44.0;
+        let icon_size = self.wizard_list_icon(44.0);
+        let metrics = self.wizard_list_metrics(16.0, 12.0);
         let mk = |f: Family| -> Element<'_, Message> {
             let card = Self::root_list_option_card(
                 f.icon_sized(icon_size),
@@ -478,6 +480,7 @@ impl App {
                 self.t(f.desc_key()),
                 self.root.family == Some(f),
                 Some(Message::Root(RootMsg::RootFamily(f))),
+                metrics,
             );
             if f == Family::KernelSU {
                 recommended_overlay(card, self.t("root_recommended_tip").to_string())
@@ -496,7 +499,7 @@ impl App {
             .padding([20, 28])
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, ROOT_WIZARD_LIST_MAX_WIDTH)
+        centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH))
     }
 
     pub(crate) fn root_provider_step(&self) -> Element<'_, Message> {
@@ -504,15 +507,18 @@ impl App {
         let providers = family.providers();
 
         if providers.len() > 2 {
+            let icon_size = self.wizard_list_icon(44.0);
+            let metrics = self.wizard_list_metrics(16.0, 12.0);
             let mut cards = column![].spacing(8).width(Length::Fill);
             for &p in providers {
                 let sub = p.desc_key().map(|k| self.t(k)).unwrap_or("");
                 let card = Self::root_list_option_card(
-                    p.icon_sized(44.0),
+                    p.icon_sized(icon_size),
                     self.t(p.label_key()),
                     sub,
                     self.root.provider == Some(p),
                     Some(Message::Root(RootMsg::RootProvider(p))),
+                    metrics,
                 );
                 let card = if p == Provider::KernelSU {
                     recommended_overlay(card, self.t("root_recommended_tip").to_string())
@@ -527,7 +533,7 @@ impl App {
                 .padding([20, 28])
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center);
-            return centered_step(col, ROOT_WIZARD_LIST_MAX_WIDTH);
+            return centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH));
         }
 
         let side = self.wizard_square_side();

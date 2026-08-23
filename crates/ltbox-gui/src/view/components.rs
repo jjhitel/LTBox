@@ -940,14 +940,14 @@ pub(crate) fn icon_tile(icon: Element<'static, Message>) -> Element<'static, Mes
 }
 
 impl RebootTarget {
-    pub(crate) fn icon(self) -> Element<'static, Message> {
+    pub(crate) fn icon(self, size: f32) -> Element<'static, Message> {
         let glyph = match self {
             Self::System => icon::reboot_system(),
             Self::Recovery => icon::reboot_recovery(),
             Self::Bootloader => icon::reboot_bootloader(),
             Self::Edl => icon::reboot_edl(),
         };
-        lucide_primary(glyph, 32.0)
+        lucide_primary(glyph, size)
     }
 }
 

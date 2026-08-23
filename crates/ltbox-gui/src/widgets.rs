@@ -1085,8 +1085,22 @@ pub(crate) const WIZARD_CARD_SQUARE_MAX: f32 = 300.0;
 /// 820 px minimum window.
 pub(crate) const WIZARD_CARD_GROW_FROM_CONTENT: f32 = 756.0;
 pub(crate) const WIZARD_CARD_GROW_TO_CONTENT: f32 = 1600.0;
-pub(crate) const ROOT_WIZARD_LIST_CARD_HEIGHT: f32 = 72.0;
-pub(crate) const ROOT_WIZARD_LIST_MAX_WIDTH: f32 = 620.0;
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ListRowMetrics {
+    pub(crate) height: f32,
+    pub(crate) label_size: f32,
+    pub(crate) desc_size: f32,
+}
+
+pub(crate) const WIZARD_LIST_CARD_HEIGHT: f32 = 72.0;
+/// Row height the single-column lists grow to, keeping the enlarged icon inside
+/// its padding.
+pub(crate) const WIZARD_LIST_CARD_HEIGHT_MAX: f32 = 96.0;
+/// Single-column lists widen by this much across the growth range; icons in
+/// them grow on the same 1.5x curve the square-card icon uses.
+pub(crate) const WIZARD_LIST_GROWTH: f32 = 1.32;
+pub(crate) const WIZARD_ICON_GROWTH: f32 = 1.5;
+pub(crate) const WIZARD_LIST_MAX_WIDTH: f32 = 620.0;
 pub(crate) const WIZARD_CONFIRM_MAX_WIDTH: f32 = 660.0;
 pub(crate) const WIZARD_TOP_APP_BAR_HEIGHT: f32 = 132.0;
 pub(crate) const WIZARD_TOP_APP_BAR_MAX_WIDTH: f32 = 1040.0;
@@ -1095,7 +1109,6 @@ pub(crate) const WIZARD_FAB_SPACING: f32 = 12.0;
 pub(crate) const WIZARD_FAB_NAV_HEIGHT: f32 = 88.0;
 pub(crate) const ADVANCED_GRID_MAX_WIDTH: f32 = 860.0;
 pub(crate) const SETTINGS_PANEL_MAX_WIDTH: f32 = 620.0;
-pub(crate) const REBOOT_PANEL_MAX_WIDTH: f32 = 760.0;
 
 /// Fixed sub-row height (~2 lines at size 11) so cards line up across
 /// translations.
@@ -1143,6 +1156,53 @@ pub(crate) fn centered_step<'a>(
 }
 
 impl App {
+    /// How far along the window is between the size at which wizard content is
+    /// laid out at its minimum and the size past which growing further only adds
+    /// padding. Every adaptive wizard dimension rides this one factor so they
+    /// cannot drift apart.
+    pub(crate) fn wizard_growth_t(&self) -> f32 {
+        let content_width = self.window_size.0 - SIDEBAR_RAIL_WIDTH;
+        let span = WIZARD_CARD_GROW_TO_CONTENT - WIZARD_CARD_GROW_FROM_CONTENT;
+        ((content_width - WIZARD_CARD_GROW_FROM_CONTENT) / span).clamp(0.0, 1.0)
+    }
+
+    /// Width cap for the single-column wizard lists (root families, reboot
+    /// targets), on the same curve as the square cards.
+    pub(crate) fn wizard_list_max_width(&self, base: f32) -> f32 {
+        base + (base * WIZARD_LIST_GROWTH - base) * self.wizard_growth_t()
+    }
+
+    /// The adaptive dimensions of one single-column list row, resolved together
+    /// so a caller cannot mix a scaled height with unscaled text.
+    pub(crate) fn wizard_list_metrics(&self, label_base: f32, desc_base: f32) -> ListRowMetrics {
+        let (label_size, desc_size) = self.wizard_list_text(label_base, desc_base);
+        ListRowMetrics {
+            height: self.wizard_list_row_height(),
+            label_size,
+            desc_size,
+        }
+    }
+
+    pub(crate) fn wizard_list_row_height(&self) -> f32 {
+        WIZARD_LIST_CARD_HEIGHT
+            + (WIZARD_LIST_CARD_HEIGHT_MAX - WIZARD_LIST_CARD_HEIGHT) * self.wizard_growth_t()
+    }
+
+    /// Icon size for a single-column list row, scaled from its own base so the
+    /// root list (44) and the reboot list (32) keep their relative weights.
+    pub(crate) fn wizard_list_icon(&self, base: f32) -> f32 {
+        base + (base * WIZARD_ICON_GROWTH - base) * self.wizard_growth_t()
+    }
+
+    /// Label and description sizes for a list row, from that row's own bases.
+    pub(crate) fn wizard_list_text(&self, label_base: f32, desc_base: f32) -> (f32, f32) {
+        let t = self.wizard_growth_t();
+        (
+            label_base + (WIZARD_CARD_TITLE_MAX - label_base).max(0.0) * t,
+            desc_base + (WIZARD_CARD_DESC_MAX - desc_base).max(0.0) * t,
+        )
+    }
+
     pub(crate) fn wizard_square_side(&self) -> f32 {
         let content_width = self.window_size.0 - SIDEBAR_RAIL_WIDTH;
         // Grow with the window rather than stepping once and then staying flat.
