@@ -6,7 +6,7 @@ use iced::{Element, Length, Theme};
 use theme::mix_color;
 
 const GITHUB_URL: &str = "https://github.com/miner7222/LTBox";
-const WIKI_URL: &str = "https://github.com/miner7222/LTBox/wiki";
+const WIKI_URL: &str = "https://miner7222.github.io/ltbox";
 const ISSUES_URL: &str = "https://github.com/miner7222/LTBox/issues";
 
 impl App {
