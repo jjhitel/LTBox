@@ -815,7 +815,7 @@
   "nav_flash": "Прошивка",
   "nav_flash_sidebar": "Прошивка",
   "nav_konabess": "Изменить частоту/напряжение GPU",
-  "nav_konabess_sidebar": "Частота/напряжение GPU",
+  "nav_konabess_sidebar": "Тюнинг GPU",
   "nav_reboot": "Перезагрузка",
   "nav_root": "Root",
   "nav_section_tools": "ИНСТРУМЕНТЫ",
