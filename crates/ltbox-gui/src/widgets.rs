@@ -1073,7 +1073,12 @@ pub(crate) const WIZARD_CARD_HEIGHT: f32 = 180.0;
 /// steps. Sized so a 3-up row still fits within the minimum window width.
 pub(crate) const WIZARD_CARD_SQUARE: f32 = 200.0;
 /// Larger square-card side used once the window has enough horizontal room.
-pub(crate) const WIZARD_CARD_SQUARE_WIDE: f32 = 236.0;
+pub(crate) const WIZARD_CARD_SQUARE_MAX: f32 = 300.0;
+/// Content width at which cards are still at their minimum size, and the one
+/// where they reach `WIZARD_CARD_SQUARE_MAX`. 756 is the content area of the
+/// 820 px minimum window.
+pub(crate) const WIZARD_CARD_GROW_FROM_CONTENT: f32 = 756.0;
+pub(crate) const WIZARD_CARD_GROW_TO_CONTENT: f32 = 1600.0;
 pub(crate) const ROOT_WIZARD_LIST_CARD_HEIGHT: f32 = 72.0;
 pub(crate) const ROOT_WIZARD_LIST_MAX_WIDTH: f32 = 620.0;
 pub(crate) const WIZARD_CONFIRM_MAX_WIDTH: f32 = 660.0;
@@ -1134,11 +1139,13 @@ pub(crate) fn centered_step<'a>(
 impl App {
     pub(crate) fn wizard_square_side(&self) -> f32 {
         let content_width = self.window_size.0 - SIDEBAR_RAIL_WIDTH;
-        if content_width >= 1180.0 {
-            WIZARD_CARD_SQUARE_WIDE
-        } else {
-            WIZARD_CARD_SQUARE
-        }
+        // Grow with the window rather than stepping once and then staying flat.
+        // At the minimum window the cards are already sized to look right, and
+        // past `WIZARD_CARD_GROW_TO_CONTENT` further growth would only pad the
+        // fixed-size icon and label they contain.
+        let span = WIZARD_CARD_GROW_TO_CONTENT - WIZARD_CARD_GROW_FROM_CONTENT;
+        let t = ((content_width - WIZARD_CARD_GROW_FROM_CONTENT) / span).clamp(0.0, 1.0);
+        WIZARD_CARD_SQUARE + (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE) * t
     }
 
     pub(crate) fn square_step_max_width(&self, columns: usize) -> f32 {
