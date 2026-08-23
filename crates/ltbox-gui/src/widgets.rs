@@ -657,6 +657,9 @@ pub(crate) const KPM_COLUMN_WIDTH: f32 = 280.0;
 /// its `XL_INCREASED` corner via M3's `outer radius - padding = inner
 /// radius` rule.
 pub(crate) const DEVICE_CARD_PADDING: f32 = 24.0;
+/// Inner height of the dashboard device card at the minimum window. Pinned so
+/// the empty-state and populated cards are the same size.
+pub(crate) const DEVICE_CARD_HEIGHT: f32 = 160.0;
 
 /// Horizontal padding for a common button. M3 Expressive retired the
 /// 24 dp small-button padding in favour of 16 dp, which it notes matches
@@ -1100,6 +1103,17 @@ pub(crate) const WIZARD_LIST_CARD_HEIGHT_MAX: f32 = 96.0;
 /// them grow on the same 1.5x curve the square-card icon uses.
 pub(crate) const WIZARD_LIST_GROWTH: f32 = 1.32;
 pub(crate) const WIZARD_ICON_GROWTH: f32 = 1.5;
+/// Growth ratios for [`Density`], one per element class.
+///
+/// They are deliberately unequal. Text carries a reading burden, so scaling it
+/// with the window as hard as an image would just read as a zoomed screenshot;
+/// images and icons carry none, and are what leave a wide window looking empty
+/// when they stay at the size that suited the minimum one.
+pub(crate) const TEXT_GROWTH: f32 = 1.25;
+pub(crate) const IMAGE_GROWTH: f32 = 1.5;
+pub(crate) const SPACE_GROWTH: f32 = 1.4;
+pub(crate) const SIZE_GROWTH: f32 = 1.3;
+pub(crate) const WIDTH_GROWTH: f32 = 1.32;
 pub(crate) const WIZARD_LIST_MAX_WIDTH: f32 = 620.0;
 pub(crate) const WIZARD_CONFIRM_MAX_WIDTH: f32 = 660.0;
 pub(crate) const WIZARD_TOP_APP_BAR_HEIGHT: f32 = 132.0;
@@ -1155,21 +1169,107 @@ pub(crate) fn centered_step<'a>(
     .into()
 }
 
+/// The one adaptive-sizing rule for the whole app.
+///
+/// Every view that wants to answer "how big should this be on a large window"
+/// asks a `Density` instead of inventing its own breakpoint — that drift is
+/// what left the wizard growing while the dashboard, settings and about panels
+/// stayed frozen at their minimum-window sizes.
+///
+/// `t` runs 0.0 at the content width of the 820 px minimum window and reaches
+/// 1.0 at [`WIZARD_CARD_GROW_TO_CONTENT`], past which more window only buys
+/// margin. It keys on width alone: a size that changed when the user dragged
+/// only the height would be far more surprising than one that did not.
+///
+/// Each method applies the growth ratio its element class is allowed, so a
+/// caller picks *what kind of thing* it is sizing rather than a magic number.
+/// Dialogs are the deliberate exception — they are centred and fixed-width, so
+/// they never look emptier on a big window and stay at [`Density::MIN`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Density {
+    t: f32,
+}
+
+impl Density {
+    /// Minimum-window density. For dialogs and for tests.
+    pub(crate) const MIN: Self = Self { t: 0.0 };
+
+    /// Text sizes.
+    pub(crate) fn text(self, base: f32) -> f32 {
+        self.by(base, TEXT_GROWTH)
+    }
+
+    /// Icons, images and device portraits.
+    pub(crate) fn image(self, base: f32) -> f32 {
+        self.by(base, IMAGE_GROWTH)
+    }
+
+    /// Padding and gaps, so grown content does not crowd a card edge.
+    pub(crate) fn space(self, base: f32) -> f32 {
+        self.by(base, SPACE_GROWTH)
+    }
+
+    /// Fixed card and row heights, and other hit-target boxes.
+    pub(crate) fn size(self, base: f32) -> f32 {
+        self.by(base, SIZE_GROWTH)
+    }
+
+    /// Width cap of a centred panel or list.
+    pub(crate) fn width(self, base: f32) -> f32 {
+        self.by(base, WIDTH_GROWTH)
+    }
+
+    /// Symmetric padding, both axes scaled as spacing.
+    pub(crate) fn padding(self, vertical: f32, horizontal: f32) -> iced::Padding {
+        iced::Padding::default()
+            .top(self.space(vertical))
+            .bottom(self.space(vertical))
+            .left(self.space(horizontal))
+            .right(self.space(horizontal))
+    }
+
+    /// Scale an existing [`iced::Padding`] constant as spacing.
+    pub(crate) fn scale_padding(self, base: iced::Padding) -> iced::Padding {
+        iced::Padding {
+            top: self.space(base.top),
+            right: self.space(base.right),
+            bottom: self.space(base.bottom),
+            left: self.space(base.left),
+        }
+    }
+
+    /// Interpolate between an explicit pair when a dimension has a chosen
+    /// maximum rather than a ratio.
+    pub(crate) fn between(self, min: f32, max: f32) -> f32 {
+        min + (max - min) * self.t
+    }
+
+    fn by(self, base: f32, growth: f32) -> f32 {
+        self.between(base, base * growth)
+    }
+}
+
+/// [`Density`] for a given content width — the width of the area left of the
+/// sidebar rail.
+pub(crate) fn density_for_content_width(content_width: f32) -> Density {
+    let span = WIZARD_CARD_GROW_TO_CONTENT - WIZARD_CARD_GROW_FROM_CONTENT;
+    Density {
+        t: ((content_width - WIZARD_CARD_GROW_FROM_CONTENT) / span).clamp(0.0, 1.0),
+    }
+}
+
 impl App {
-    /// How far along the window is between the size at which wizard content is
-    /// laid out at its minimum and the size past which growing further only adds
-    /// padding. Every adaptive wizard dimension rides this one factor so they
-    /// cannot drift apart.
-    pub(crate) fn wizard_growth_t(&self) -> f32 {
-        let content_width = self.window_size.0 - SIDEBAR_RAIL_WIDTH;
-        let span = WIZARD_CARD_GROW_TO_CONTENT - WIZARD_CARD_GROW_FROM_CONTENT;
-        ((content_width - WIZARD_CARD_GROW_FROM_CONTENT) / span).clamp(0.0, 1.0)
+    /// The current [`Density`]. Resolve it once per view and pass it down;
+    /// recomputing it per widget is what lets two halves of one screen
+    /// disagree.
+    pub(crate) fn density(&self) -> Density {
+        density_for_content_width(self.window_size.0 - SIDEBAR_RAIL_WIDTH)
     }
 
     /// Width cap for the single-column wizard lists (root families, reboot
     /// targets), on the same curve as the square cards.
     pub(crate) fn wizard_list_max_width(&self, base: f32) -> f32 {
-        base + (base * WIZARD_LIST_GROWTH - base) * self.wizard_growth_t()
+        self.density().by(base, WIZARD_LIST_GROWTH)
     }
 
     /// The adaptive dimensions of one single-column list row, resolved together
@@ -1184,41 +1284,37 @@ impl App {
     }
 
     pub(crate) fn wizard_list_row_height(&self) -> f32 {
-        WIZARD_LIST_CARD_HEIGHT
-            + (WIZARD_LIST_CARD_HEIGHT_MAX - WIZARD_LIST_CARD_HEIGHT) * self.wizard_growth_t()
+        self.density()
+            .between(WIZARD_LIST_CARD_HEIGHT, WIZARD_LIST_CARD_HEIGHT_MAX)
     }
 
     /// Icon size for a single-column list row, scaled from its own base so the
     /// root list (44) and the reboot list (32) keep their relative weights.
     pub(crate) fn wizard_list_icon(&self, base: f32) -> f32 {
-        base + (base * WIZARD_ICON_GROWTH - base) * self.wizard_growth_t()
+        self.density().by(base, WIZARD_ICON_GROWTH)
     }
 
     /// Label and description sizes for a list row, from that row's own bases.
     pub(crate) fn wizard_list_text(&self, label_base: f32, desc_base: f32) -> (f32, f32) {
-        let t = self.wizard_growth_t();
+        let d = self.density();
         (
-            label_base + (WIZARD_CARD_TITLE_MAX - label_base).max(0.0) * t,
-            desc_base + (WIZARD_CARD_DESC_MAX - desc_base).max(0.0) * t,
+            d.between(label_base, label_base.max(WIZARD_CARD_TITLE_MAX)),
+            d.between(desc_base, desc_base.max(WIZARD_CARD_DESC_MAX)),
         )
     }
 
     pub(crate) fn wizard_square_side(&self) -> f32 {
-        let content_width = self.window_size.0 - SIDEBAR_RAIL_WIDTH;
         // Grow with the window rather than stepping once and then staying flat.
         // At the minimum window the cards are already sized to look right, and
         // past `WIZARD_CARD_GROW_TO_CONTENT` further growth would only pad the
-        // fixed-size icon and label they contain.
-        let span = WIZARD_CARD_GROW_TO_CONTENT - WIZARD_CARD_GROW_FROM_CONTENT;
-        let t = ((content_width - WIZARD_CARD_GROW_FROM_CONTENT) / span).clamp(0.0, 1.0);
-        WIZARD_CARD_SQUARE + (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE) * t
+        // icon and label they contain.
+        self.density()
+            .between(WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX)
     }
 
     pub(crate) fn wizard_square_icon(&self) -> f32 {
-        let t = ((self.wizard_square_side() - WIZARD_CARD_SQUARE)
-            / (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE))
-            .clamp(0.0, 1.0);
-        WIZARD_CARD_ICON + (WIZARD_CARD_ICON_MAX - WIZARD_CARD_ICON) * t
+        self.density()
+            .between(WIZARD_CARD_ICON, WIZARD_CARD_ICON_MAX)
     }
 
     pub(crate) fn square_step_max_width(&self, columns: usize) -> f32 {
@@ -1307,8 +1403,9 @@ pub(crate) fn wizard_nav_cancel_generic_with_disabled_next_tooltip<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        App, MaterialProgressSize, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON_MAX,
-        WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, extended_fab_primary_style,
+        App, Density, IMAGE_GROWTH, MaterialProgressSize, WIZARD_CARD_GROW_FROM_CONTENT,
+        WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE,
+        WIZARD_CARD_SQUARE_MAX, density_for_content_width, extended_fab_primary_style,
         fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
         material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
     };
@@ -1428,5 +1525,40 @@ mod tests {
         let next = wizard_nav_layout(next_label.as_str());
         assert!(!next.grouped_leading);
         assert!(next.extended_primary);
+    }
+
+    #[test]
+    fn density_leaves_the_minimum_window_exactly_as_authored() {
+        // Views declare the sizes that were tuned at the 820 px minimum, so a
+        // minimum-width window must hand every one of them straight back.
+        let min = density_for_content_width(WIZARD_CARD_GROW_FROM_CONTENT);
+        for base in [11.0, 14.0, 40.0, 160.0, 620.0] {
+            assert_eq!(min.text(base), base);
+            assert_eq!(min.image(base), base);
+            assert_eq!(min.space(base), base);
+            assert_eq!(min.size(base), base);
+            assert_eq!(min.width(base), base);
+        }
+        assert_eq!(Density::MIN.text(14.0), 14.0);
+        // Narrower than the minimum cannot shrink anything.
+        assert_eq!(density_for_content_width(300.0).text(14.0), 14.0);
+    }
+
+    #[test]
+    fn density_grows_element_classes_in_their_intended_order() {
+        let full = density_for_content_width(WIZARD_CARD_GROW_TO_CONTENT);
+        let base = 100.0;
+        // Text carries a reading burden, so it grows least; images carry none
+        // and are what leave a wide window looking empty, so they grow most.
+        assert!(full.text(base) < full.size(base));
+        assert!(full.size(base) < full.width(base));
+        assert!(full.width(base) < full.space(base));
+        assert!(full.space(base) < full.image(base));
+        assert_eq!(full.image(base), base * IMAGE_GROWTH);
+        // Past the top of the range growth stops rather than running away.
+        assert_eq!(
+            density_for_content_width(4000.0).image(base),
+            base * IMAGE_GROWTH
+        );
     }
 }

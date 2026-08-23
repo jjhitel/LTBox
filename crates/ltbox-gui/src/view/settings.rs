@@ -8,11 +8,17 @@ use theme::{mix_color, with_alpha};
 impl App {
     pub(crate) fn view_settings(&self) -> Element<'_, Message> {
         let s = &self.settings;
+        let d = self.density();
+        // One field padding for every control on the panel, so the pick lists
+        // and the icon buttons keep the same relationship to their labels at
+        // any window size.
+        let field_padding = d.scale_padding(M3_FIELD_PADDING);
+        let icon_btn = Length::Fixed(d.size(36.0));
 
         // Single untitled "Preferences" card holds language + theme.
         let lang_row = row![
             text(self.t("settings_language").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .width(Length::Fill),
             widget::pick_list(
                 LANGUAGES.iter().map(|l| l.label()).collect::<Vec<_>>(),
@@ -30,14 +36,14 @@ impl App {
             // doesn't tower over the "Language" label next to it. The
             // menu items inherit `text_size` for visual consistency
             // with the trigger.
-            .text_size(13)
+            .text_size(d.text(13.0))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
-            .padding(M3_FIELD_PADDING)
+            .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(160),
+            .width(Length::Fixed(d.width(160.0))),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -52,7 +58,7 @@ impl App {
         let theme_options: Vec<String> = vec![t_system.clone(), t_light.clone(), t_dark.clone()];
         let theme_row = row![
             text(self.t("settings_theme").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .width(Length::Fill),
             widget::pick_list(theme_options, Some(current_theme_label), move |selected| {
                 let choice = if selected == t_system {
@@ -66,14 +72,14 @@ impl App {
             },)
             // Match the row label's 13 px size. Same rationale as the
             // language pick list.
-            .text_size(13)
+            .text_size(d.text(13.0))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
-            .padding(M3_FIELD_PADDING)
+            .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(160),
+            .width(Length::Fixed(d.width(160.0))),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -89,7 +95,7 @@ impl App {
             vec![seed_indigo.clone(), seed_teal.clone(), seed_rose.clone()];
         let seed_row = row![
             text(self.t("settings_theme_seed").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .width(Length::Fill),
             widget::pick_list(seed_options, Some(current_seed_label), move |selected| {
                 let seed = if selected == seed_teal {
@@ -101,14 +107,14 @@ impl App {
                 };
                 Message::Settings(SettingsMsg::SetThemeSeed(seed))
             },)
-            .text_size(13)
+            .text_size(d.text(13.0))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
-            .padding(M3_FIELD_PADDING)
+            .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(160),
+            .width(Length::Fixed(d.width(160.0))),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -132,7 +138,7 @@ impl App {
             "settings_qcom_driver_mode_help"
         };
         let driver_help_icon = widget::tooltip(
-            container(text("?").size(11).style(muted_style))
+            container(text("?").size(d.text(11.0)).style(muted_style))
                 .padding([2, 6])
                 .style(|t: &Theme| {
                     let p = pal_of(t);
@@ -145,9 +151,9 @@ impl App {
                         ..Default::default()
                     }
                 }),
-            container(text(self.t(driver_help_key).to_string()).size(11))
+            container(text(self.t(driver_help_key).to_string()).size(d.text(11.0)))
                 .padding([6, 10])
-                .max_width(280)
+                .max_width(d.width(280.0))
                 .style(|t: &Theme| theme::tooltip_style(t, theme::shape::SM)),
             widget::tooltip::Position::Right,
         );
@@ -155,13 +161,15 @@ impl App {
             // Same geometry as the pick_list this replaces, at M3's disabled
             // tones (38% content, 12% outline), so it reads as that control
             // unavailable rather than as a different kind of field.
-            container(text(current_driver_label).size(13).style(|t: &Theme| {
-                iced::widget::text::Style {
-                    color: Some(with_alpha(pal_of(t).on_surface, 0.38)),
-                }
-            }))
-            .padding(M3_FIELD_PADDING)
-            .width(160)
+            container(
+                text(current_driver_label)
+                    .size(d.text(13.0))
+                    .style(|t: &Theme| iced::widget::text::Style {
+                        color: Some(with_alpha(pal_of(t).on_surface, 0.38)),
+                    }),
+            )
+            .padding(field_padding)
+            .width(Length::Fixed(d.width(160.0)))
             .style(|t: &Theme| {
                 let p = pal_of(t);
                 container::Style {
@@ -189,21 +197,21 @@ impl App {
                     Message::Settings(SettingsMsg::SetQcomDriverMode(mode))
                 },
             )
-            .text_size(13)
+            .text_size(d.text(13.0))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
-            .padding(M3_FIELD_PADDING)
+            .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(160)
+            .width(Length::Fixed(d.width(160.0)))
             .into()
         };
         let driver_label = row![
-            text(self.t("settings_qcom_driver_mode").to_string()).size(13),
+            text(self.t("settings_qcom_driver_mode").to_string()).size(d.text(13.0)),
             driver_help_icon,
         ]
-        .spacing(6)
+        .spacing(d.space(6.0))
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
         let driver_row = row![driver_label, driver_control].align_y(iced::Alignment::Center);
@@ -211,7 +219,7 @@ impl App {
         // Default EDL loader used to auto-fill loader pickers.
         let default_loader_help = self.t("settings_default_loader_help").to_string();
         let help_icon = widget::tooltip(
-            container(text("?").size(11).style(muted_style))
+            container(text("?").size(d.text(11.0)).style(muted_style))
                 .padding([2, 6])
                 .style(|t: &Theme| {
                     let p = pal_of(t);
@@ -224,9 +232,9 @@ impl App {
                         ..Default::default()
                     }
                 }),
-            container(text(default_loader_help).size(11))
+            container(text(default_loader_help).size(d.text(11.0)))
                 .padding([6, 10])
-                .max_width(280)
+                .max_width(d.width(280.0))
                 .style(|t: &Theme| theme::tooltip_style(t, theme::shape::SM)),
             widget::tooltip::Position::Right,
         );
@@ -236,8 +244,8 @@ impl App {
             container(lucide_icon(icon::settings_browse(), 18.0, |t: &Theme| {
                 pal_of(t).on_secondary_container
             }))
-            .width(36)
-            .height(36)
+            .width(icon_btn)
+            .height(icon_btn)
             .center_x(36)
             .center_y(36),
         )
@@ -271,22 +279,24 @@ impl App {
         });
         let browse_tip = widget::tooltip(
             browse_btn,
-            container(text(self.t("settings_default_loader_browse").to_string()).size(11))
-                .padding([6, 10])
-                .style(|t: &Theme| theme::tooltip_style(t, theme::shape::XS)),
+            container(
+                text(self.t("settings_default_loader_browse").to_string()).size(d.text(11.0)),
+            )
+            .padding([6, 10])
+            .style(|t: &Theme| theme::tooltip_style(t, theme::shape::XS)),
             widget::tooltip::Position::Top,
         );
 
         let mut default_loader_actions = row![browse_tip,]
-            .spacing(8)
+            .spacing(d.space(8.0))
             .align_y(iced::Alignment::Center);
         if self.default_loader_path.is_some() {
             let clear_btn = button(
                 container(lucide_icon(icon::settings_clear(), 18.0, |t: &Theme| {
                     pal_of(t).on_error_container
                 }))
-                .width(36)
-                .height(36)
+                .width(icon_btn)
+                .height(icon_btn)
                 .center_x(36)
                 .center_y(36),
             )
@@ -315,9 +325,11 @@ impl App {
             });
             let clear_tip = widget::tooltip(
                 clear_btn,
-                container(text(self.t("settings_default_loader_clear").to_string()).size(11))
-                    .padding([6, 10])
-                    .style(|t: &Theme| theme::tooltip_style(t, theme::shape::XS)),
+                container(
+                    text(self.t("settings_default_loader_clear").to_string()).size(d.text(11.0)),
+                )
+                .padding([6, 10])
+                .style(|t: &Theme| theme::tooltip_style(t, theme::shape::XS)),
                 widget::tooltip::Position::Top,
             );
             default_loader_actions = default_loader_actions.push(clear_tip);
@@ -325,13 +337,13 @@ impl App {
 
         let default_loader_top = row![
             text(self.t("settings_default_loader").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .line_height(1.0),
             help_icon,
             Space::new().width(Length::Fill),
             default_loader_actions,
         ]
-        .spacing(8)
+        .spacing(d.space(8.0))
         .align_y(iced::Alignment::Center);
 
         let default_loader_path_str = self
@@ -340,19 +352,16 @@ impl App {
             .unwrap_or_else(|| self.t("settings_default_loader_unset").to_string());
         let default_loader_row = column![
             default_loader_top,
-            text(default_loader_path_str).size(11).style(muted_style),
+            text(default_loader_path_str)
+                .size(d.text(11.0))
+                .style(muted_style),
         ]
-        .spacing(6);
+        .spacing(d.space(6.0));
 
         let prefs_card = container(
             column![lang_row, theme_row, seed_row,]
-                .spacing(14)
-                .padding(iced::Padding {
-                    top: 14.0,
-                    right: 18.0,
-                    bottom: 14.0,
-                    left: 18.0,
-                })
+                .spacing(d.space(14.0))
+                .padding(d.padding(14.0, 18.0))
                 .width(Length::Fill),
         )
         .width(Length::Fill)
@@ -370,7 +379,7 @@ impl App {
             }
         });
         let prefs_card: Element<'_, Message> =
-            centered_max_width(prefs_card, SETTINGS_PANEL_MAX_WIDTH);
+            centered_max_width(prefs_card, d.width(SETTINGS_PANEL_MAX_WIDTH));
 
         // --- Maintenance card: clean leftover temp/scratch files ----------
         // Enabled only once a scan has found something to remove and no
@@ -378,7 +387,7 @@ impl App {
         let cleanup_enabled =
             !self.busy && !self.cleaning_temp && matches!(self.temp_files_bytes, Some(b) if b > 0);
         let cleanup_help_icon = widget::tooltip(
-            container(text("?").size(11).style(muted_style))
+            container(text("?").size(d.text(11.0)).style(muted_style))
                 .padding([2, 6])
                 .style(|t: &Theme| {
                     let p = pal_of(t);
@@ -391,9 +400,9 @@ impl App {
                         ..Default::default()
                     }
                 }),
-            container(text(self.t("settings_cleanup_help").to_string()).size(11))
+            container(text(self.t("settings_cleanup_help").to_string()).size(d.text(11.0)))
                 .padding([6, 10])
-                .max_width(280)
+                .max_width(d.width(280.0))
                 .style(|t: &Theme| theme::tooltip_style(t, theme::shape::SM)),
             widget::tooltip::Position::Right,
         );
@@ -419,8 +428,8 @@ impl App {
                     }
                 },
             ))
-            .width(36)
-            .height(36)
+            .width(icon_btn)
+            .height(icon_btn)
             .center_x(36)
             .center_y(36),
         )
@@ -462,7 +471,7 @@ impl App {
         }
         let cleanup_action = widget::tooltip(
             cleanup_btn,
-            container(text(cleanup_tip_label).size(11))
+            container(text(cleanup_tip_label).size(d.text(11.0)))
                 .padding([6, 10])
                 .style(|t: &Theme| theme::tooltip_style(t, theme::shape::XS)),
             widget::tooltip::Position::Top,
@@ -472,21 +481,21 @@ impl App {
         // shown once a scan has landed. Explanation lives only in the tooltip.
         let cleanup_size: Element<'_, Message> = match self.temp_files_bytes {
             Some(bytes) => text(format!("({})", format_bytes_auto(bytes)))
-                .size(13)
+                .size(d.text(13.0))
                 .style(muted_style)
                 .into(),
             None => Space::new().width(0).height(0).into(),
         };
         let cleanup_top = row![
             text(self.t("settings_cleanup").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .line_height(1.0),
             cleanup_size,
             cleanup_help_icon,
             Space::new().width(Length::Fill),
             cleanup_action,
         ]
-        .spacing(8)
+        .spacing(d.space(8.0))
         .width(Length::Fill)
         .align_y(iced::Alignment::Center);
 
@@ -494,13 +503,8 @@ impl App {
         // above, with the temp-file cleanup row kept at the very bottom.
         let cleanup_card = container(
             column![driver_row, default_loader_row, cleanup_top]
-                .spacing(14)
-                .padding(iced::Padding {
-                    top: 14.0,
-                    right: 18.0,
-                    bottom: 14.0,
-                    left: 18.0,
-                })
+                .spacing(d.space(14.0))
+                .padding(d.padding(14.0, 18.0))
                 .width(Length::Fill),
         )
         .width(Length::Fill)
@@ -518,13 +522,16 @@ impl App {
             }
         });
         let cleanup_card: Element<'_, Message> =
-            centered_max_width(cleanup_card, SETTINGS_PANEL_MAX_WIDTH);
+            centered_max_width(cleanup_card, d.width(SETTINGS_PANEL_MAX_WIDTH));
 
-        let mut col = column![].spacing(14).width(Length::Fill);
+        let mut col = column![].spacing(d.space(14.0)).width(Length::Fill);
         // Surface the driver install / update banner here too, so switching the
         // driver mode above shows the prompt without a trip to the dashboard.
         if let Some(banner) = self.driver_install_banner() {
-            col = col.push(centered_max_width(banner, SETTINGS_PANEL_MAX_WIDTH));
+            col = col.push(centered_max_width(
+                banner,
+                d.width(SETTINGS_PANEL_MAX_WIDTH),
+            ));
         }
         col = col.push(prefs_card);
         col = col.push(cleanup_card);

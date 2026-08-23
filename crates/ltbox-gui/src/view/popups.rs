@@ -183,8 +183,8 @@ impl App {
                 .spacing(4);
 
                 let meta_row = iced::widget::row![
-                    info_kv(self.t("ota_popup_size"), &size_str),
-                    info_kv(self.t("ota_popup_md5"), &update.md5),
+                    info_kv(Density::MIN, self.t("ota_popup_size"), &size_str),
+                    info_kv(Density::MIN, self.t("ota_popup_md5"), &update.md5),
                 ]
                 .spacing(40);
 
@@ -301,22 +301,38 @@ impl App {
                     .unwrap_or_default();
                 let mut rows = column![].spacing(10).width(Length::Fill);
                 if !pkg.version.is_empty() {
-                    rows = rows.push(info_kv(self.t("qfil_popup_version"), &pkg.version));
+                    rows = rows.push(info_kv(
+                        Density::MIN,
+                        self.t("qfil_popup_version"),
+                        &pkg.version,
+                    ));
                 }
                 if !pkg.file_name.is_empty() {
-                    rows = rows.push(info_kv(self.t("qfil_popup_file"), &pkg.file_name));
+                    rows = rows.push(info_kv(
+                        Density::MIN,
+                        self.t("qfil_popup_file"),
+                        &pkg.file_name,
+                    ));
                 }
                 if !pkg.platform.is_empty() {
-                    rows = rows.push(info_kv(self.t("qfil_popup_platform"), &pkg.platform));
+                    rows = rows.push(info_kv(
+                        Density::MIN,
+                        self.t("qfil_popup_platform"),
+                        &pkg.platform,
+                    ));
                 }
                 if !updated.is_empty() {
-                    rows = rows.push(info_kv(self.t("qfil_popup_updated"), &updated));
+                    rows = rows.push(info_kv(
+                        Density::MIN,
+                        self.t("qfil_popup_updated"),
+                        &updated,
+                    ));
                 }
                 // Archive password (fixed constant) with a copy affordance —
                 // it isn't discoverable and the user needs it to extract.
                 let pw = ltbox_core::lenovo_qfil::package_password();
                 let pw_row = row![
-                    info_kv(self.t("qfil_popup_password"), &pw),
+                    info_kv(Density::MIN, self.t("qfil_popup_password"), &pw),
                     Space::new().width(Length::Fill),
                     m3_filled_button(self.t("qfil_popup_copy").to_string())
                         .on_press(Message::CopyToClipboard(pw.clone())),
@@ -1143,7 +1159,7 @@ impl App {
             .spacing(8)
             .align_y(iced::Alignment::Center),
             widget::rule::horizontal(1),
-            m3_log_text_field(self.t("dash_log").to_string(), editor.into()),
+            m3_log_text_field(Density::MIN, self.t("dash_log").to_string(), editor.into()),
         ]
         .spacing(12)
         .padding(20)

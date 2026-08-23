@@ -26,19 +26,20 @@ impl App {
             return self.view_adv_wizard();
         }
 
-        let mut content = column![].spacing(14).width(Length::Fill);
+        let d = self.density();
+        let mut content = column![].spacing(d.space(14.0)).width(Length::Fill);
 
         for section in ADV_SECTIONS {
             content = content.push(
                 text(self.t(section.title_key).to_string())
-                    .size(11)
+                    .size(d.text(11.0))
                     .style(muted_style),
             );
-            let mut rows = column![].spacing(8);
+            let mut rows = column![].spacing(d.space(8.0));
             for chunk in section.items.chunks(3) {
-                let mut r = row![].spacing(8).width(Length::Fill);
+                let mut r = row![].spacing(d.space(8.0)).width(Length::Fill);
                 for &item in chunk {
-                    r = r.push(adv_grid_btn(item, self.t(item.label_key())));
+                    r = r.push(adv_grid_btn(d, item, self.t(item.label_key())));
                 }
                 for _ in chunk.len()..3 {
                     r = r.push(Space::new().width(Length::Fill));
@@ -49,9 +50,12 @@ impl App {
         }
 
         let body = scrollable(
-            container(centered_max_width(content, ADVANCED_GRID_MAX_WIDTH))
-                .padding(24)
-                .width(Length::Fill),
+            container(centered_max_width(
+                content,
+                d.width(ADVANCED_GRID_MAX_WIDTH),
+            ))
+            .padding(d.space(24.0))
+            .width(Length::Fill),
         )
         .style(m3_scrollable_style)
         .width(Length::Fill)
@@ -749,6 +753,7 @@ impl App {
         }
 
         let body = column![m3_log_text_field(
+            self.density(),
             self.t("adv_image_info").to_string(),
             editor.into()
         )]

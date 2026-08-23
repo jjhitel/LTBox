@@ -26,6 +26,7 @@ pub(crate) fn m3_dialog_modeless(inner: Element<'_, Message>) -> Element<'_, Mes
 }
 
 pub(crate) fn m3_log_text_field<'a>(
+    d: Density,
     label: impl Into<String>,
     editor: Element<'a, Message>,
 ) -> Element<'a, Message> {
@@ -38,16 +39,16 @@ pub(crate) fn m3_log_text_field<'a>(
     let label = label.into();
     let label_row = container(
         text(label)
-            .size(theme::text_size::TITLE_SMALL)
+            .size(d.text(theme::text_size::TITLE_SMALL))
             .font(theme::emphasis::medium())
             .line_height(1.0)
             .style(muted_style),
     )
     .padding(iced::Padding {
-        top: 12.0,
-        right: 18.0,
-        bottom: 8.0,
-        left: 18.0,
+        top: d.space(12.0),
+        right: d.space(18.0),
+        bottom: d.space(8.0),
+        left: d.space(18.0),
     })
     .width(Length::Fill);
 
@@ -363,31 +364,36 @@ pub(crate) fn sec_hdr<'a>(label: &str, label_alpha: f32) -> Element<'a, Message>
     .into()
 }
 
-fn card_content<'a>(title: &str, content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+fn card_content<'a>(
+    d: Density,
+    title: &str,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
     column![
         text(title.to_string())
-            .size(theme::text_size::TITLE_SMALL)
+            .size(d.text(theme::text_size::TITLE_SMALL))
             .font(theme::emphasis::medium())
             .style(muted_style)
             .line_height(1.0),
         content.into(),
     ]
-    .spacing(6)
+    .spacing(d.space(6.0))
     .padding(iced::Padding {
-        top: 10.0,
-        right: 18.0,
-        bottom: 14.0,
-        left: 18.0,
+        top: d.space(10.0),
+        right: d.space(18.0),
+        bottom: d.space(14.0),
+        left: d.space(18.0),
     })
     .width(Length::Fill)
     .into()
 }
 
 pub(crate) fn card<'a>(
+    d: Density,
     title: &str,
     content: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    container(card_content(title, content))
+    container(card_content(d, title, content))
         .width(Length::Fill)
         .style(|t: &Theme| {
             theme::surface_card_style(t, theme::SurfaceLevel::Default, theme::shape::LG, 1)
@@ -396,11 +402,12 @@ pub(crate) fn card<'a>(
 }
 
 pub(crate) fn clickable_card<'a>(
+    d: Density,
     title: &str,
     content: impl Into<Element<'a, Message>>,
     message: Message,
 ) -> Element<'a, Message> {
-    button(card_content(title, content))
+    button(card_content(d, title, content))
         .on_press(message)
         .padding(0)
         .width(Length::Fill)
@@ -424,20 +431,20 @@ pub(crate) fn clickable_card<'a>(
         .into()
 }
 
-pub(crate) fn info_kv<'a>(label: &str, value: &str) -> Element<'a, Message> {
+pub(crate) fn info_kv<'a>(d: Density, label: &str, value: &str) -> Element<'a, Message> {
     column![
         text(label.to_string())
-            .size(theme::text_size::LABEL_SMALL)
+            .size(d.text(theme::text_size::LABEL_SMALL))
             .style(muted_style),
         // Value outranks its caption on weight and color rather than
         // size — at `BODY_LARGE` the kv grid competed with the device
         // name above it, which is what pushed that name oversized in the
         // first place.
         text(value.to_string())
-            .size(theme::text_size::BODY_MEDIUM)
+            .size(d.text(theme::text_size::BODY_MEDIUM))
             .font(theme::emphasis::medium()),
     ]
-    .spacing(3)
+    .spacing(d.space(3.0))
     .into()
 }
 
@@ -658,7 +665,7 @@ pub(crate) fn recommended_overlay(
     iced::widget::stack![card, overlay].into()
 }
 
-pub(crate) fn adv_grid_btn<'a>(item: AdvAction, label: &str) -> Element<'a, Message> {
+pub(crate) fn adv_grid_btn<'a>(d: Density, item: AdvAction, label: &str) -> Element<'a, Message> {
     // Inner container: border-only via `sel_card_style`. Earlier
     // version used `theme::surface_card_style` which paints an opaque
     // bg — that bg sat on top of the button's hover fill, swallowing
@@ -666,7 +673,7 @@ pub(crate) fn adv_grid_btn<'a>(item: AdvAction, label: &str) -> Element<'a, Mess
     let destructive = item.is_destructive();
     let content = container(
         text(label.to_string())
-            .size(12)
+            .size(d.text(12.0))
             .center()
             .width(Length::Fill)
             .style(move |t: &Theme| {
@@ -676,7 +683,7 @@ pub(crate) fn adv_grid_btn<'a>(item: AdvAction, label: &str) -> Element<'a, Mess
                 }
             }),
     )
-    .padding([18, 12])
+    .padding(d.padding(18.0, 12.0))
     .width(Length::Fill)
     .center_x(Length::Fill)
     .style(move |t: &Theme| sel_card_style_for(t, false, destructive));
