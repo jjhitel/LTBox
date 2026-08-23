@@ -704,7 +704,7 @@ impl App {
         let tb323fu = self.is_tb323fu();
         let unsupported_tb323fu = tr_args!("model_unsupported", model = "TB323FU");
         let lkm_card = icon_option_card_sub_square_sized(
-            RootMode::Lkm.icon(),
+            RootMode::Lkm.icon(self.wizard_square_icon()),
             self.t(RootMode::Lkm.label_key()),
             self.t(RootMode::Lkm.desc_key()),
             self.root.mode == Some(RootMode::Lkm),
@@ -717,14 +717,14 @@ impl App {
         // vbmeta handling is added.
         let gki_card: Element<'_, Message> = if tb323fu {
             icon_option_card_sub_square_disabled_sized(
-                RootMode::Gki.icon_disabled(),
+                RootMode::Gki.icon_disabled(self.wizard_square_icon()),
                 self.t(RootMode::Gki.label_key()),
                 &unsupported_tb323fu,
                 side,
             )
         } else {
             icon_option_card_sub_square_sized(
-                RootMode::Gki.icon(),
+                RootMode::Gki.icon(self.wizard_square_icon()),
                 self.t(RootMode::Gki.label_key()),
                 self.t(RootMode::Gki.desc_key()),
                 self.root.mode == Some(RootMode::Gki),
@@ -743,7 +743,7 @@ impl App {
     pub(crate) fn root_skroot_flavor_step(&self) -> Element<'_, Message> {
         let side = self.wizard_square_side();
         let lite = icon_option_card_sub_square_sized(
-            SkrootFlavor::Lite.icon(),
+            SkrootFlavor::Lite.icon(self.wizard_square_icon()),
             self.t(SkrootFlavor::Lite.label_key()),
             self.t(SkrootFlavor::Lite.desc_key()),
             self.root.skroot_flavor == Some(SkrootFlavor::Lite),
@@ -751,7 +751,7 @@ impl App {
             side,
         );
         let pro = icon_option_card_sub_square_disabled_sized(
-            SkrootFlavor::Pro.icon_disabled(),
+            SkrootFlavor::Pro.icon_disabled(self.wizard_square_icon()),
             self.t(SkrootFlavor::Pro.label_key()),
             self.t(SkrootFlavor::Pro.desc_key()),
             side,
@@ -769,7 +769,7 @@ impl App {
         let side = self.wizard_square_side();
         let mk = |choice: VerChoice| -> Element<'_, Message> {
             let card = icon_option_card_sub_square_sized(
-                choice.icon(),
+                choice.icon(self.wizard_square_icon()),
                 self.t(choice.label_key()),
                 self.t(choice.desc_key()),
                 self.root.version == Some(choice),
@@ -809,7 +809,7 @@ impl App {
         let side = self.wizard_square_side();
         let mk = |src: NightlySource| -> Element<'_, Message> {
             icon_option_card_sub_square_sized(
-                src.icon(),
+                src.icon(self.wizard_square_icon()),
                 self.t(src.label_key()),
                 self.t(src.desc_key()),
                 self.root.nightly_source == Some(src),

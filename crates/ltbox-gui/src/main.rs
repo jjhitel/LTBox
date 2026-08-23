@@ -811,12 +811,12 @@ impl RootMode {
             Self::Gki => "rootmode_gki_desc",
         }
     }
-    fn icon_disabled(self) -> Element<'static, Message> {
+    fn icon_disabled(self, size: f32) -> Element<'static, Message> {
         let glyph = match self {
             Self::Lkm => icon::root_lkm(),
             Self::Gki => icon::root_gki(),
         };
-        lucide_disabled(glyph, 57.6)
+        lucide_disabled(glyph, size)
     }
 }
 
@@ -838,19 +838,19 @@ impl SkrootFlavor {
             Self::Pro => "skroot_flavor_pro_desc",
         }
     }
-    fn icon(self) -> Element<'static, Message> {
+    fn icon(self, size: f32) -> Element<'static, Message> {
         let glyph = match self {
             Self::Lite => icon::skroot_lite(),
             Self::Pro => icon::root_lkm(),
         };
-        lucide_primary(glyph, 57.6)
+        lucide_primary(glyph, size)
     }
-    fn icon_disabled(self) -> Element<'static, Message> {
+    fn icon_disabled(self, size: f32) -> Element<'static, Message> {
         let glyph = match self {
             Self::Lite => icon::skroot_lite(),
             Self::Pro => icon::root_lkm(),
         };
-        lucide_disabled(glyph, 57.6)
+        lucide_disabled(glyph, size)
     }
 }
 

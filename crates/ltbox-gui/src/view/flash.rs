@@ -71,7 +71,7 @@ impl App {
 
     pub(crate) fn flash_region_step(&self) -> Element<'_, Message> {
         let side = self.wizard_square_side();
-        let prc_icon = lucide_primary(icon::region_prc(), 57.6);
+        let prc_icon = lucide_primary(icon::region_prc(), self.wizard_square_icon());
         // TB322FC is a PRC-only SKU. Render ROW as a disabled card with
         // a grayed icon so the constraint is visible — silent skip
         // would confuse users who expect both options.
@@ -79,14 +79,14 @@ impl App {
         let unsupported_tb322fc = tr_args!("model_unsupported", model = "TB322FC");
         let row_card: Element<'_, Message> = if tb322fc {
             icon_option_card_sub_square_disabled_sized(
-                lucide_disabled(icon::region_row(), 57.6),
+                lucide_disabled(icon::region_row(), self.wizard_square_icon()),
                 self.t("region_row"),
                 &unsupported_tb322fc,
                 side,
             )
         } else {
             icon_option_card_sub_square_sized(
-                lucide_primary(icon::region_row(), 57.6),
+                lucide_primary(icon::region_row(), self.wizard_square_icon()),
                 self.t("region_row"),
                 self.t("region_row_name"),
                 self.flash.device_region == Some(DeviceRegion::Row),
@@ -140,7 +140,7 @@ impl App {
 
     pub(crate) fn flash_target_step(&self) -> Element<'_, Message> {
         let side = self.wizard_square_side();
-        let device = lucide_primary(icon::tile_device(), 57.6);
+        let device = lucide_primary(icon::tile_device(), self.wizard_square_icon());
         // TB322FC ships only in PRC, so cross-region (OtherRegion) is
         // never a valid target. Disable the card with a grayed icon to
         // keep the constraint visible on the picker.
@@ -157,14 +157,14 @@ impl App {
         };
         let other_card: Element<'_, Message> = if tb322fc {
             icon_option_card_sub_square_disabled_sized(
-                lucide_disabled(icon::tile_globe(), 57.6),
+                lucide_disabled(icon::tile_globe(), self.wizard_square_icon()),
                 self.t(FlashTarget::OtherRegion.label_key()),
                 &unsupported_tb322fc,
                 side,
             )
         } else {
             icon_option_card_sub_square_sized(
-                lucide_primary(icon::tile_globe(), 57.6),
+                lucide_primary(icon::tile_globe(), self.wizard_square_icon()),
                 self.t(FlashTarget::OtherRegion.label_key()),
                 self.t(other_desc),
                 self.flash.target == Some(FlashTarget::OtherRegion),
@@ -195,11 +195,11 @@ impl App {
 
     pub(crate) fn flash_data_step(&self) -> Element<'_, Message> {
         let side = self.wizard_square_side();
-        let shield = lucide_primary(icon::tile_shield(), 57.6);
+        let shield = lucide_primary(icon::tile_shield(), self.wizard_square_icon());
         // Erasing `metadata` + `userdata` is the one irreversible choice
         // on this step, so it carries the error role rather than looking
         // like the sibling it is not.
-        let wipe = lucide_error(icon::tile_wipe(), 57.6);
+        let wipe = lucide_error(icon::tile_wipe(), self.wizard_square_icon());
         let col = column![
             row![
                 icon_option_card_sub_square_sized(

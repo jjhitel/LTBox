@@ -1072,6 +1072,12 @@ pub(crate) const WIZARD_CARD_HEIGHT: f32 = 180.0;
 /// Side length for the square (1:1) option cards used by single-row wizard
 /// steps. Sized so a 3-up row still fits within the minimum window width.
 pub(crate) const WIZARD_CARD_SQUARE: f32 = 200.0;
+pub(crate) const WIZARD_CARD_ICON: f32 = 57.6;
+pub(crate) const WIZARD_CARD_ICON_MAX: f32 = 86.4;
+/// Title and description sizes the square cards grow toward, on the same
+/// curve as the card itself.
+pub(crate) const WIZARD_CARD_TITLE_MAX: f32 = 20.0;
+pub(crate) const WIZARD_CARD_DESC_MAX: f32 = 14.0;
 /// Larger square-card side used once the window has enough horizontal room.
 pub(crate) const WIZARD_CARD_SQUARE_MAX: f32 = 300.0;
 /// Content width at which cards are still at their minimum size, and the one
@@ -1146,6 +1152,13 @@ impl App {
         let span = WIZARD_CARD_GROW_TO_CONTENT - WIZARD_CARD_GROW_FROM_CONTENT;
         let t = ((content_width - WIZARD_CARD_GROW_FROM_CONTENT) / span).clamp(0.0, 1.0);
         WIZARD_CARD_SQUARE + (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE) * t
+    }
+
+    pub(crate) fn wizard_square_icon(&self) -> f32 {
+        let t = ((self.wizard_square_side() - WIZARD_CARD_SQUARE)
+            / (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE))
+            .clamp(0.0, 1.0);
+        WIZARD_CARD_ICON + (WIZARD_CARD_ICON_MAX - WIZARD_CARD_ICON) * t
     }
 
     pub(crate) fn square_step_max_width(&self, columns: usize) -> f32 {
@@ -1234,11 +1247,25 @@ pub(crate) fn wizard_nav_cancel_generic_with_disabled_next_tooltip<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        MaterialProgressSize, extended_fab_primary_style, fab_elevation_level, fab_primary_style,
-        fab_surface_style, material_progress_arc, material_progress_gap_angle,
-        material_progress_metrics, wizard_nav_layout,
+        App, MaterialProgressSize, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON_MAX,
+        WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, extended_fab_primary_style,
+        fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
+        material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
     };
     use iced::widget::button;
+
+    #[test]
+    fn wizard_square_contents_track_card_growth_endpoints() {
+        let app = App::default();
+
+        assert_eq!(app.wizard_square_side(), WIZARD_CARD_SQUARE);
+        assert_eq!(app.wizard_square_icon(), 57.6);
+
+        let mut maximized = App::default();
+        maximized.window_size.0 = WIZARD_CARD_GROW_TO_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
+        assert_eq!(maximized.wizard_square_side(), WIZARD_CARD_SQUARE_MAX);
+        assert_eq!(maximized.wizard_square_icon(), WIZARD_CARD_ICON_MAX);
+    }
 
     #[test]
     fn material_progress_metrics_match_m3_tokens() {

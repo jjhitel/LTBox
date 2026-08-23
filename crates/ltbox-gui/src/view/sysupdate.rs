@@ -96,8 +96,8 @@ impl App {
 
     pub(crate) fn sysupdate_action_step(&self) -> Element<'_, Message> {
         let side = self.wizard_square_side();
-        let off_icon = lucide_primary(icon::tile_update_off(), 57.6);
-        let on_icon = lucide_primary(icon::tile_update_on(), 57.6);
+        let off_icon = lucide_primary(icon::tile_update_off(), self.wizard_square_icon());
+        let on_icon = lucide_primary(icon::tile_update_on(), self.wizard_square_icon());
         // TB323FU's vendor_boot/vbmeta sit on a different UFS LUN than the
         // Boot Recovery worker targets, so the flow can't run on it — disable
         // the card (alongside the non-Qualcomm platform gate).
@@ -105,9 +105,9 @@ impl App {
         // Gray the icon when disabled, matching the other wizards' disabled
         // option cards (region ROW / OtherRegion).
         let rescue_icon = if rescue_disabled {
-            lucide_disabled(icon::tile_rescue(), 57.6)
+            lucide_disabled(icon::tile_rescue(), self.wizard_square_icon())
         } else {
-            lucide_primary(icon::tile_rescue(), 57.6)
+            lucide_primary(icon::tile_rescue(), self.wizard_square_icon())
         };
         let mut cards = row![
             icon_option_card_sub_square_sized(

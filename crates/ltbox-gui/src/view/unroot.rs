@@ -84,8 +84,8 @@ impl App {
         // Unroot reuses the Lucide puzzle/layers glyphs that the root
         // wizard uses for the LKM/GKI pick — context (title + label)
         // disambiguates.
-        let lkm_icon = lucide_primary(icon::root_lkm(), 57.6);
-        let gki_icon = lucide_primary(icon::root_gki(), 57.6);
+        let lkm_icon = lucide_primary(icon::root_lkm(), self.wizard_square_icon());
+        let gki_icon = lucide_primary(icon::root_gki(), self.wizard_square_icon());
         let col = column![
             row![
                 icon_option_card_sub_square_sized(

@@ -818,6 +818,7 @@ fn option_card(
     let enabled = msg.is_some();
     let square = square_side.is_some();
     let side = square_side.unwrap_or(WIZARD_CARD_SQUARE);
+    let (title_size, desc_size) = square_card_text_sizes(side);
     let label_style_fn = if enabled {
         on_surface_style
     } else {
@@ -827,7 +828,7 @@ fn option_card(
     // left long gaps between short descs and the label above.
     let sub_text: Element<'static, Message> = if sub.is_empty() {
         text(" ")
-            .size(theme::text_size::BODY_SMALL)
+            .size(desc_size)
             .width(Length::Fill)
             .center()
             .into()
@@ -836,7 +837,7 @@ fn option_card(
         // hardcoded 11 was borrowing. The widest localized description still
         // wraps to three lines inside the narrowest card at this size.
         text(sub.to_string())
-            .size(theme::text_size::BODY_SMALL)
+            .size(desc_size)
             .style(muted_style)
             .width(Length::Fill)
             .center()
@@ -861,7 +862,7 @@ fn option_card(
         icon_tile(icon),
         Space::new().height(14),
         text(label.to_string())
-            .size(theme::text_size::TITLE_MEDIUM)
+            .size(title_size)
             .font(theme::emphasis::medium())
             .style(label_style_fn)
             .width(Length::Fill)
@@ -918,6 +919,20 @@ fn option_card(
     }
 }
 
+/// Title and description sizes for a card of `side`, on the same curve the card
+/// itself grows along. A non-square card passes the minimum side, so it sits at
+/// progress 0 and keeps the unscaled sizes.
+fn square_card_text_sizes(side: f32) -> (f32, f32) {
+    let progress = ((side - WIZARD_CARD_SQUARE) / (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE))
+        .clamp(0.0, 1.0);
+    (
+        theme::text_size::TITLE_MEDIUM
+            + (WIZARD_CARD_TITLE_MAX - theme::text_size::TITLE_MEDIUM) * progress,
+        theme::text_size::BODY_SMALL
+            + (WIZARD_CARD_DESC_MAX - theme::text_size::BODY_SMALL) * progress,
+    )
+}
+
 /// Wrap a wizard icon. Icons already carry their own rounded-rect bg,
 /// so no outer border.
 pub(crate) fn icon_tile(icon: Element<'static, Message>) -> Element<'static, Message> {
@@ -971,33 +986,33 @@ impl Provider {
 }
 
 impl RootMode {
-    pub(crate) fn icon(self) -> Element<'static, Message> {
+    pub(crate) fn icon(self, size: f32) -> Element<'static, Message> {
         // Lucide chip/layers glyphs in place of the old bespoke SVGs.
         let glyph = match self {
             Self::Lkm => icon::root_lkm(),
             Self::Gki => icon::root_gki(),
         };
-        lucide_primary(glyph, 57.6)
+        lucide_primary(glyph, size)
     }
 }
 
 impl VerChoice {
-    pub(crate) fn icon(self) -> Element<'static, Message> {
+    pub(crate) fn icon(self, size: f32) -> Element<'static, Message> {
         let glyph = match self {
             Self::Stable => icon::ver_stable(),
             Self::Nightly => icon::ver_nightly(),
         };
-        lucide_primary(glyph, 57.6)
+        lucide_primary(glyph, size)
     }
 }
 
 impl NightlySource {
-    pub(crate) fn icon(self) -> Element<'static, Message> {
+    pub(crate) fn icon(self, size: f32) -> Element<'static, Message> {
         let glyph = match self {
             Self::AutoDetect => icon::nightly_auto(),
             Self::ManualInput => icon::nightly_manual(),
         };
-        lucide_primary(glyph, 57.6)
+        lucide_primary(glyph, size)
     }
 }
 
@@ -1080,5 +1095,19 @@ impl App {
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into()
+    }
+}
+
+#[cfg(test)]
+mod typography_tests {
+    use super::{WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, square_card_text_sizes};
+
+    #[test]
+    fn option_card_typography_tracks_square_growth_endpoints() {
+        // Non-square cards pass the minimum side and must not scale.
+        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE), (16.0, 12.0));
+        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE_MAX), (20.0, 14.0));
+        let (title, desc) = square_card_text_sizes(250.0);
+        assert!((16.0..20.0).contains(&title) && (12.0..14.0).contains(&desc));
     }
 }
