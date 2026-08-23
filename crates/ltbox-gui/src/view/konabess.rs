@@ -383,7 +383,8 @@ fn gpu_table_view<'a>(
     app: &'a App,
     validation: &ltbox_patch::konabess::GpuTableValidation,
 ) -> Element<'a, Message> {
-    let mut groups = column![].spacing(18).width(Length::Shrink);
+    let d = app.density();
+    let mut groups = column![].spacing(d.space(18.0)).width(Length::Shrink);
     let has_hard_errors = validation.has_hard_errors();
     for (group_position, group) in table.groups.iter().enumerate() {
         let has_warning = validation
@@ -400,20 +401,26 @@ fn gpu_table_view<'a>(
         // `groups` must stay intrinsic-width so the two-axis scrollable can
         // expose wide device tables. A Fill row (or Fill spacer) under that
         // Shrink parent creates contradictory horizontal constraints.
-        let mut group_label = row![].spacing(5).align_y(iced::Alignment::Center);
+        let mut group_label = row![]
+            .spacing(d.space(5.0))
+            .align_y(iced::Alignment::Center);
         if has_warning {
-            group_label = group_label.push(text("⚠").size(13).style(warning_container_text_style));
+            group_label = group_label.push(
+                text("⚠")
+                    .size(d.text(13.0))
+                    .style(warning_container_text_style),
+            );
         }
         group_label = group_label.push(
             text(format!("Bin {}", group.id))
-                .size(14)
+                .size(d.text(14.0))
                 .style(move |theme| group_heading_text_style(theme, has_warning)),
         );
         let group_label = container(group_label)
-            .padding([4, 8])
+            .padding(d.padding(4.0, 8.0))
             .style(move |theme| group_heading_style(theme, has_warning));
         let group_heading = row![group_label, add_button]
-            .spacing(8)
+            .spacing(d.space(8.0))
             .align_y(iced::Alignment::Center)
             .width(Length::Shrink);
 
@@ -421,11 +428,11 @@ fn gpu_table_view<'a>(
         for property in &group.header_properties {
             let property_width = property_cells_width(property.cells.len());
             let mut property_row =
-                row![table_cell(property_label(&property.name), true, 250.0,)].spacing(0);
+                row![table_cell(d, property_label(&property.name), true, 250.0,)].spacing(0);
             let value_cell =
                 match gpu_property_editability(GpuPropertyLocation::GroupHeader, &property.name) {
                     GpuPropertyEditability::ReadOnly => {
-                        read_only_property_cell(property, property_width)
+                        read_only_property_cell(d, property, property_width)
                     }
                     GpuPropertyEditability::Editable => {
                         unreachable!("group header properties are always read-only")
@@ -436,9 +443,10 @@ fn gpu_table_view<'a>(
         }
 
         let mut table_rows = column![].spacing(0).width(Length::Shrink);
-        let mut header = row![table_cell("Level".to_string(), true, 150.0,)].spacing(0);
+        let mut header = row![table_cell(d, "Level".to_string(), true, 150.0,)].spacing(0);
         for name in &property_names {
             header = header.push(table_cell(
+                d,
                 property_label(name),
                 true,
                 property_column_width(group, name),
@@ -453,12 +461,12 @@ fn gpu_table_view<'a>(
                 ));
             }
             let level_control = container(
-                row![text(level.id.to_string()).size(12), remove_button]
-                    .spacing(6)
+                row![text(level.id.to_string()).size(d.text(12.0)), remove_button]
+                    .spacing(d.width(6.0))
                     .align_y(iced::Alignment::Center),
             )
-            .padding([4, 7])
-            .width(Length::Fixed(150.0))
+            .padding(cell_padding(d, 4.0, 7.0))
+            .width(Length::Fixed(d.width(150.0)))
             .height(Length::Fixed(58.0))
             .align_y(iced::alignment::Vertical::Center)
             .style(derived_table_cell_style);
@@ -485,12 +493,13 @@ fn gpu_table_view<'a>(
                         app,
                         validation,
                     ),
-                    None => table_cell("—".to_string(), false, width),
+                    None => table_cell(d, "—".to_string(), false, width),
                 });
             }
             table_rows = table_rows.push(cells);
         }
-        groups = groups.push(column![group_heading, header_properties, table_rows,].spacing(6));
+        groups = groups
+            .push(column![group_heading, header_properties, table_rows,].spacing(d.space(6.0)));
     }
 
     scrollable(groups)
@@ -504,14 +513,34 @@ fn gpu_table_view<'a>(
         .into()
 }
 
-fn table_cell(value: String, header: bool, width: f32) -> Element<'static, Message> {
+/// Row heights stay fixed while everything else scales.
+///
+/// This is a data grid: growing the rows with the window would show *fewer*
+/// levels on a bigger screen, which is backwards. The extra width goes into the
+/// columns instead, and the taller text still clears the 58 px row.
+///
+/// The table's horizontal metrics all ride `Density::width`.
+///
+/// Column widths are computed from cell counts — `property_cells_width` is
+/// `n * 110 + 16` — so the padding and gaps inside a cell have to scale on the
+/// same factor as the widths, or that arithmetic drifts apart as the window
+/// grows. Vertical metrics are free to use the spacing factor.
+fn cell_padding(d: Density, vertical: f32, horizontal: f32) -> iced::Padding {
+    iced::Padding::default()
+        .top(d.space(vertical))
+        .bottom(d.space(vertical))
+        .left(d.width(horizontal))
+        .right(d.width(horizontal))
+}
+
+fn table_cell(d: Density, value: String, header: bool, width: f32) -> Element<'static, Message> {
     container(
         text(value)
-            .size(if header { 11 } else { 12 })
+            .size(d.text(if header { 11.0 } else { 12.0 }))
             .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
     )
-    .padding([7, 9])
-    .width(Length::Fixed(width))
+    .padding(cell_padding(d, 7.0, 9.0))
+    .width(Length::Fixed(d.width(width)))
     .height(Length::Fixed(if header { 52.0 } else { 58.0 }))
     .align_y(iced::alignment::Vertical::Center)
     .style(table_border_style(header))
@@ -540,14 +569,15 @@ fn editable_property_cell<'a>(
     app: &'a App,
     validation: &ltbox_patch::konabess::GpuTableValidation,
 ) -> Element<'a, Message> {
-    let mut inputs = row![].spacing(6);
+    let d = app.density();
+    let mut inputs = row![].spacing(d.width(6.0));
     for (cell_position, committed) in property.cells.iter().copied().enumerate() {
         let key = key_for_cell(cell_position);
         let value = app.konabess.cell_text(key, committed, &property.name);
         if gpu_property_editability(GpuPropertyLocation::Level, &property.name)
             == GpuPropertyEditability::ReadOnly
         {
-            inputs = inputs.push(derived_value_cell(value));
+            inputs = inputs.push(derived_value_cell(d, value));
             continue;
         }
         let parser_error = app.konabess.cell_has_input_error(key);
@@ -572,8 +602,8 @@ fn editable_property_cell<'a>(
                     choice.vote.to_string(),
                 ))
             })
-            .text_size(12)
-            .padding([7, 8])
+            .text_size(d.text(12.0))
+            .padding(cell_padding(d, 7.0, 8.0))
             .style(move |theme: &Theme, status| {
                 let mut style = m3_pick_list_style(theme, status);
                 if hard_error {
@@ -586,15 +616,15 @@ fn editable_property_cell<'a>(
                 style
             })
             .menu_style(m3_pick_list_menu_style)
-            .width(Length::Fixed((width - 16.0).max(104.0)));
+            .width(Length::Fixed(d.width((width - 16.0).max(104.0))));
             inputs = inputs.push(picker);
             continue;
         }
         let input = widget::text_input("", &value)
             .on_input(move |text| Message::KonaBess(KonaBessMsg::KonaBessCellChanged(key, text)))
-            .padding([7, 8])
-            .size(12)
-            .width(Length::Fixed(104.0))
+            .padding(cell_padding(d, 7.0, 8.0))
+            .size(d.text(12.0))
+            .width(Length::Fixed(d.width(104.0)))
             .style(move |theme: &Theme, status| {
                 let mut style = m3_text_input_style(theme, status);
                 if hard_error {
@@ -614,8 +644,8 @@ fn editable_property_cell<'a>(
         inputs = inputs.push(input);
     }
     container(inputs)
-        .padding([7, 8])
-        .width(Length::Fixed(width))
+        .padding(cell_padding(d, 7.0, 8.0))
+        .width(Length::Fixed(d.width(width)))
         .height(Length::Fixed(58.0))
         .align_y(iced::alignment::Vertical::Center)
         .style(table_border_style(false))
@@ -623,31 +653,32 @@ fn editable_property_cell<'a>(
 }
 
 fn read_only_property_cell(
+    d: Density,
     property: &ltbox_patch::konabess::GpuProperty,
     width: f32,
 ) -> Element<'static, Message> {
-    let mut values = row![].spacing(6);
+    let mut values = row![].spacing(d.width(6.0));
     for cell in &property.cells {
         values = values.push(
-            container(text(cell.to_string()).size(12))
-                .padding([7, 8])
-                .width(Length::Fixed(104.0))
+            container(text(cell.to_string()).size(d.text(12.0)))
+                .padding(cell_padding(d, 7.0, 8.0))
+                .width(Length::Fixed(d.width(104.0)))
                 .style(derived_value_style),
         );
     }
     container(values)
-        .padding([7, 8])
-        .width(Length::Fixed(width))
+        .padding(cell_padding(d, 7.0, 8.0))
+        .width(Length::Fixed(d.width(width)))
         .height(Length::Fixed(58.0))
         .align_y(iced::alignment::Vertical::Center)
         .style(table_border_style(false))
         .into()
 }
 
-fn derived_value_cell(value: String) -> Element<'static, Message> {
-    container(text(value).size(12))
-        .padding([7, 8])
-        .width(Length::Fixed(104.0))
+fn derived_value_cell(d: Density, value: String) -> Element<'static, Message> {
+    container(text(value).size(d.text(12.0)))
+        .padding(cell_padding(d, 7.0, 8.0))
+        .width(Length::Fixed(d.width(104.0)))
         .style(derived_value_style)
         .into()
 }
@@ -776,6 +807,7 @@ fn finding_panel(
     warning: bool,
     app: &App,
 ) -> Element<'static, Message> {
+    let d = app.density();
     let count = finding_count(issues);
     let mut content = if warning {
         column![
@@ -783,7 +815,7 @@ fn finding_panel(
                 "konabess_warning_summary",
                 count = count.to_string()
             ))
-            .size(11)
+            .size(d.text(11.0))
             .wrapping(iced::widget::text::Wrapping::None)
         ]
     } else {
@@ -792,17 +824,17 @@ fn finding_panel(
                 "konabess_error_summary",
                 count = count.to_string()
             ))
-            .size(12)
+            .size(d.text(12.0))
         ]
     }
-    .spacing(3);
+    .spacing(d.space(3.0));
     if !warning {
         for issue in issues {
-            content = content.push(text(localized_issue(issue, false, app)).size(11));
+            content = content.push(text(localized_issue(issue, false, app)).size(d.text(11.0)));
         }
     }
     container(content)
-        .padding([9, 12])
+        .padding(d.padding(9.0, 12.0))
         .width(Length::Fill)
         .style(move |theme: &Theme| {
             let palette = pal_of(theme);
