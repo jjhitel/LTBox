@@ -70,6 +70,7 @@ impl App {
     }
 
     pub(crate) fn flash_region_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let prc_icon = lucide_primary(icon::region_prc(), self.wizard_square_icon());
         // TB322FC is a PRC-only SKU. Render ROW as a disabled card with
@@ -102,15 +103,15 @@ impl App {
             let probing = column![
                 material_circular_progress(MaterialProgressSize::Standard),
                 text(self.t("flash_region_detecting").to_string())
-                    .size(13)
+                    .size(d.text(13.0))
                     .style(muted_style),
             ]
-            .spacing(16)
+            .spacing(d.space(16.0))
             .align_x(iced::Alignment::Center);
             // Shrink-height content centered in the filled body slot — both
             // axes, so the indicator sits dead center rather than at the top.
             return container(probing)
-                .padding(28)
+                .padding(d.space(28.0))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x(Length::Fill)
@@ -129,16 +130,17 @@ impl App {
                 ),
                 row_card,
             ]
-            .spacing(12),
+            .spacing(d.space(12.0)),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 
     pub(crate) fn flash_target_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let device = lucide_primary(icon::tile_device(), self.wizard_square_icon());
         // TB322FC ships only in PRC, so cross-region (OtherRegion) is
@@ -184,16 +186,17 @@ impl App {
                     side,
                 ),
             ]
-            .spacing(12),
+            .spacing(d.space(12.0)),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 
     pub(crate) fn flash_data_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let shield = lucide_primary(icon::tile_shield(), self.wizard_square_icon());
         // Erasing `metadata` + `userdata` is the one irreversible choice
@@ -219,16 +222,17 @@ impl App {
                     side,
                 ),
             ]
-            .spacing(12),
+            .spacing(d.space(12.0)),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 
     pub(crate) fn flash_folder_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.flash.firmware_folder.is_some();
         let status = if let Some(p) = &self.flash.firmware_folder {
             p.clone()
@@ -239,19 +243,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_folder").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.t("flash_folder_desc").to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::Flash(FlashMsg::FlashSelectFolder))
@@ -267,7 +271,7 @@ impl App {
         let mut col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
@@ -278,8 +282,8 @@ impl App {
                 .center()
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
 
@@ -295,7 +299,7 @@ impl App {
                 })
                 .to_string(),
             )
-            .size(12)
+            .size(d.text(12.0))
             .style(move |t: &Theme| iced::widget::text::Style {
                 color: Some(if has {
                     pal_of(t).success
@@ -314,11 +318,13 @@ impl App {
                 .to_string(),
             )
             .on_press(Message::Flash(FlashMsg::FlashSelectLoader));
-            let mut loader_col = column![notice].spacing(6).align_x(iced::Alignment::Center);
+            let mut loader_col = column![notice]
+                .spacing(d.space(6.0))
+                .align_x(iced::Alignment::Center);
             if let Some(p) = &self.flash.loader_override {
                 loader_col = loader_col.push(
                     text(p.clone())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center()
                         .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
@@ -327,7 +333,7 @@ impl App {
             if let Some(err) = &self.flash.loader_error {
                 loader_col = loader_col.push(
                     text(err.clone())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(|t: &Theme| iced::widget::text::Style {
                             color: Some(pal_of(t).error),
                         })
@@ -348,6 +354,7 @@ impl App {
     }
 
     pub(crate) fn flash_confirm_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let dash = "—".to_string();
         // `wf_config` is the worker's only input, so the summary derives every
         // editable row from it (not the wizard cards). The values match the
@@ -421,13 +428,13 @@ impl App {
         };
         let warning = container(
             text(self.t(warning_key).to_string())
-                .size(12)
+                .size(d.text(12.0))
                 .style(warning_style)
                 .center()
                 .width(Length::Fill)
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         )
-        .padding([4, 8])
+        .padding(d.padding(4.0, 8.0))
         .width(Length::Fill);
 
         let region_row = info_kv_center_editable(

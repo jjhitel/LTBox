@@ -143,22 +143,25 @@ impl App {
     }
 
     pub(crate) fn root_kpm_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         // No recents here — the KPM list already competes for vertical space.
         let kpm_selected = !self.root.kpm_paths.is_empty();
         let pick_btn = button(
             container(
                 column![
-                    text(self.t("btn_browse_kpm").to_string()).size(14).center(),
+                    text(self.t("btn_browse_kpm").to_string())
+                        .size(d.text(14.0))
+                        .center(),
                     text(self.t("root_kpm_desc").to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
+            .padding(d.padding(20.0, 24.0))
             .width(KPM_COLUMN_WIDTH)
             .style(move |t: &Theme| sel_card_style(t, kpm_selected)),
         )
@@ -171,7 +174,7 @@ impl App {
         // content area, which packed every row against the far left edge
         // while the card it belongs to sat centred — the two read as
         // unrelated. Matching widths makes them one column.
-        let mut list = column![].spacing(4).width(KPM_COLUMN_WIDTH);
+        let mut list = column![].spacing(d.space(4.0)).width(KPM_COLUMN_WIDTH);
         for path in &self.root.kpm_paths {
             let name = std::path::Path::new(path)
                 .file_name()
@@ -200,19 +203,19 @@ impl App {
                     // break at glyph boundaries rather than overflowing
                     // the column the list now shares with the card.
                     text(name)
-                        .size(12)
+                        .size(d.text(12.0))
                         .style(on_surface_style)
                         .width(Length::Fill)
                         .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
                 ]
-                .spacing(10)
+                .spacing(d.space(10.0))
                 .align_y(iced::Alignment::Center),
             );
         }
 
         let col = column![pick_btn, list,]
-            .spacing(14)
-            .padding(28)
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         container(col)
@@ -224,6 +227,7 @@ impl App {
     }
 
     pub(crate) fn root_superkey_popup(&self) -> Element<'_, Message> {
+        let d = self.density();
         // M3 text-input dialog — same shape as root_run_id_popup /
         // root_kernel_version_popup so the three APatch-flow popups
         // feel consistent (380 wide, outlined Cancel + filled OK,
@@ -235,13 +239,13 @@ impl App {
         .on_input(|__v| Message::Root(RootMsg::RootSuperkeyInput(__v)))
         .on_submit(Message::Root(RootMsg::RootSuperkeyConfirm))
         .secure(true)
-        .padding([10, 12])
+        .padding(d.padding(10.0, 12.0))
         .width(Length::Fill)
         .style(m3_text_input_style);
 
         let err: Element<'_, Message> = match &self.error_msg {
             Some(e) => text(e.clone())
-                .size(12)
+                .size(d.text(12.0))
                 .style(|t: &Theme| {
                     let p = pal_of(t);
                     iced::widget::text::Style {
@@ -269,9 +273,9 @@ impl App {
         };
 
         let content = column![
-            text(self.t(title_key).to_string()).size(20),
+            text(self.t(title_key).to_string()).size(d.text(20.0)),
             text(self.t(subtitle_key).to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .style(muted_style),
             input,
             err,
@@ -282,17 +286,18 @@ impl App {
                 m3_filled_button(self.t("btn_ok").to_string())
                     .on_press(Message::Root(RootMsg::RootSuperkeyConfirm)),
             ]
-            .spacing(8)
+            .spacing(d.space(8.0))
             .align_y(iced::Alignment::Center),
         ]
-        .spacing(14)
-        .padding(24)
-        .width(380);
+        .spacing(d.space(14.0))
+        .padding(d.space(24.0))
+        .width(Length::Fixed(d.width(380.0)));
 
         m3_dialog(content.into())
     }
 
     pub(crate) fn root_run_id_popup(&self) -> Element<'_, Message> {
+        let d = self.density();
         // M3 text-input dialog — 380 wide, outlined Cancel + filled OK.
         let input = iced::widget::text_input(
             self.t("nightly_manual_placeholder"),
@@ -300,13 +305,13 @@ impl App {
         )
         .on_input(|__v| Message::Root(RootMsg::RootRunIdInput(__v)))
         .on_submit(Message::Root(RootMsg::RootRunIdConfirm))
-        .padding([10, 12])
+        .padding(d.padding(10.0, 12.0))
         .width(Length::Fill)
         .style(m3_text_input_style);
 
         let err: Element<'_, Message> = match &self.error_msg {
             Some(e) => text(e.clone())
-                .size(12)
+                .size(d.text(12.0))
                 .style(|t: &Theme| {
                     let p = pal_of(t);
                     iced::widget::text::Style {
@@ -318,9 +323,9 @@ impl App {
         };
 
         let content = column![
-            text(self.t("nightly_manual_title").to_string()).size(20),
+            text(self.t("nightly_manual_title").to_string()).size(d.text(20.0)),
             text(self.t("nightly_manual_subtitle").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .style(muted_style),
             input,
             err,
@@ -331,30 +336,31 @@ impl App {
                 m3_filled_button(self.t("btn_ok").to_string())
                     .on_press(Message::Root(RootMsg::RootRunIdConfirm)),
             ]
-            .spacing(8)
+            .spacing(d.space(8.0))
             .align_y(iced::Alignment::Center),
         ]
-        .spacing(14)
-        .padding(24)
-        .width(380);
+        .spacing(d.space(14.0))
+        .padding(d.space(24.0))
+        .width(Length::Fixed(d.width(380.0)));
 
         m3_dialog(content.into())
     }
 
     pub(crate) fn root_kernel_version_popup(&self) -> Element<'_, Message> {
+        let d = self.density();
         let input = iced::widget::text_input(
             self.t("root_kernel_version_placeholder"),
             &self.root.kernel_version_buffer,
         )
         .on_input(|__v| Message::Root(RootMsg::RootKernelVersionInput(__v)))
         .on_submit(Message::Root(RootMsg::RootKernelVersionConfirm))
-        .padding([10, 12])
+        .padding(d.padding(10.0, 12.0))
         .width(Length::Fill)
         .style(m3_text_input_style);
 
         let err: Element<'_, Message> = match &self.error_msg {
             Some(e) => text(e.clone())
-                .size(12)
+                .size(d.text(12.0))
                 .style(|t: &Theme| {
                     let p = pal_of(t);
                     iced::widget::text::Style {
@@ -366,9 +372,9 @@ impl App {
         };
 
         let content = column![
-            text(self.t("root_kernel_version_manual_title").to_string()).size(20),
+            text(self.t("root_kernel_version_manual_title").to_string()).size(d.text(20.0)),
             text(self.t("root_kernel_version_manual_subtitle").to_string())
-                .size(13)
+                .size(d.text(13.0))
                 .style(muted_style),
             input,
             err,
@@ -379,12 +385,12 @@ impl App {
                 m3_filled_button(self.t("btn_ok").to_string())
                     .on_press(Message::Root(RootMsg::RootKernelVersionConfirm)),
             ]
-            .spacing(8)
+            .spacing(d.space(8.0))
             .align_y(iced::Alignment::Center),
         ]
-        .spacing(14)
-        .padding(24)
-        .width(380);
+        .spacing(d.space(14.0))
+        .padding(d.space(24.0))
+        .width(Length::Fixed(d.width(380.0)));
 
         m3_dialog(content.into())
     }
@@ -421,18 +427,18 @@ impl App {
                     .width(Length::Fill),
                 desc,
             ]
-            .spacing(3)
+            .spacing(metrics.text_gap)
             .width(Length::Fill),
         )
         .width(Length::Fill)
         .height(Length::Fill)
         .center_y(Length::Fill);
         let body = row![icon_tile(icon), text_block]
-            .spacing(16)
+            .spacing(metrics.icon_gap)
             .align_y(iced::Alignment::Center);
 
         let inner = container(body)
-            .padding([10, 16])
+            .padding(metrics.padding)
             .width(Length::Fill)
             .height(Length::Fixed(metrics.height))
             .center_y(Length::Fixed(metrics.height))
@@ -465,6 +471,7 @@ impl App {
     }
 
     pub(crate) fn root_family_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let families = [
             Family::Magisk,
             Family::KernelSU,
@@ -483,33 +490,34 @@ impl App {
                 metrics,
             );
             if f == Family::KernelSU {
-                recommended_overlay(card, self.t("root_recommended_tip").to_string())
+                recommended_overlay(d, card, self.t("root_recommended_tip").to_string())
             } else {
                 card
             }
         };
 
-        let mut cards = column![].spacing(8).width(Length::Fill);
+        let mut cards = column![].spacing(d.space(8.0)).width(Length::Fill);
         for f in families {
             cards = cards.push(mk(f));
         }
 
         let col = column![cards,]
-            .spacing(14)
-            .padding([20, 28])
+            .spacing(d.space(14.0))
+            .padding(d.padding(20.0, 28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH))
     }
 
     pub(crate) fn root_provider_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let family = self.root.family.unwrap_or(Family::KernelSU);
         let providers = family.providers();
 
         if providers.len() > 2 {
             let icon_size = self.wizard_list_icon(44.0);
             let metrics = self.wizard_list_metrics(16.0, 12.0);
-            let mut cards = column![].spacing(8).width(Length::Fill);
+            let mut cards = column![].spacing(d.space(8.0)).width(Length::Fill);
             for &p in providers {
                 let sub = p.desc_key().map(|k| self.t(k)).unwrap_or("");
                 let card = Self::root_list_option_card(
@@ -521,7 +529,7 @@ impl App {
                     metrics,
                 );
                 let card = if p == Provider::KernelSU {
-                    recommended_overlay(card, self.t("root_recommended_tip").to_string())
+                    recommended_overlay(d, card, self.t("root_recommended_tip").to_string())
                 } else {
                     card
                 };
@@ -529,8 +537,8 @@ impl App {
             }
 
             let col = column![cards,]
-                .spacing(14)
-                .padding([20, 28])
+                .spacing(d.space(14.0))
+                .padding(d.padding(20.0, 28.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center);
             return centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH));
@@ -540,9 +548,10 @@ impl App {
         let card = |p: Provider, selected: bool| -> Element<'_, Message> {
             let sub = p.desc_key().map(|k| self.t(k)).unwrap_or("");
             // Smaller brand logo (52 vs 72) so the 72px SVG doesn't
-            // overflow the fixed 200px square once the label/desc wraps.
+            // overflow the square once the label/desc wraps. Scaled from that
+            // base so it keeps its proportion as the card grows.
             icon_option_card_sub_square_sized(
-                p.icon_sized(52.0),
+                p.icon_sized(self.density().image(52.0)),
                 self.t(p.label_key()),
                 sub,
                 selected,
@@ -551,20 +560,23 @@ impl App {
             )
         };
 
-        let mut cards = row![].spacing(12).align_y(iced::Alignment::Center);
+        let mut cards = row![]
+            .spacing(d.space(12.0))
+            .align_y(iced::Alignment::Center);
         for &p in providers {
             cards = cards.push(card(p, self.root.provider == Some(p)));
         }
 
         let col = column![cards,]
-            .spacing(14)
-            .padding(28)
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(providers.len()))
     }
 
     pub(crate) fn root_file_step(&self, subtitle: &str) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.root.file_path.is_some();
         let status_text = if let Some(p) = &self.root.file_path {
             p.clone()
@@ -581,18 +593,18 @@ impl App {
         let btn = button(
             container(
                 column![
-                    text(btn_label.to_string()).size(14).center(),
+                    text(btn_label.to_string()).size(d.text(14.0)).center(),
                     text(subtitle.to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::Root(RootMsg::RootSelectFile))
@@ -616,7 +628,7 @@ impl App {
         let col = column![
             btn,
             text(status_text)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
@@ -628,8 +640,8 @@ impl App {
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -641,6 +653,7 @@ impl App {
     }
 
     pub(crate) fn root_folder_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         // Root pipeline now needs only the EDL loader (`.melf`) — the
         // full firmware folder was dropped when dump/flash stopped
         // depending on `rawprogram*.xml` and started resolving partition
@@ -655,19 +668,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_loader").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.loader_picker_desc())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::Root(RootMsg::RootSelectFolder))
@@ -681,7 +694,7 @@ impl App {
         let col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
@@ -693,8 +706,8 @@ impl App {
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -706,6 +719,7 @@ impl App {
     }
 
     pub(crate) fn root_mode_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let tb323fu = self.is_tb323fu();
         let unsupported_tb323fu = tr_args!("model_unsupported", model = "TB323FU");
@@ -717,7 +731,7 @@ impl App {
             Message::Root(RootMsg::RootMode(RootMode::Lkm)),
             side,
         );
-        let lkm_card = recommended_overlay(lkm_card, self.t("root_recommended_tip").to_string());
+        let lkm_card = recommended_overlay(d, lkm_card, self.t("root_recommended_tip").to_string());
         // TODO(root): LTBox currently only swaps the boot.img Image for
         // GKI, which corrupts boot on TB323FU. Keep GKI disabled until
         // vbmeta handling is added.
@@ -738,15 +752,16 @@ impl App {
                 side,
             )
         };
-        let col = column![row![lkm_card, gki_card,].spacing(12),]
-            .spacing(14)
-            .padding(28)
+        let col = column![row![lkm_card, gki_card,].spacing(d.space(12.0)),]
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 
     pub(crate) fn root_skroot_flavor_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let lite = icon_option_card_sub_square_sized(
             SkrootFlavor::Lite.icon(self.wizard_square_icon()),
@@ -763,15 +778,16 @@ impl App {
             side,
         );
 
-        let col = column![row![lite, pro].spacing(12),]
-            .spacing(14)
-            .padding(28)
+        let col = column![row![lite, pro].spacing(d.space(12.0)),]
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 
     pub(crate) fn root_version_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let mk = |choice: VerChoice| -> Element<'_, Message> {
             let card = icon_option_card_sub_square_sized(
@@ -783,7 +799,7 @@ impl App {
                 side,
             );
             if choice == VerChoice::Stable {
-                recommended_overlay(card, self.t("root_recommended_tip").to_string())
+                recommended_overlay(d, card, self.t("root_recommended_tip").to_string())
             } else {
                 card
             }
@@ -793,14 +809,14 @@ impl App {
         // can't pick a channel that has no release assets. Other providers
         // keep both.
         let version_row = if self.root.provider == Some(Provider::ReSukiSU) {
-            row![mk(VerChoice::Nightly)].spacing(12)
+            row![mk(VerChoice::Nightly)].spacing(d.space(12.0))
         } else {
-            row![mk(VerChoice::Stable), mk(VerChoice::Nightly)].spacing(12)
+            row![mk(VerChoice::Stable), mk(VerChoice::Nightly)].spacing(d.space(12.0))
         };
 
         let col = column![version_row,]
-            .spacing(14)
-            .padding(28)
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         let columns = if self.root.provider == Some(Provider::ReSukiSU) {
@@ -812,6 +828,7 @@ impl App {
     }
 
     pub(crate) fn root_nightly_source_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let mk = |src: NightlySource| -> Element<'_, Message> {
             icon_option_card_sub_square_sized(
@@ -829,8 +846,8 @@ impl App {
             match (self.root.nightly_source, self.root.run_id.as_deref()) {
                 (Some(NightlySource::ManualInput), Some(id)) if !id.is_empty() => {
                     let label = tr_args!("nightly_manual_committed", id = id);
-                    button(text(label).size(13).style(on_surface_style))
-                        .padding([8, 14])
+                    button(text(label).size(d.text(13.0)).style(on_surface_style))
+                        .padding(d.padding(8.0, 14.0))
                         .on_press(Message::Root(RootMsg::RootNightlySource(
                             NightlySource::ManualInput,
                         )))
@@ -860,11 +877,11 @@ impl App {
                 mk(NightlySource::AutoDetect),
                 mk(NightlySource::ManualInput)
             ]
-            .spacing(12),
+            .spacing(d.space(12.0)),
             chip,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))

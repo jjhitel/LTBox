@@ -80,6 +80,7 @@ impl App {
     }
 
     pub(crate) fn unroot_type_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         // Unroot reuses the Lucide puzzle/layers glyphs that the root
         // wizard uses for the LKM/GKI pick — context (title + label)
@@ -105,16 +106,17 @@ impl App {
                     side,
                 ),
             ]
-            .spacing(12),
+            .spacing(d.space(12.0)),
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 
     pub(crate) fn unroot_loader_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.unroot.loader_path.is_some();
         let status = if let Some(p) = &self.unroot.loader_path {
             p.clone()
@@ -125,19 +127,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_loader").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.loader_picker_desc())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::Unroot(UnrootMsg::UnrootSelectLoader))
@@ -154,7 +156,7 @@ impl App {
         let col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
@@ -166,8 +168,8 @@ impl App {
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -179,6 +181,7 @@ impl App {
     }
 
     pub(crate) fn unroot_folder_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.unroot.folder_path.is_some();
         let desc_owned = self
             .unroot
@@ -194,16 +197,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_folder").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
-                    text(desc_owned).size(11).style(muted_style).center(),
+                    text(desc_owned)
+                        .size(d.text(11.0))
+                        .style(muted_style)
+                        .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::Unroot(UnrootMsg::UnrootSelectFolder))
@@ -219,7 +225,7 @@ impl App {
         let col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
@@ -231,8 +237,8 @@ impl App {
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)

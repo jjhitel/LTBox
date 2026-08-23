@@ -1093,6 +1093,11 @@ pub(crate) struct ListRowMetrics {
     pub(crate) height: f32,
     pub(crate) label_size: f32,
     pub(crate) desc_size: f32,
+    pub(crate) padding: iced::Padding,
+    /// Gap between the label and its description.
+    pub(crate) text_gap: f32,
+    /// Gap between the icon and the text stack.
+    pub(crate) icon_gap: f32,
 }
 
 pub(crate) const WIZARD_LIST_CARD_HEIGHT: f32 = 72.0;
@@ -1276,10 +1281,14 @@ impl App {
     /// so a caller cannot mix a scaled height with unscaled text.
     pub(crate) fn wizard_list_metrics(&self, label_base: f32, desc_base: f32) -> ListRowMetrics {
         let (label_size, desc_size) = self.wizard_list_text(label_base, desc_base);
+        let d = self.density();
         ListRowMetrics {
             height: self.wizard_list_row_height(),
             label_size,
             desc_size,
+            padding: d.padding(10.0, 16.0),
+            text_gap: d.space(3.0),
+            icon_gap: d.space(16.0),
         }
     }
 

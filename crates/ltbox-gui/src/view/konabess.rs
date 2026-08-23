@@ -83,6 +83,7 @@ impl App {
     }
 
     fn konabess_table_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let target = self
             .konabess
             .selected_target()
@@ -99,13 +100,13 @@ impl App {
                 revert_button.on_press(Message::KonaBess(KonaBessMsg::KonaBessRevertEdits));
         }
         let mut toolbar = row![target_button, Space::new().width(Length::Fill)]
-            .spacing(4)
+            .spacing(d.space(4.0))
             .align_y(iced::Alignment::Center)
             .width(Length::Fill);
         if self.konabess.edited_dirty {
             toolbar = toolbar.push(
                 text(self.t("konabess_table_modified").to_string())
-                    .size(11)
+                    .size(d.text(11.0))
                     .style(muted_style),
             );
         }
@@ -114,21 +115,21 @@ impl App {
         let mut content = column![
             toolbar,
             text(self.t("konabess_table_value_note").to_string())
-                .size(11)
+                .size(d.text(11.0))
                 .style(muted_style),
         ]
-        .spacing(8)
+        .spacing(d.space(8.0))
         .width(Length::Fill);
         if let Some(error) = self.konabess.import_error.as_deref() {
-            content = content.push(text(format!("⚠ {error}")).size(11).style(|theme: &Theme| {
-                iced::widget::text::Style {
+            content = content.push(text(format!("⚠ {error}")).size(d.text(11.0)).style(
+                |theme: &Theme| iced::widget::text::Style {
                     color: Some(pal_of(theme).error),
-                }
-            }));
+                },
+            ));
         } else if let Some(path) = self.konabess.import_path.as_deref() {
             content = content.push(
                 text(tr_args!("konabess_import_loaded", path = path))
-                    .size(11)
+                    .size(d.text(11.0))
                     .style(muted_style),
             );
         }
@@ -143,7 +144,7 @@ impl App {
         content = content.push(match self.konabess.edited_table.as_ref() {
             Some(table) => gpu_table_view(table, self, &validation),
             None => text(self.t("konabess_target_no_table").to_string())
-                .size(12)
+                .size(d.text(12.0))
                 .style(muted_style)
                 .center()
                 .width(Length::Fill)
@@ -151,12 +152,12 @@ impl App {
         });
         content = content.push(
             text(self.t("konabess_attribution").to_string())
-                .size(10)
+                .size(d.text(10.0))
                 .wrapping(iced::widget::text::Wrapping::None)
                 .style(muted_style),
         );
 
-        container(content.padding(20))
+        container(content.padding(d.space(20.0)))
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
@@ -211,8 +212,9 @@ impl App {
     }
 
     pub(crate) fn konabess_target_popup_view(&self) -> Element<'_, Message> {
+        let d = self.density();
         let selected = self.konabess.selected_target_index;
-        let mut candidates = column![].spacing(4).width(Length::Fill);
+        let mut candidates = column![].spacing(d.space(4.0)).width(Length::Fill);
         for candidate in &self.konabess.candidates {
             let index = candidate.index;
             let is_selected = selected == Some(index);
@@ -230,27 +232,27 @@ impl App {
             let likely_note = is_likely.then(|| self.t("konabess_target_likely").to_string());
             let details = row![
                 text(format!("#{index} · {model} · {chip}"))
-                    .size(13)
+                    .size(d.text(13.0))
                     .width(Length::Fill),
             ]
             .align_y(iced::Alignment::Center);
-            let mut candidate_body = column![details].spacing(3);
+            let mut candidate_body = column![details].spacing(d.space(3.0));
             if let Some(note) = likely_note {
                 candidate_body = candidate_body.push(
                     text(note)
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(move |theme| target_note_style(theme, is_selected, is_likely)),
                 );
             }
             candidate_body = candidate_body.push(
                 text(shape)
-                    .size(11)
+                    .size(d.text(11.0))
                     .style(move |theme| target_shape_style(theme, is_selected, is_likely)),
             );
             if !can_select {
                 candidate_body = candidate_body.push(
                     text(self.t("konabess_target_unknown_chip_unusable").to_string())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(|theme: &Theme| iced::widget::text::Style {
                             color: Some(pal_of(theme).error),
                         }),
@@ -262,9 +264,11 @@ impl App {
                     KonaBessMsg::KonaBessTargetSelected(index),
                 ));
             }
-            candidates =
-                candidates.push(candidate_button.padding([9, 12]).width(Length::Fill).style(
-                    move |theme: &Theme, status| {
+            candidates = candidates.push(
+                candidate_button
+                    .padding(d.padding(9.0, 12.0))
+                    .width(Length::Fill)
+                    .style(move |theme: &Theme, status| {
                         let palette = pal_of(theme);
                         let hovered = matches!(status, button::Status::Hovered);
                         button::Style {
@@ -302,13 +306,13 @@ impl App {
                             },
                             ..Default::default()
                         }
-                    },
-                ));
+                    }),
+            );
         }
         if self.konabess.candidates.is_empty() {
             candidates = candidates.push(
                 text(self.t("konabess_target_no_candidates").to_string())
-                    .size(12)
+                    .size(d.text(12.0))
                     .style(muted_style)
                     .center()
                     .width(Length::Fill),
@@ -325,25 +329,25 @@ impl App {
         }
         let content: Element<'_, Message> = column![
             row![
-                text(self.t("konabess_target_title").to_string()).size(16),
+                text(self.t("konabess_target_title").to_string()).size(d.text(16.0)),
                 Space::new().width(Length::Fill),
                 m3_text_button(self.t("btn_cancel").to_string())
                     .on_press(Message::KonaBess(KonaBessMsg::KonaBessTargetDismiss)),
             ]
             .align_y(iced::Alignment::Center),
             text(self.t("konabess_target_subtitle").to_string())
-                .size(12)
+                .size(d.text(12.0))
                 .style(muted_style),
-            text(summary).size(11).style(muted_style),
+            text(summary).size(d.text(11.0)).style(muted_style),
             widget::rule::horizontal(1),
             scrollable(candidates)
                 .style(m3_scrollable_style)
-                .height(Length::Fixed(300.0)),
+                .height(Length::Fixed(d.size(300.0))),
             row![Space::new().width(Length::Fill), confirm],
         ]
-        .spacing(10)
-        .padding(20)
-        .width(560)
+        .spacing(d.space(10.0))
+        .padding(d.space(20.0))
+        .width(Length::Fixed(d.width(560.0)))
         .into();
         m3_dialog(content)
     }

@@ -607,16 +607,22 @@ pub(crate) fn info_kv_center_editable<'a>(
 /// non-interactive overlay layer, so the card underneath stays fully
 /// clickable (same `stack` pattern as the dashboard save-FAB).
 pub(crate) fn recommended_overlay(
+    d: Density,
     card: Element<'static, Message>,
     tip: String,
 ) -> Element<'static, Message> {
-    let badge = container(lucide_icon(icon::rec_badge(), 13.0, |t: &Theme| {
-        pal_of(t).on_primary
-    }))
-    .width(22)
-    .height(22)
-    .center_x(22)
-    .center_y(22)
+    // Rides the card it sits on: a badge pinned at its minimum size reads as a
+    // speck once the card has grown.
+    let side = Length::Fixed(d.size(22.0));
+    let badge = container(lucide_icon(
+        icon::rec_badge(),
+        d.image(13.0),
+        |t: &Theme| pal_of(t).on_primary,
+    ))
+    .width(side)
+    .height(side)
+    .center_x(side)
+    .center_y(side)
     .style(|t: &Theme| {
         let p = pal_of(t);
         container::Style {

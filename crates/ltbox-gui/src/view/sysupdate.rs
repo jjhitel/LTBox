@@ -95,6 +95,7 @@ impl App {
     }
 
     pub(crate) fn sysupdate_action_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         let side = self.wizard_square_side();
         let off_icon = lucide_primary(icon::tile_update_off(), self.wizard_square_icon());
         let on_icon = lucide_primary(icon::tile_update_on(), self.wizard_square_icon());
@@ -127,7 +128,7 @@ impl App {
                 side,
             ),
         ]
-        .spacing(12);
+        .spacing(d.space(12.0));
         if rescue_disabled {
             // Disabled rescue card — no on_press, grayed out; still mirrors
             // the sub-row layout of the other tiles with the Qualcomm-required
@@ -140,22 +141,22 @@ impl App {
             let content = column![
                 icon_tile(rescue_icon),
                 text(self.t("sysupdate_rescue").to_string())
-                    .size(13)
+                    .size(d.text(13.0))
                     .width(Length::Fill)
                     .center()
                     .style(muted_style),
                 text(rescue_req)
-                    .size(11)
+                    .size(d.text(11.0))
                     .width(Length::Fill)
                     .center()
                     .style(muted_style),
             ]
-            .spacing(8)
+            .spacing(d.space(8.0))
             .align_x(iced::Alignment::Center);
             cards = cards.push(
                 button(
                     container(content)
-                        .padding([20, 16])
+                        .padding(d.padding(20.0, 16.0))
                         .width(Length::Fixed(side))
                         .height(side)
                         .center_x(side)
@@ -188,8 +189,8 @@ impl App {
             ));
         }
         let col = column![cards,]
-            .spacing(14)
-            .padding(28)
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(3))
@@ -224,6 +225,7 @@ impl App {
     }
 
     pub(crate) fn sysupdate_rescue_folder_step(&self) -> Element<'_, Message> {
+        let d = self.density();
         // Boot Recovery now consumes only the EDL loader file —
         // dump+flash use GPT-by-name on a fixed LUN, no rawprogram*.xml
         // is read. Step layout still matches the flash / root / unroot
@@ -239,19 +241,19 @@ impl App {
             container(
                 column![
                     text(self.t("btn_browse_loader").to_string())
-                        .size(14)
+                        .size(d.text(14.0))
                         .center(),
                     text(self.loader_picker_desc())
-                        .size(11)
+                        .size(d.text(11.0))
                         .style(muted_style)
                         .center(),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center),
             )
-            .padding([20, 24])
-            .width(280)
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
             .style(move |t: &Theme| sel_card_style(t, selected)),
         )
         .on_press(Message::Sys(SysMsg::SysRescueSelectFolder))
@@ -268,7 +270,7 @@ impl App {
         let col = column![
             btn,
             text(status)
-                .size(12)
+                .size(d.text(12.0))
                 .width(Length::Fill)
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
@@ -280,8 +282,8 @@ impl App {
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             chips,
         ]
-        .spacing(14)
-        .padding(28)
+        .spacing(d.space(14.0))
+        .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
         container(col)
@@ -322,19 +324,25 @@ impl App {
 
     /// Reusable exec-step view with collapsible log panel.
     pub(crate) fn exec_step_view(&self) -> Element<'_, Message> {
+        let d = self.density();
         let (_, detail) = self.exec_status_copy();
         let is_error = self.operation_error.is_some();
         let is_busy = self.busy;
 
+        // Shared progress/result card for wizard exec steps. One scale on
+        // both axes: the badge is a circle.
+        let badge = d.size(80.0);
         // Shared progress/result card for wizard exec steps.
         let step_icon: Element<'_, Message> = if is_error {
-            container(lucide_icon(icon::op_failed(), 52.0, |t: &Theme| {
-                pal_of(t).error
-            }))
-            .width(80)
-            .height(80)
-            .center_x(80)
-            .center_y(80)
+            container(lucide_icon(
+                icon::op_failed(),
+                d.image(52.0),
+                |t: &Theme| pal_of(t).error,
+            ))
+            .width(Length::Fixed(badge))
+            .height(Length::Fixed(badge))
+            .center_x(Length::Fixed(badge))
+            .center_y(Length::Fixed(badge))
             .style(|t: &Theme| {
                 let p = pal_of(t);
                 container::Style {
@@ -349,19 +357,19 @@ impl App {
             .into()
         } else if is_busy {
             container(material_circular_progress(MaterialProgressSize::Hero))
-                .width(80)
-                .height(80)
-                .center_x(80)
-                .center_y(80)
+                .width(Length::Fixed(badge))
+                .height(Length::Fixed(badge))
+                .center_x(Length::Fixed(badge))
+                .center_y(Length::Fixed(badge))
                 .into()
         } else {
-            container(lucide_icon(icon::op_done(), 52.0, |t: &Theme| {
+            container(lucide_icon(icon::op_done(), d.image(52.0), |t: &Theme| {
                 pal_of(t).success
             }))
-            .width(80)
-            .height(80)
-            .center_x(80)
-            .center_y(80)
+            .width(Length::Fixed(badge))
+            .height(Length::Fixed(badge))
+            .center_x(Length::Fixed(badge))
+            .center_y(Length::Fixed(badge))
             .style(|t: &Theme| {
                 let p = pal_of(t);
                 container::Style {
@@ -403,7 +411,7 @@ impl App {
             Space::new().height(0).into()
         } else {
             text(eyebrow_text)
-                .size(12)
+                .size(d.text(12.0))
                 .style(move |t: &Theme| {
                     let p = pal_of(t);
                     let color = if is_error {
@@ -420,35 +428,36 @@ impl App {
 
         let mut card_body = column![
             eyebrow_node,
-            text(label_text).size(18).style(on_surface_style),
+            text(label_text).size(d.text(18.0)).style(on_surface_style),
         ]
-        .spacing(6)
+        .spacing(d.space(6.0))
         .width(Length::Fill);
         if let Some(progress_label) = self.firmware_flash_progress_label() {
-            card_body = card_body.push(text(progress_label).size(13).style(muted_style));
+            card_body = card_body.push(text(progress_label).size(d.text(13.0)).style(muted_style));
         }
         if is_error {
             if let Some(error) = self.operation_error.as_deref() {
                 let summary = concise_error_summary(error, EXEC_ERROR_SUMMARY_MAX_CHARS);
                 if !summary.is_empty() {
-                    card_body = card_body.push(text(summary).size(13).style(|t: &Theme| {
-                        iced::widget::text::Style {
-                            color: Some(pal_of(t).error),
-                        }
-                    }));
+                    card_body =
+                        card_body.push(text(summary).size(d.text(13.0)).style(|t: &Theme| {
+                            iced::widget::text::Style {
+                                color: Some(pal_of(t).error),
+                            }
+                        }));
                 }
             }
             card_body = card_body.push(
                 text(self.t("exec_error_log_hint").to_string())
-                    .size(12)
+                    .size(d.text(12.0))
                     .style(muted_style),
             );
         }
         let card_row = row![step_icon, card_body]
-            .spacing(24)
+            .spacing(d.space(24.0))
             .align_y(iced::Alignment::Center);
         let step_card = container(card_row)
-            .padding([28, 32])
+            .padding(d.padding(28.0, 32.0))
             .max_width(600)
             .width(Length::Fill)
             .style(move |t: &Theme| {
@@ -525,8 +534,8 @@ impl App {
         }
 
         let col = column![step_card]
-            .spacing(10)
-            .padding(28)
+            .spacing(d.space(10.0))
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
 

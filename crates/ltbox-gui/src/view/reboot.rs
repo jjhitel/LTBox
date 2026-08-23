@@ -8,6 +8,7 @@ use theme::with_alpha;
 
 impl App {
     pub(crate) fn view_reboot(&self) -> Element<'_, Message> {
+        let d = self.density();
         let conn = self.connection;
         let icon_size = self.wizard_list_icon(32.0);
         let (label_size, desc_size) = self.wizard_list_text(18.0, 12.0);
@@ -15,7 +16,10 @@ impl App {
         // Disabled cards: M3 tokens (12% surface alpha, 38% text alpha).
         // Same inset as the root list so both single-column lists sit on the
         // same margins.
-        let mut list = column![].spacing(10).padding([20, 28]).width(Length::Fill);
+        let mut list = column![]
+            .spacing(d.space(10.0))
+            .padding(d.padding(20.0, 28.0))
+            .width(Length::Fill);
         for &target in RebootTarget::all().iter() {
             let available = target.available_from(conn);
             let label = self.t(target.label_key()).to_string();
@@ -46,15 +50,15 @@ impl App {
                     text(label).size(label_size).style(label_style),
                     text(desc).size(desc_size).style(desc_style),
                 ]
-                .spacing(6)
+                .spacing(d.space(6.0))
                 .width(Length::Fill)
                 .into()
             };
             let card_content = row![icon_tile(target.icon(icon_size)), label_col]
-                .spacing(16)
+                .spacing(d.space(16.0))
                 .align_y(iced::Alignment::Center);
             let card_inner = container(card_content)
-                .padding([10, 16])
+                .padding(d.padding(10.0, 16.0))
                 .width(Length::Fill)
                 .height(Length::Fixed(row_height))
                 .center_y(Length::Fixed(row_height))
@@ -91,7 +95,7 @@ impl App {
             list,
             self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH),
         ))
-        .padding(24)
+        .padding(d.space(24.0))
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -109,12 +113,13 @@ impl App {
 
     /// M3 confirm dialog for the Reboot panel.
     pub(crate) fn reboot_confirm_popup(&self, target: RebootTarget) -> Element<'_, Message> {
+        let d = self.density();
         let short = self.t(target.short_name_key()).to_string();
         let title = tr_args!("reboot_confirm_title", target = short);
         let body = tr_args!("reboot_confirm_body", target = short);
         let content = column![
-            text(title).size(20),
-            text(body).size(13).style(muted_style),
+            text(title).size(d.text(20.0)),
+            text(body).size(d.text(13.0)).style(muted_style),
             widget::rule::horizontal(1),
             row![
                 Space::new().width(Length::Fill),
@@ -131,12 +136,12 @@ impl App {
                     b
                 },
             ]
-            .spacing(10)
+            .spacing(d.space(10.0))
             .align_y(iced::Alignment::Center),
         ]
-        .spacing(14)
-        .padding(24)
-        .width(380);
+        .spacing(d.space(14.0))
+        .padding(d.space(24.0))
+        .width(Length::Fixed(d.width(380.0)));
         m3_dialog(content.into())
     }
 }

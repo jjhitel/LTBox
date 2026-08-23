@@ -241,13 +241,15 @@ impl App {
 
         // Icon-only actions keep tooltips for accessibility.
         let browse_btn = button(
-            container(lucide_icon(icon::settings_browse(), 18.0, |t: &Theme| {
-                pal_of(t).on_secondary_container
-            }))
+            container(lucide_icon(
+                icon::settings_browse(),
+                d.image(18.0),
+                |t: &Theme| pal_of(t).on_secondary_container,
+            ))
             .width(icon_btn)
             .height(icon_btn)
-            .center_x(36)
-            .center_y(36),
+            .center_x(icon_btn)
+            .center_y(icon_btn),
         )
         .on_press(Message::Settings(SettingsMsg::SettingsPickDefaultLoader))
         .padding(0)
@@ -292,13 +294,15 @@ impl App {
             .align_y(iced::Alignment::Center);
         if self.default_loader_path.is_some() {
             let clear_btn = button(
-                container(lucide_icon(icon::settings_clear(), 18.0, |t: &Theme| {
-                    pal_of(t).on_error_container
-                }))
+                container(lucide_icon(
+                    icon::settings_clear(),
+                    d.image(18.0),
+                    |t: &Theme| pal_of(t).on_error_container,
+                ))
                 .width(icon_btn)
                 .height(icon_btn)
-                .center_x(36)
-                .center_y(36),
+                .center_x(icon_btn)
+                .center_y(icon_btn),
             )
             .on_press(Message::Settings(SettingsMsg::SettingsClearDefaultLoader))
             .padding(0)
@@ -418,7 +422,7 @@ impl App {
         let mut cleanup_btn = button(
             container(lucide_icon(
                 icon::settings_cleanup(),
-                18.0,
+                d.image(18.0),
                 move |t: &Theme| {
                     let p = pal_of(t);
                     if cleanup_enabled {
@@ -430,8 +434,8 @@ impl App {
             ))
             .width(icon_btn)
             .height(icon_btn)
-            .center_x(36)
-            .center_y(36),
+            .center_x(icon_btn)
+            .center_y(icon_btn),
         )
         .padding(0)
         .style(move |t: &Theme, status| {
