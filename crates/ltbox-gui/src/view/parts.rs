@@ -4,9 +4,20 @@ use crate::*;
 use iced::widget::{self, Space, button, column, container, row, scrollable, text};
 use iced::{Element, Length, Theme};
 
+/// Side of the tri-state marker, shared by the checkbox and the erase badge.
+///
+/// One source so the two states cannot drift to different sizes, and it stays
+/// under [`FLASH_PARTS_MARKER_CELL_HEIGHT`] at every window size — a marker
+/// taller than its cell is squeezed flat rather than clipped, which reads as a
+/// rendering fault rather than a layout one.
+fn marker_side(d: Density) -> f32 {
+    d.size(FLASH_PARTS_MARKER_SIZE)
+}
+
 fn m3_erase_marker(d: Density) -> Element<'static, Message> {
+    // Square badge, so both axes ride the one factor its side does.
     let dash = container(Space::new())
-        .width(Length::Fixed(d.width(FLASH_PARTS_ERASE_DASH_WIDTH)))
+        .width(Length::Fixed(d.size(FLASH_PARTS_ERASE_DASH_WIDTH)))
         .height(Length::Fixed(d.size(FLASH_PARTS_ERASE_DASH_HEIGHT)))
         .style(|t: &Theme| {
             let p = pal_of(t);
@@ -21,8 +32,8 @@ fn m3_erase_marker(d: Density) -> Element<'static, Message> {
         });
 
     container(dash)
-        .width(Length::Fixed(d.size(d.size(FLASH_PARTS_MARKER_SIZE))))
-        .height(Length::Fixed(d.size(d.size(FLASH_PARTS_MARKER_SIZE))))
+        .width(Length::Fixed(marker_side(d)))
+        .height(Length::Fixed(marker_side(d)))
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center)
         .style(|t: &Theme| {
@@ -290,14 +301,14 @@ impl App {
             // Fixed-width tri-state marker: skip, flash, or erase.
             let marker: Element<'_, Message> = match r.state {
                 FlashRowState::Unchecked => iced::widget::checkbox(false)
-                    .size(d.size(FLASH_PARTS_MARKER_SIZE))
+                    .size(marker_side(d))
                     .on_toggle(move |_| {
                         Message::FlashParts(FlashPartsMsg::FlashPartsToggleRow(idx))
                     })
                     .style(m3_checkbox_style)
                     .into(),
                 FlashRowState::Flash => iced::widget::checkbox(true)
-                    .size(d.size(FLASH_PARTS_MARKER_SIZE))
+                    .size(marker_side(d))
                     .on_toggle(move |_| {
                         Message::FlashParts(FlashPartsMsg::FlashPartsToggleRow(idx))
                     })
@@ -943,5 +954,34 @@ impl App {
         }
 
         self.confirm_step_frame(leading, vec![], vec![])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::widgets::{
+        WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, density_for_content_width,
+    };
+
+    #[test]
+    fn the_tri_state_marker_always_fits_its_cell() {
+        // Scaling the marker twice put it at 27 px inside a 26 px cell, which
+        // squeezed the erase badge flat while the checkbox beside it — scaled
+        // once — still looked right.
+        for content_width in [
+            WIZARD_CARD_GROW_FROM_CONTENT,
+            1200.0,
+            WIZARD_CARD_GROW_TO_CONTENT,
+            4000.0,
+        ] {
+            let d = density_for_content_width(content_width);
+            let side = marker_side(d);
+            let cell = d.size(FLASH_PARTS_MARKER_CELL_HEIGHT);
+            assert!(
+                side <= cell,
+                "marker {side} does not fit the {cell} cell at content width {content_width}"
+            );
+        }
     }
 }
