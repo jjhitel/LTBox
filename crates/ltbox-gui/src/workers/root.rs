@@ -16,6 +16,38 @@ fn fingerprint_matches_detected_model(fingerprint: &str, device_model: &str) -> 
     fingerprint_token_match(fingerprint, device_model)
 }
 
+/// The provider/version pair the pipeline runs with.
+///
+/// Three routes reach the confirm step without the user ever seeing a version
+/// card, so none of them may demand one:
+///
+/// * **GKI** — the AnyKernel3 zip is the whole input.
+/// * **SKRoot** — always the latest Lite release.
+/// * **Magisk forks** — the wizard puts an APK picker where the version step
+///   would be, and the pipeline ignores the channel for this provider anyway
+///   (`provider_repo` has no slug for it and nightly resolution returns early).
+///
+/// The first two substitute `Magisk` to pick magiskboot as the unpack/repack
+/// backend. Forks keep their own provider, and keep whatever channel happened
+/// to be selected before the user switched to them.
+fn resolve_provider_version(
+    is_gki_route: bool,
+    is_skroot_route: bool,
+    provider: Option<Provider>,
+    version: Option<VerChoice>,
+) -> Result<(Provider, VerChoice), String> {
+    if is_gki_route || is_skroot_route {
+        return Ok((Provider::Magisk, VerChoice::Stable));
+    }
+    let provider = provider.ok_or_else(|| tr("err_root_provider_missing"))?;
+    let version = if provider == Provider::MagiskForks {
+        version.unwrap_or(VerChoice::Stable)
+    } else {
+        version.ok_or_else(|| tr("err_root_version_missing"))?
+    };
+    Ok((provider, version))
+}
+
 // The params are the closure's captured locals, threaded through verbatim
 // from the update_root handler; bundling them into a struct would only move the
 // noise. Extraction is mechanical, so keep the 1:1 capture->param mapping.
@@ -45,19 +77,8 @@ pub(crate) fn root_worker(
     let is_gki_route = mode == Some(RootMode::Gki);
     let family = family.ok_or_else(|| tr("err_root_family_missing"))?;
     let is_skroot_route = family == Family::Skroot;
-    let (provider, version) = if is_gki_route {
-        // `Magisk` stand-in — picks magiskboot as
-        // the backend for unpack/repack.
-        (Provider::Magisk, VerChoice::Stable)
-    } else if is_skroot_route {
-        // SKRoot has no provider/version picker; the pipeline always uses
-        // the latest Lite release manager APK and direct boot.img patching.
-        (Provider::Magisk, VerChoice::Stable)
-    } else {
-        let prov = provider.ok_or_else(|| tr("err_root_provider_missing"))?;
-        let ver = version.ok_or_else(|| tr("err_root_version_missing"))?;
-        (prov, ver)
-    };
+    let (provider, version) =
+        resolve_provider_version(is_gki_route, is_skroot_route, provider, version)?;
 
     use ltbox_patch::root_pipeline::{
         RootFamily, RootPipelineConfig, RootProvider, RootVersion, build_patched_artifacts,
@@ -678,5 +699,43 @@ mod tests {
         assert!(fingerprint_matches_detected_model(tb320fc, "TB320FC"));
         assert!(fingerprint_matches_detected_model(tb320fc, "LAVIETab9QHD1"));
         assert!(!fingerprint_matches_detected_model(tb323fu, "TB320FC"));
+    }
+
+    #[test]
+    fn routes_without_a_version_card_do_not_demand_a_version() {
+        // Magisk forks: the wizard shows an APK picker where the version step
+        // would be, so `version` is never set and the run must still start.
+        assert_eq!(
+            resolve_provider_version(false, false, Some(Provider::MagiskForks), None),
+            Ok((Provider::MagiskForks, VerChoice::Stable))
+        );
+        // A channel picked before switching to forks is kept, not discarded.
+        assert_eq!(
+            resolve_provider_version(
+                false,
+                false,
+                Some(Provider::MagiskForks),
+                Some(VerChoice::Nightly)
+            ),
+            Ok((Provider::MagiskForks, VerChoice::Nightly))
+        );
+        for (gki, skroot) in [(true, false), (false, true)] {
+            assert_eq!(
+                resolve_provider_version(gki, skroot, None, None),
+                Ok((Provider::Magisk, VerChoice::Stable))
+            );
+        }
+    }
+
+    #[test]
+    fn routes_with_a_version_card_still_require_one() {
+        assert_eq!(
+            resolve_provider_version(false, false, Some(Provider::Magisk), None),
+            Err(tr("err_root_version_missing"))
+        );
+        assert_eq!(
+            resolve_provider_version(false, false, None, Some(VerChoice::Stable)),
+            Err(tr("err_root_provider_missing"))
+        );
     }
 }
