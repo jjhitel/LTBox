@@ -488,6 +488,25 @@ pub fn sahara_dump_regions<T: QdlChan>(
     Ok(())
 }
 
+fn sahara_read_packet<T: Read>(channel: &mut T, verbose: bool) -> Result<SaharaPacket> {
+    const HEADER_LEN: usize = size_of::<SaharaCmd>() + size_of::<u32>();
+    const MAX_PACKET_LEN: usize = 4096;
+
+    let mut header = [0u8; HEADER_LEN];
+    channel.read_exact(&mut header)?;
+
+    let packet_len = u32::from_le_bytes(header[4..8].try_into().unwrap()) as usize;
+    if !(HEADER_LEN..=MAX_PACKET_LEN).contains(&packet_len) {
+        bail!("Invalid Sahara packet length {packet_len}");
+    }
+
+    let mut packet = vec![0u8; packet_len];
+    packet[..HEADER_LEN].copy_from_slice(&header);
+    channel.read_exact(&mut packet[HEADER_LEN..])?;
+
+    sahara_parse_packet(&packet, verbose)
+}
+
 pub fn sahara_run<T: QdlChan>(
     channel: &mut T,
     sahara_mode: SaharaMode,
@@ -496,11 +515,8 @@ pub fn sahara_run<T: QdlChan>(
     filenames: Vec<String>,
     verbose: bool,
 ) -> Result<Vec<u8>> {
-    let mut buf = vec![0; 4096];
-
     loop {
-        let bytes_read = channel.read(&mut buf[..])?;
-        let pkt = sahara_parse_packet(&buf[..bytes_read], verbose)?;
+        let pkt = sahara_read_packet(channel, verbose)?;
         let pktsize = size_of_val(&pkt.cmd) + size_of_val(&pkt.len);
 
         match pkt.cmd {
@@ -565,8 +581,7 @@ pub fn sahara_run<T: QdlChan>(
                     // Indicate we're ready to receive the requested amount of data
                     sahara_send_cmd_data(channel, resp.command)?;
 
-                    let resp_len = channel.read(&mut resp_buf)?;
-                    assert_eq!(resp_len, resp.len as usize);
+                    channel.read_exact(&mut resp_buf)?;
 
                     // Got everything we want, exit command mode
                     sahara_switch_mode(channel, SaharaMode::WaitingForImage)?;
@@ -678,4 +693,99 @@ fn sahara_parse_packet(buf: &[u8], verbose: bool) -> Result<SaharaPacket> {
     }
 
     Ok(ret)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DoneResp, Eoi, SaharaCmd, SaharaPacket, SaharaPacketBody, sahara_read_packet};
+    use bincode::serialize;
+    use std::io::{BufReader, Cursor, ErrorKind};
+
+    fn eoi_packet() -> Vec<u8> {
+        serialize(&SaharaPacket {
+            cmd: SaharaCmd::SaharaEndOfImage,
+            len: 16,
+            body: SaharaPacketBody::Eoi(Eoi {
+                image: 13,
+                status: 0,
+            }),
+        })
+        .unwrap()
+    }
+
+    fn done_response_packet() -> Vec<u8> {
+        serialize(&SaharaPacket {
+            cmd: SaharaCmd::SaharaDoneResp,
+            len: 12,
+            body: SaharaPacketBody::DoneResp(DoneResp { status: 1 }),
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn reads_packet_split_across_transport_reads() {
+        let packet = eoi_packet();
+        let mut reader = BufReader::with_capacity(5, Cursor::new(packet));
+
+        let parsed = sahara_read_packet(&mut reader, false).unwrap();
+
+        assert_eq!(parsed.cmd, SaharaCmd::SaharaEndOfImage);
+        assert_eq!(parsed.len, 16);
+        let SaharaPacketBody::Eoi(eoi) = parsed.body else {
+            panic!("expected EndOfImage body");
+        };
+        assert_eq!(eoi.image, 13);
+        assert_eq!(eoi.status, 0);
+    }
+
+    #[test]
+    fn leaves_coalesced_packet_for_next_read() {
+        let mut transport_data = eoi_packet();
+        transport_data.extend(done_response_packet());
+        let mut reader = Cursor::new(transport_data);
+
+        let first = sahara_read_packet(&mut reader, false).unwrap();
+        let second = sahara_read_packet(&mut reader, false).unwrap();
+
+        assert_eq!(first.cmd, SaharaCmd::SaharaEndOfImage);
+        assert_eq!(second.cmd, SaharaCmd::SaharaDoneResp);
+        let SaharaPacketBody::DoneResp(done) = second.body else {
+            panic!("expected DoneResp body");
+        };
+        assert_eq!(done.status, 1);
+    }
+
+    #[test]
+    fn rejects_truncated_header() {
+        let packet = eoi_packet();
+        let error = sahara_read_packet(&mut Cursor::new(&packet[..7]), false).unwrap_err();
+
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            ErrorKind::UnexpectedEof
+        );
+    }
+
+    #[test]
+    fn rejects_truncated_packet_body() {
+        let mut packet = eoi_packet();
+        packet.pop();
+        let error = sahara_read_packet(&mut Cursor::new(packet), false).unwrap_err();
+
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            ErrorKind::UnexpectedEof
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_packet_length() {
+        let mut header = Vec::new();
+        header.extend((SaharaCmd::SaharaDoneResp as u32).to_le_bytes());
+        header.extend(7u32.to_le_bytes());
+
+        let error = sahara_read_packet(&mut Cursor::new(header), false).unwrap_err();
+
+        assert!(error.to_string().contains("Invalid Sahara packet length 7"));
+    }
 }

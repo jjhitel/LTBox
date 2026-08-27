@@ -121,6 +121,10 @@ pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
         }
     };
 
+    setup_usb_device_from_device(dev)
+}
+
+fn setup_usb_device_from_device(dev: Device) -> Result<QdlUsbConfig> {
     // TODO: is there always precisely one interface like this?
     let cfg_desc = dev.active_configuration()?;
     let intf_desc = cfg_desc
@@ -170,4 +174,26 @@ pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
         pos: 0,
         cap: 0,
     })
+}
+
+/// Open an EDL device at a known physical USB location.
+pub fn setup_usb_device_at(bus_id: &str, port_numbers: &[u8]) -> Result<QdlUsbConfig> {
+    let mut devices = nusb::list_devices().wait()?.filter(|d| {
+        d.vendor_id() == USB_VID_QCOM
+            && USB_PID_EDL.contains(&d.product_id())
+            && d.bus_id() == bus_id
+            && d.port_chain() == port_numbers
+    });
+
+    let Some(info) = devices.next() else {
+        bail!(
+            "Found no EDL device at USB bus {bus_id:?} ports {:?}",
+            port_numbers
+        );
+    };
+    if devices.next().is_some() {
+        bail!("multiple EDL devices matched one USB location");
+    }
+
+    setup_usb_device_from_device(info.open().wait()?)
 }

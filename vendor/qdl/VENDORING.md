@@ -13,11 +13,8 @@ carrying the minimal patches we need.
 
 ## Source
 
-- Upstream: `qualcomm/qdlrs` `main` at `f46f233`
-  (`Merge pull request #51 from qualcomm/topic/clippy_1.97.1`).
-  That revision includes the PR #50 reliability fixes merged at
-  `3bccbc6` and the library-only Clippy 1.97.1 cleanup from PR #51
-  (`2bce116` in `qdl/src/serial.rs` and `qdl/src/usb.rs`).
+- Upstream: `qualcomm/qdlrs` `main` at `75fe2f7`. Everything under `src/`
+  matches that revision except the local patches listed below.
 - Only the `qdl` library crate files under `qdl/src/` and the crate
   `Cargo.toml` were vendored. Upstream CLI files under `cli/` were not
   copied into this vendor tree.
@@ -40,10 +37,8 @@ carrying the minimal patches we need.
   indefinitely (the endpoint write timeout does not cancel the queued
   transfer). Symptom: a multi-partition flash hung on the partition after
   the first packet-aligned one (e.g. `xbl_config_a`, 245760 B = exact
-  512-multiple). PR #50's non-panicking ZLP write context was therefore
-  not adopted; the explicit ZLP remains absent, while the PR's
-  `.with_context()` on data-channel writes is retained in the local
-  progress implementation.
+  512-multiple). Upstream still sends this ZLP, so this is a deliberate
+  behavioural divergence that must be re-applied on every re-sync.
 - **Make the serial backend tolerant enough for Qualcomm kernel-driver mode**
   (`src/serial.rs`). LTBox opens the port with an identity configuration,
   applies raw mode + 115200 baud best-effort, and sets explicit read/write

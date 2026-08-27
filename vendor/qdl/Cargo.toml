@@ -1,5 +1,5 @@
-# Vendored from qualcomm/qdlrs main @f46f233 (includes PR #50 + PR #51 Clippy
-# cleanup), BSD-3-Clause. See VENDORING.md for provenance + local patches.
+# Vendored from qualcomm/qdlrs main @75fe2f7, BSD-3-Clause.
+# See VENDORING.md for provenance + local patches.
 [package]
 name = "qdl"
 version = "0.1.0"
