@@ -17,7 +17,7 @@ mod vendor_boot;
 use std::path::{Path, PathBuf};
 
 use fs_err as fs;
-use ltbox_core::{LtboxError, Result, tr_args};
+use ltbox_core::{LtboxError, Result};
 use tracing::info;
 
 use crate::{avb, key_map};
@@ -196,11 +196,7 @@ fn build_konabess_avb_images_from_export(
     // A present-but-unknown key must never leave a tempting unsigned artifact.
     let vbmeta_key = key_map::key_spec_for_signed_pubkey(vbmeta_info.public_key_sha1.as_deref())
         .map_err(|key| {
-            LtboxError::Avb(tr_args!(
-                "err_avb_signing_key_unknown",
-                image = "vbmeta.img",
-                key = key
-            ))
+            LtboxError::Avb(key_map::unresolved_signing_key_error("vbmeta.img", &key))
         })?;
 
     let mut patchable = fs::read(vendor_boot_src).map_err(|e| {

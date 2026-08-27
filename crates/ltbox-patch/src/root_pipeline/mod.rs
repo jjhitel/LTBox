@@ -57,10 +57,8 @@ fn resolve_signing_key(
             );
             Ok(None)
         }
-        Err(sha) => Err(LtboxError::Avb(tr_args!(
-            "err_avb_signing_key_unknown",
-            image = image_name,
-            key = sha
+        Err(sha) => Err(LtboxError::Avb(key_map::unresolved_signing_key_error(
+            image_name, &sha,
         ))),
     }
 }

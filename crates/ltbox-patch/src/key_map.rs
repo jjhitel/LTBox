@@ -76,6 +76,27 @@ pub fn key_spec_for_signed_pubkey(
         .ok_or_else(|| sha1.to_string())
 }
 
+/// The user-facing message for a signing key that cannot be resolved.
+///
+/// The two cases have very different causes and deserve different wording. A
+/// [`KeyClass::Fixed`] key is the ordinary one — the device is on firmware that
+/// closed the AOSP test-key hole, and no amount of retrying will change that.
+/// Anything else really is an unknown key and keeps the diagnostic.
+///
+/// Both leave `{work}` for the GUI to fill with the operation that was running;
+/// nothing at this depth knows which one it is.
+pub fn unresolved_signing_key_error(image: &str, pubkey_sha1: &str) -> String {
+    if classify_pubkey(Some(pubkey_sha1)) == KeyClass::Fixed {
+        ltbox_core::i18n::tr("err_device_key_fixed")
+    } else {
+        ltbox_core::tr_args!(
+            "err_avb_signing_key_unknown",
+            image = image,
+            key = pubkey_sha1
+        )
+    }
+}
+
 /// True iff the bundled map knows a key for this pubkey SHA-1.
 pub fn has_key_for(pubkey_sha1: &str) -> bool {
     KEY_MAP
@@ -148,5 +169,17 @@ mod tests {
                 .unwrap_or(false),
             "embedded 4096 key should report a SHA256_RSA* algorithm",
         );
+    }
+
+    #[test]
+    fn a_fixed_device_key_is_not_reported_as_an_unknown_key() {
+        // The two have different causes: one is a device that can never run the
+        // operation, the other is an image signed with something unexpected.
+        // Collapsing them back into one message is the regression to catch.
+        let fixed = unresolved_signing_key_error("vbmeta.img", KEY2_MAP[0]);
+        let unknown = unresolved_signing_key_error("vbmeta.img", "1234567890abcdef1234");
+        assert_ne!(fixed, unknown);
+        // A testkey device resolves and never reaches either message.
+        assert!(key_spec_for_signed_pubkey(Some(KEY_MAP[0].0)).is_ok());
     }
 }

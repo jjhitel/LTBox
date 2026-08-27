@@ -375,10 +375,9 @@ pub(crate) fn advanced_file_worker(
              -> std::result::Result<&'static str, String> {
                 ltbox_patch::key_map::key_spec_for_pubkey(info.public_key_sha1.as_deref())
                     .ok_or_else(|| {
-                        tr_args!(
-                            "err_avb_signing_key_unknown",
-                            image = label,
-                            key = format!("{:?}", info.public_key_sha1)
+                        ltbox_patch::key_map::unresolved_signing_key_error(
+                            label,
+                            info.public_key_sha1.as_deref().unwrap_or_default(),
                         )
                     })
             };
@@ -504,10 +503,9 @@ pub(crate) fn advanced_file_worker(
             let key_spec =
                 ltbox_patch::key_map::key_spec_for_pubkey(info.public_key_sha1.as_deref())
                     .ok_or_else(|| {
-                        tr_args!(
-                            "err_avb_signing_key_unknown",
-                            image = "vbmeta.img",
-                            key = format!("{:?}", info.public_key_sha1)
+                        ltbox_patch::key_map::unresolved_signing_key_error(
+                            "vbmeta.img",
+                            info.public_key_sha1.as_deref().unwrap_or_default(),
                         )
                     })?;
             let alg: Option<&str> = if info.algorithm == "NONE" {

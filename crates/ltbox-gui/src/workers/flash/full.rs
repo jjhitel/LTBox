@@ -839,7 +839,9 @@ pub(crate) fn flash_worker(
                     } else {
                         let _ = session.reset(&mut log);
                     }
-                    return Err(ltbox_core::i18n::tr("err_flash_key2_device_constraint"));
+                    // Same cause as an unresolvable signing key: this device
+                    // is on firmware that closed the test-key hole.
+                    return Err(ltbox_core::i18n::tr("err_device_key_fixed"));
                 }
                 ltbox_core::live!(
                     log,
@@ -999,7 +1001,7 @@ pub(crate) fn flash_worker(
             ) {
                 Ok(spec) => spec,
                 Err(sha) => {
-                    let err = tr_args!("err_avb_signing_key_unknown", image = log_name, key = sha);
+                    let err = ltbox_patch::key_map::unresolved_signing_key_error(log_name, &sha);
                     ltbox_core::live!(log, "[ARB] {err}");
                     session.reset_tolerant(&mut log);
                     return Err(err);
@@ -1217,7 +1219,7 @@ pub(crate) fn flash_worker(
             ) {
                 Ok(spec) => spec,
                 Err(sha) => {
-                    let err = tr_args!("err_avb_signing_key_unknown", image = log_name, key = sha);
+                    let err = ltbox_patch::key_map::unresolved_signing_key_error(log_name, &sha);
                     ltbox_core::live!(log, "[ARB] {err}");
                     session.reset_tolerant(&mut log);
                     return Err(err);

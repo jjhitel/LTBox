@@ -282,6 +282,11 @@ impl App {
                 self.error_msg = Some(self.t(key).to_string());
             }
             Message::OperationError(e) => {
+                // Errors raised deep in the pipeline cannot name the operation,
+                // so they leave `{work}` in the message. This is the one place
+                // an operation error is surfaced, and the last point where the
+                // running operation is still known — `fail_op` clears it.
+                let e = e.replace("{work}", &self.busy_operation_label());
                 self.fail_op();
                 self.operation_error = Some(e.clone());
                 self.error_msg = Some(e.clone());

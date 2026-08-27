@@ -182,13 +182,7 @@ impl KonaBessInspectionBackend for DeviceBackend<'_> {
 fn validate_signing_key(pubkey_sha1: Option<&str>) -> Result<(), String> {
     ltbox_patch::key_map::key_spec_for_signed_pubkey(pubkey_sha1)
         .map(|_| ())
-        .map_err(|key| {
-            tr_args!(
-                "err_avb_signing_key_unknown",
-                image = "vbmeta.img",
-                key = key
-            )
-        })
+        .map_err(|key| ltbox_patch::key_map::unresolved_signing_key_error("vbmeta.img", &key))
 }
 
 fn persist_backup(vendor_boot: &Path, vbmeta: &Path, backup_dir: &Path) -> Result<(), String> {

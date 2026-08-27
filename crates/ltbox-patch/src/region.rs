@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::avb::AvbImageInfo;
 use crate::{avb, key_map};
-use ltbox_core::{LtboxError, Result, model::fingerprint_model_match, tr_args};
+use ltbox_core::{LtboxError, Result, model::fingerprint_model_match};
 use tracing::info;
 
 /// Outcome of validating an image against a device model.
@@ -295,11 +295,7 @@ pub fn build_region_converted_avb_images_with_progress(
         Some(spec) => Some(spec),
         None => key_map::key_spec_for_signed_pubkey(vbmeta_info.public_key_sha1.as_deref())
             .map_err(|key| {
-                LtboxError::Avb(tr_args!(
-                    "err_avb_signing_key_unknown",
-                    image = "vbmeta.img",
-                    key = key
-                ))
+                LtboxError::Avb(key_map::unresolved_signing_key_error("vbmeta.img", &key))
             })?,
     };
     match resolved {
