@@ -9,6 +9,7 @@ use crate::{
     fingerprint_token_match, is_rollback_protected_model, open_edl_session,
     read_device_rollback_index_via_edl, transition_to_edl,
 };
+use ltbox_core::model::{TB323FU_MODEL, TB324ZC_MODEL};
 use ltbox_core::{live, tr_args};
 
 fn require_firmware_loader(
@@ -78,8 +79,14 @@ fn fixed_firmware_device_policy(
 /// model from an EDL-dumped vendor_boot when fastboot/ADB never ran.
 /// LAVIE Tab 9QHD1 is represented by TB320FC because the shared matcher treats
 /// its reported token as equivalent and the recovered value is internal only.
-const SUPPORTED_MODELS: [&str; 6] = [
-    "TB320FC", "TB321FU", "TB322FC", "TB323FU", "TB520FU", "TB710FU",
+const SUPPORTED_MODELS: [&str; 7] = [
+    "TB320FC",
+    "TB321FU",
+    "TB322FC",
+    TB323FU_MODEL,
+    TB324ZC_MODEL,
+    "TB520FU",
+    "TB710FU",
 ];
 
 /// EDL-start device identity + rollback floor, read over the open EDL session.
@@ -633,16 +640,24 @@ fn decompress_zst_file(
     result
 }
 
-/// Country-code partitions to dump/patch/flash for a model. The TB320FC hardware
-/// path and TB323FU keep the code ONLY in `oemowninfo` (LUN 0); every other model
-/// keeps it in `devinfo` + `persist`. The model is matched against the
+/// Country-code partitions to dump/patch/flash for a model. TB320FC and TB323FU
+/// keep the code ONLY in `oemowninfo` (LUN 0); TB324ZC uses `proinfo` + `persist`;
+/// every other model keeps it in `devinfo` + `persist`. The model is matched against the
 /// vendor_boot AVB fingerprint (works on an EDL-start flash) or the
 /// probe-reported model name.
 fn country_partitions_for(
     device_model: &str,
     firmware_fingerprint: Option<&str>,
 ) -> &'static [&'static str] {
-    let oemowninfo_sku = ["TB320FC", "TB323FU"].iter().any(|m| {
+    let tb324zc = firmware_fingerprint
+        .map(|fp| fingerprint_token_match(fp, TB324ZC_MODEL))
+        .unwrap_or(false)
+        || fingerprint_token_match(device_model, TB324ZC_MODEL);
+    if tb324zc {
+        return &["proinfo", "persist"];
+    }
+
+    let oemowninfo_sku = ["TB320FC", TB323FU_MODEL].iter().any(|m| {
         firmware_fingerprint
             .map(|fp| fingerprint_token_match(fp, m))
             .unwrap_or(false)
@@ -655,9 +670,14 @@ fn country_partitions_for(
     }
 }
 
+fn country_field_only(label: &str) -> bool {
+    matches!(label, "persist" | "proinfo")
+}
+
 /// Rewrite the device's country code in the model's country partitions over an
-/// open EDL session: the TB320FC hardware path and TB323FU use `oemowninfo`;
-/// every other model uses `devinfo` + `persist`. Best-effort per partition
+/// open EDL session: TB320FC and TB323FU use `oemowninfo`; TB324ZC uses
+/// `proinfo` + `persist`; every other model uses `devinfo` + `persist`.
+/// Best-effort per partition
 /// (logs + continues on failure). Shared by `flash_worker`'s post-flash country
 /// phase and the standalone `change_country_worker`.
 #[allow(clippy::too_many_arguments)]
@@ -746,7 +766,7 @@ fn run_country_change(
         let detected = match ltbox_patch::region::detect_country_code(
             &dump_path,
             KNOWN_CODES,
-            label == "persist",
+            country_field_only(label),
         ) {
             Ok(c) => c,
             Err(e) => {
@@ -807,7 +827,7 @@ fn run_country_change(
                     old_code,
                     target_code,
                     EU_CODES,
-                    label == "persist",
+                    country_field_only(label),
                 ) {
                     Ok(c) => changed |= c,
                     Err(e) => {
@@ -929,10 +949,16 @@ pub(crate) use simple::simple_flash_worker;
 #[cfg(test)]
 mod tests {
     use super::{
-        FixedFirmwareDevicePolicy, ZSTD_FREE_SPACE_RESERVE_BYTES, fixed_firmware_device_policy,
-        require_firmware_loader, should_reboot_fastboot_to_system_after_pre_edl_abort,
-        stream_zstd_decoder, zstd_output_limit,
+        FixedFirmwareDevicePolicy, SUPPORTED_MODELS, ZSTD_FREE_SPACE_RESERVE_BYTES,
+        fixed_firmware_device_policy, require_firmware_loader,
+        should_reboot_fastboot_to_system_after_pre_edl_abort, stream_zstd_decoder,
+        zstd_output_limit,
     };
+
+    #[test]
+    fn edl_fingerprint_recovery_recognizes_tb324zc() {
+        assert!(SUPPORTED_MODELS.contains(&"TB324ZC"));
+    }
 
     #[test]
     fn country_partitions_select_by_model() {
@@ -944,6 +970,10 @@ mod tests {
             &["oemowninfo"][..]
         );
         assert_eq!(country_partitions_for("TB323FU", None), &["oemowninfo"][..]);
+        assert_eq!(
+            country_partitions_for("TB324ZC", None),
+            &["proinfo", "persist"][..]
+        );
         // Every other model uses devinfo + persist.
         assert_eq!(
             country_partitions_for("TB330FU", None),
@@ -953,6 +983,10 @@ mod tests {
         assert_eq!(
             country_partitions_for("", Some("Lenovo/TB323FU/TB323FU:14/build")),
             &["oemowninfo"][..]
+        );
+        assert_eq!(
+            country_partitions_for("", Some("Lenovo/TB324ZC/TB324ZC:16/build")),
+            &["proinfo", "persist"][..]
         );
         assert_eq!(
             country_partitions_for("", Some("qti/LAVIETab9QHD1/LAVIETab9QHD1:15/build_NEC")),
