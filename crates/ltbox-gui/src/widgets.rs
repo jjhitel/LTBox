@@ -4,6 +4,7 @@
 use crate::*;
 use iced::widget::{Space, button, canvas, container, row, text};
 use iced::{Element, Length, Point, Radians, Rectangle, Renderer, Theme, mouse, window};
+use ltbox_core::model::TB324ZC_MODEL;
 
 const MATERIAL_PROGRESS_PERIOD: std::time::Duration = std::time::Duration::from_millis(1_400);
 const MATERIAL_PROGRESS_FRAME: std::time::Duration = std::time::Duration::from_millis(33);
@@ -1064,6 +1065,7 @@ pub(crate) fn device_portrait(model: &str) -> DevicePortrait {
         "TB321FU" => DevicePortrait::Png(TB321FU_HANDLE.clone()),
         "TB322FC" => DevicePortrait::Png(TB322FC_HANDLE.clone()),
         "TB323FU" => DevicePortrait::Png(TB323FU_HANDLE.clone()),
+        TB324ZC_MODEL => DevicePortrait::Png(TB323FU_HANDLE.clone()),
         "TB520FU" => DevicePortrait::Png(TB520FU_HANDLE.clone()),
         "TB710FU" => DevicePortrait::Png(TB710FU_HANDLE.clone()),
         _ => DevicePortrait::Svg(GENERIC_TABLET_SVG_HANDLE.clone()),
@@ -1412,13 +1414,24 @@ pub(crate) fn wizard_nav_cancel_generic_with_disabled_next_tooltip<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        App, Density, IMAGE_GROWTH, MaterialProgressSize, WIZARD_CARD_GROW_FROM_CONTENT,
-        WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON, WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE,
-        WIZARD_CARD_SQUARE_MAX, density_for_content_width, extended_fab_primary_style,
+        App, Density, DevicePortrait, IMAGE_GROWTH, MaterialProgressSize,
+        WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON,
+        WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX,
+        density_for_content_width, device_portrait, extended_fab_primary_style,
         fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
         material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
     };
     use iced::widget::button;
+
+    #[test]
+    fn tb324zc_reuses_the_tb323fu_portrait_handle() {
+        match (device_portrait("TB323FU"), device_portrait("TB324ZC")) {
+            (DevicePortrait::Png(tb323fu), DevicePortrait::Png(tb324zc)) => {
+                assert!(tb323fu == tb324zc);
+            }
+            _ => panic!("both models must dispatch to the shared PNG portrait"),
+        }
+    }
 
     #[test]
     fn wizard_square_contents_track_card_growth_endpoints() {

@@ -2,7 +2,10 @@
 //! and the live connection state, split out of `main.rs`.
 
 use crate::theme::Palette;
-use ltbox_core::model::{LAVIE_TAB_9QHD1_MODEL, TB320FC_MODEL, is_tb320fc_model};
+use ltbox_core::model::{
+    LAVIE_TAB_9QHD1_MODEL, TB320FC_MODEL, TB323FU_MODEL, TB324ZC_MODEL, fingerprint_model_match,
+    is_tb320fc_model,
+};
 
 /// Classifies the device model into a known SKU so wizard gates ask
 /// "what device class are we on?" once instead of comparing the raw
@@ -25,6 +28,9 @@ pub(crate) enum DeviceClass {
     /// `qsahara_device_programmer.xml` Sahara manifest rather than a
     /// single `.melf` loader.
     TB323FU,
+    /// TB324ZC — Lenovo Y700 Infinite. Uses the efisp/GBL exploit route and
+    /// multi-image Sahara manifest, and is restricted to PRC firmware.
+    TB324ZC,
     /// Any other supported model. No special-case gates apply.
     Generic,
 }
@@ -35,12 +41,31 @@ impl DeviceClass {
             Self::TB320FC
         } else if model.eq_ignore_ascii_case("TB322FC") {
             Self::TB322FC
-        } else if model.eq_ignore_ascii_case("TB323FU") {
+        } else if model.eq_ignore_ascii_case(TB323FU_MODEL) {
             Self::TB323FU
+        } else if model.eq_ignore_ascii_case(TB324ZC_MODEL) {
+            Self::TB324ZC
         } else {
             Self::Generic
         }
     }
+
+    /// Whether this class uses the efisp/GBL exploit route.
+    pub(crate) const fn uses_efisp_gbl_route(self) -> bool {
+        matches!(self, Self::TB323FU | Self::TB324ZC)
+    }
+
+    /// Whether this class is limited to PRC firmware and country settings.
+    pub(crate) const fn is_prc_only(self) -> bool {
+        matches!(self, Self::TB322FC | Self::TB324ZC)
+    }
+}
+
+/// Whether a firmware fingerprint belongs to an efisp/GBL-route model.
+pub(crate) fn fingerprint_uses_efisp_gbl_route(fingerprint: &str) -> bool {
+    [TB323FU_MODEL, TB324ZC_MODEL]
+        .iter()
+        .any(|model| fingerprint_model_match(fingerprint, model))
 }
 
 /// Lenovo tablets that expose two USB-C ports. Only the port on the long
@@ -53,7 +78,7 @@ pub(crate) const DUAL_USBC_MODELS: [&str; 5] = [
     LAVIE_TAB_9QHD1_MODEL,
     "TB321FU",
     "TB322FC",
-    "TB323FU",
+    TB323FU_MODEL,
 ];
 
 /// Whether `model` is one of the [`DUAL_USBC_MODELS`] (case-insensitive).
@@ -84,8 +109,26 @@ mod tests {
             DeviceClass::TB320FC
         );
         assert!(is_dual_usbc_model(LAVIE_TAB_9QHD1_MODEL));
-        assert_eq!(DeviceClass::from_model("TB323FU"), DeviceClass::TB323FU);
+        assert_eq!(DeviceClass::from_model(TB323FU_MODEL), DeviceClass::TB323FU);
         assert!(!is_dual_usbc_model("TB330FU"));
+    }
+
+    #[test]
+    fn tb324zc_classifies_on_both_capability_axes_without_dual_usbc() {
+        let class = DeviceClass::from_model(TB324ZC_MODEL);
+        assert_eq!(class, DeviceClass::TB324ZC);
+        assert!(class.uses_efisp_gbl_route());
+        assert!(class.is_prc_only());
+        assert!(!is_dual_usbc_model(TB324ZC_MODEL));
+        assert!(fingerprint_uses_efisp_gbl_route(
+            "qti/TB324ZC/TB324ZC:16/build:user/release-keys"
+        ));
+    }
+
+    #[test]
+    fn tb324zc_remains_rollback_protected() {
+        assert!(is_rollback_protected_model(TB324ZC_MODEL));
+        assert!(!is_rollback_protected_model("TB322FC"));
     }
 }
 

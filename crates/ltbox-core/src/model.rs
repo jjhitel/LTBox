@@ -6,6 +6,12 @@ pub const TB320FC_MODEL: &str = "TB320FC";
 /// Model token reported by LAVIE Tab 9QHD1 firmware.
 pub const LAVIE_TAB_9QHD1_MODEL: &str = "LAVIETab9QHD1";
 
+/// Model token reported by Lenovo Y700 Gen 5 firmware.
+pub const TB323FU_MODEL: &str = "TB323FU";
+
+/// Model token reported by Lenovo Y700 Infinite firmware.
+pub const TB324ZC_MODEL: &str = "TB324ZC";
+
 /// Whether `model` follows the TB320FC hardware-specific paths.
 ///
 /// LAVIE Tab 9QHD1 reports its domestic model token despite using the same
@@ -91,6 +97,14 @@ mod tests {
         assert!(!fingerprint_model_match(
             "qti/LAVIETab9QHD1X/build",
             TB320FC_MODEL
+        ));
+        assert!(!fingerprint_model_match(
+            "qti/TB323FU/TB323FU:15/build",
+            TB324ZC_MODEL
+        ));
+        assert!(!fingerprint_model_match(
+            "qti/TB324ZC/TB324ZC:16/build",
+            TB323FU_MODEL
         ));
     }
 }
