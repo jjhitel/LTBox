@@ -1647,30 +1647,30 @@ pub(crate) fn flash_worker(
 }
 
 /// Pinned gbl_root_baldur release used for TB323FU efisp GBL images.
-const EFISP_GBL_RELEASE_TAG: &str = "5.3.120-mod5";
+const EFISP_GBL_RELEASE_TAG: &str = "5.3.120-mod6";
 
 /// Exact asset names accepted for the pinned efisp release.
 const EFISP_EXPECTED_ASSETS: &[(&str, &str)] = &[
     (
         "generic_superfastboot_prc.efi",
-        "22471c543e13a433cb05c5c54bcfaf107f2643a6cfd7e46d8d73764b349e8cf2",
+        "375d3f4ec5ca9f02745077fba6ef8b5b7e7c5ad77c17b7bdb28b794da4fb72f2",
     ),
     (
         "generic_superfastboot_prc_arb.efi",
-        "fc55e6a4912f20c1bf0c664bb985e10d0c4e0944f92fab5e4f855b22e2aefcdf",
+        "d0496c898667bd63fe30809c3ab68a4bcd009dae8f961048583c37ee4a004086",
     ),
     (
         "generic_superfastboot_row.efi",
-        "90b16cacc4f2f6aded2c5bf0eed7d20b6a294115f6cf09dab555b4a4496e2628",
+        "024244ea7d2ac42947ced7688eada4082bf642e1cf205cf64a0b82a7f6291155",
     ),
     (
         "generic_superfastboot_row_arb.efi",
-        "99b62f4aeca619df4f480f6bffa3f0fea3ef2516a8fe48a092613c2aa68d10e2",
+        "defa391eed6164801cb5e8bec0a5175a164aa0ed44f776f9637e2c6c108efc33",
     ),
 ];
 
 /// Map a region/ARB suffix to the exact pinned asset name for the
-/// `5.3.120-mod5` gbl_root_baldur release. Unknown suffixes refuse.
+/// `5.3.120-mod6` gbl_root_baldur release. Unknown suffixes refuse.
 fn efisp_expected_asset(suffix: &str) -> Option<&'static str> {
     match suffix {
         "_prc.efi" => Some("generic_superfastboot_prc.efi"),
@@ -1808,7 +1808,7 @@ mod efisp_pin_tests {
 
     #[test]
     fn expected_hashes_cover_all_accepted_assets() {
-        assert_eq!(EFISP_GBL_RELEASE_TAG, "5.3.120-mod5");
+        assert_eq!(EFISP_GBL_RELEASE_TAG, "5.3.120-mod6");
         assert_eq!(EFISP_EXPECTED_ASSETS.len(), 4);
         for (name, hash) in EFISP_EXPECTED_ASSETS {
             assert_eq!(hash.len(), 64, "{name} hash length");
