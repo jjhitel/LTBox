@@ -159,14 +159,15 @@ pub(crate) fn is_melf_loader(path: &std::path::Path) -> bool {
 }
 
 /// True when `path`'s extension is the EDL loader form the given model needs:
-/// TB323FU → `.xml` / `.x` (Sahara manifest); every other model → `.melf`.
+/// Efisp/GBL-route models → `.xml` / `.x` (Sahara manifest); every other model
+/// → `.melf`.
 /// Inspects only the file's own extension, not the images a manifest references.
-pub(crate) fn loader_ext_fits_model(is_tb323fu: bool, path: &std::path::Path) -> bool {
+pub(crate) fn loader_ext_fits_model(uses_efisp_gbl_route: bool, path: &std::path::Path) -> bool {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_ascii_lowercase());
-    if is_tb323fu {
+    if uses_efisp_gbl_route {
         matches!(ext.as_deref(), Some("xml") | Some("x"))
     } else {
         ext.as_deref() == Some("melf")
@@ -235,7 +236,7 @@ mod tests {
 
     #[test]
     fn loader_ext_fits_model_by_device() {
-        // TB323FU needs the .xml / .x manifest.
+        // Efisp/GBL-route models need the .xml / .x manifest.
         assert!(loader_ext_fits_model(
             true,
             Path::new("x/qsahara_device_programmer.xml")

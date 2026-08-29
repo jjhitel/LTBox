@@ -2735,14 +2735,14 @@ impl App {
 
     /// Kick off region auto-detection on entering the Flash wizard (called
     /// right after `flash.reset()`):
-    /// * PRC-only model (TB322FC) → preselect PRC and jump to the target step.
+    /// * PRC-only model → preselect PRC and jump to the target step.
     /// * usable polled serial → probe PTSTPD (region step shows an indicator).
     /// * no usable serial → open the manual-serial prompt.
     ///
     /// On a fetch failure / inconclusive SaleArea the handler falls back to the
     /// manual PRC/ROW cards, so this never blocks the wizard.
     fn begin_flash_region_auto(&mut self) -> Task<Message> {
-        if self.is_tb322fc() {
+        if self.is_prc_only() {
             // PRC-only SKU: no lookup needed; skip straight to the target step.
             self.flash.device_region = Some(DeviceRegion::Prc);
             self.flash.step = 1;
@@ -2966,14 +2966,14 @@ impl App {
         let path = std::path::Path::new(selected_path);
         if path.is_file() {
             self.remember_recent(pickers::PickerKind::File, selected_path);
-            // TB323FU model gate: if the user picked a `.melf` but the
-            // device is a TB323FU, upgrade to the
+            // Efisp/GBL-route model gate: if the user picked a `.melf`, upgrade
+            // it to the
             // `qsahara_device_programmer.xml` manifest sitting in the
             // same folder. If the manifest is missing the .melf
             // alone is wrong and would fail mid-Sahara — abort up
             // front. Performed during resolve so the wizard's Confirm
             // step shows the correct path.
-            if self.is_tb323fu()
+            if self.uses_efisp_gbl_route()
                 && is_melf_loader(path)
                 && let Some(parent) = path.parent()
             {
@@ -2981,7 +2981,8 @@ impl App {
                     return Ok(manifest.to_string_lossy().to_string());
                 }
                 return Err(tr_args!(
-                    "err_tb323fu_loader_manifest_required",
+                    "err_efisp_loader_manifest_required",
+                    model = self.device_model.as_str(),
                     path = path.display()
                 ));
             }
@@ -3128,25 +3129,25 @@ impl App {
         self.device_class() == DeviceClass::TB320FC
     }
 
-    /// Whether the polled device is a TB323FU. Drives the multi-image
-    /// EDL loader path: TB323FU doesn't accept a single
+    /// Whether the polled device uses the efisp/GBL exploit route. These models
+    /// also use the multi-image EDL loader path and don't accept a single
     /// `xbl_s_devprg_ns.melf`; it needs the full
     /// `qsahara_device_programmer.xml` manifest + the per-id ELF /
     /// MBN payloads it references. The loader resolver upgrades a
     /// stray `.melf` selection to the manifest when one exists in
     /// the same folder; if not, it aborts up front rather than
     /// failing mid-Sahara.
-    fn is_tb323fu(&self) -> bool {
-        self.device_class() == DeviceClass::TB323FU
+    fn uses_efisp_gbl_route(&self) -> bool {
+        self.device_class().uses_efisp_gbl_route()
     }
 
     /// True when `path`'s extension is the EDL loader form the connected device
-    /// needs: TB323FU (Y700 Gen 5) loads the multi-image Sahara manifest
+    /// needs: efisp/GBL-route models load the multi-image Sahara manifest
     /// (`.xml` / `.x`); every other model loads a `.melf` single-blob programmer.
     /// Inspects only the picked file's own extension, never the `.mbn` / `.elf`
     /// images a manifest references internally.
     fn loader_fits_model(&self, path: &std::path::Path) -> bool {
-        loader_ext_fits_model(self.is_tb323fu(), path)
+        loader_ext_fits_model(self.uses_efisp_gbl_route(), path)
     }
 
     /// True when the Settings default EDL loader is unset, or its extension fits
@@ -3160,12 +3161,12 @@ impl App {
     }
 
     /// Loader-picker description, resolved live against the connected
-    /// device. TB323FU (Y700 Gen 5) needs the `qsahara_device_programmer.xml`
+    /// device. Efisp/GBL-route models need the `qsahara_device_programmer.xml`
     /// manifest, not the `.melf`; with no recognised model the picker hints
     /// both. Every loader picker routes its subtitle through this.
     fn loader_picker_desc(&self) -> String {
-        if self.is_tb323fu() {
-            self.t("loader_desc_tb323fu").to_string()
+        if self.uses_efisp_gbl_route() {
+            self.t("loader_desc_efisp_gbl").to_string()
         } else if self.device_model.is_empty() {
             self.t("loader_desc_unknown").to_string()
         } else {
@@ -3173,12 +3174,12 @@ impl App {
         }
     }
 
-    /// Whether the polled device is a TB322FC. PRC-only SKU — the Flash
+    /// Whether the polled device is a PRC-only SKU. The Flash
     /// wizard hides ROW + OtherRegion as disabled cards so the user
     /// cannot pick a region or cross-region flash target that the
     /// hardware doesn't ship with.
-    fn is_tb322fc(&self) -> bool {
-        self.device_class() == DeviceClass::TB322FC
+    fn is_prc_only(&self) -> bool {
+        self.device_class().is_prc_only()
     }
 
     /// True when the dashboard poll has placed the device in a mode
@@ -4225,6 +4226,44 @@ mod tests {
     }
 
     #[test]
+    fn tb324zc_capabilities_drive_loader_and_region_entry() {
+        let mut app = App {
+            device_model: "TB324ZC".into(),
+            ..App::default()
+        };
+        assert!(app.uses_efisp_gbl_route());
+        assert!(app.is_prc_only());
+        assert!(app.loader_fits_model(std::path::Path::new("qsahara_device_programmer.xml")));
+        assert!(app.loader_fits_model(std::path::Path::new("qsahara_device_programmer.x")));
+        assert!(!app.loader_fits_model(std::path::Path::new("prog.melf")));
+
+        let _ = app.begin_flash_region_auto();
+        assert_eq!(app.flash.device_region, Some(DeviceRegion::Prc));
+        assert_eq!(app.flash.step, 1);
+    }
+
+    #[test]
+    fn tb324zc_flash_country_dispatch_rejects_non_cn_but_advanced_stays_unrestricted() {
+        let mut app = App {
+            device_model: "TB324ZC".into(),
+            country_popup_open: true,
+            wf_config: WorkflowConfig {
+                country_action: CountryAction::Set("CN".into()),
+                ..WorkflowConfig::default()
+            },
+            ..App::default()
+        };
+        let _ = app.update(Message::SelectCountry("KR".into()));
+        assert_eq!(app.wf_config.country_action.target(), Some("CN"));
+        assert!(app.country_popup_open);
+
+        app.adv_needs_country = true;
+        let _ = app.update(Message::SelectCountry("KR".into()));
+        assert_eq!(app.adv_wizard.country.as_deref(), Some("KR"));
+        assert!(!app.country_popup_open);
+    }
+
+    #[test]
     fn flash_keep_data_preserves_confirm_country_override() {
         let mut app = App {
             wf_config: WorkflowConfig {
@@ -4538,6 +4577,7 @@ mod tests {
         assert_eq!(arb_from_model(""), "");
         assert_eq!(arb_from_model("   "), "");
         assert_eq!(arb_from_model("TB322FC"), "arb_no");
+        assert_eq!(arb_from_model("TB324ZC"), "arb_yes");
         assert_eq!(arb_from_model("TB520FU"), "arb_yes");
     }
 

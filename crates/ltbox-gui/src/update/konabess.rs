@@ -110,7 +110,7 @@ impl App {
                                 let phases = self
                                     .begin_phased_op(View::KonaBess, OperationPhaseKind::KonaBess);
                                 let conn = self.connection;
-                                let is_tb323fu = self.is_tb323fu();
+                                let uses_efisp_gbl_route = self.uses_efisp_gbl_route();
                                 let ll = self.live_labels();
                                 let loader = std::path::PathBuf::from(loader);
                                 return Task::perform(
@@ -118,7 +118,11 @@ impl App {
                                         tokio::task::spawn_blocking(move || {
                                             ltbox_core::runtime::run_heavy(move || {
                                                 konabess_inspection_worker(
-                                                    conn, loader, is_tb323fu, ll, phases,
+                                                    conn,
+                                                    loader,
+                                                    uses_efisp_gbl_route,
+                                                    ll,
+                                                    phases,
                                                 )
                                             })
                                             .and_then(|result| result)

@@ -8,10 +8,10 @@ impl App {
     pub(crate) fn update_sys(&mut self, msg: SysMsg) -> Task<Message> {
         match msg {
             SysMsg::SysAction(a) => {
-                // TB323FU can't run Boot Recovery (vendor_boot/vbmeta LUN
+                // Efisp/GBL-route models can't run Boot Recovery (vendor_boot/vbmeta LUN
                 // mismatch). The card is disabled, but drop a stale dispatch
                 // here too so the action can never latch.
-                if a == SysUpdateAction::Rescue && self.is_tb323fu() {
+                if a == SysUpdateAction::Rescue && self.uses_efisp_gbl_route() {
                     return Task::none();
                 }
                 // Switching action resets Rescue-specific state so a stale
@@ -107,10 +107,13 @@ impl App {
                 let Some(action) = self.sysupdate.action else {
                     return Task::none();
                 };
-                // Final guard: never start Boot Recovery on TB323FU even if a
+                // Final guard: never start Boot Recovery on an efisp/GBL-route model even if a
                 // stale Rescue selection slipped past the disabled card.
-                if action == SysUpdateAction::Rescue && self.is_tb323fu() {
-                    self.error_msg = Some(tr_args!("model_unsupported", model = "TB323FU"));
+                if action == SysUpdateAction::Rescue && self.uses_efisp_gbl_route() {
+                    self.error_msg = Some(tr_args!(
+                        "model_unsupported",
+                        model = self.device_model.as_str()
+                    ));
                     return Task::none();
                 }
                 // Rescue captures folder + region into the blocking task.
@@ -168,5 +171,28 @@ impl App {
                 Task::none()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tb324zc_blocks_boot_recovery_dispatch_and_start_with_its_own_model_name() {
+        let mut app = App {
+            device_model: "TB324ZC".into(),
+            ..App::default()
+        };
+        let _ = app.update_sys(SysMsg::SysAction(SysUpdateAction::Rescue));
+        assert_eq!(app.sysupdate.action, None);
+
+        app.sysupdate.action = Some(SysUpdateAction::Rescue);
+        let _ = app.update_sys(SysMsg::SysExecStart);
+        assert!(
+            app.error_msg
+                .as_deref()
+                .is_some_and(|msg| msg.contains("TB324ZC"))
+        );
     }
 }

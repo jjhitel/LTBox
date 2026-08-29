@@ -99,10 +99,10 @@ impl App {
         let side = self.wizard_square_side();
         let off_icon = lucide_primary(icon::tile_update_off(), self.wizard_square_icon());
         let on_icon = lucide_primary(icon::tile_update_on(), self.wizard_square_icon());
-        // TB323FU's vendor_boot/vbmeta sit on a different UFS LUN than the
+        // Efisp/GBL-route models' vendor_boot/vbmeta sit on a different UFS LUN than the
         // Boot Recovery worker targets, so the flow can't run on it — disable
         // the card (alongside the non-Qualcomm platform gate).
-        let rescue_disabled = self.platform_supported == Some(false) || self.is_tb323fu();
+        let rescue_disabled = self.platform_supported == Some(false) || self.uses_efisp_gbl_route();
         // Gray the icon when disabled, matching the other wizards' disabled
         // option cards (region ROW / OtherRegion).
         let rescue_icon = if rescue_disabled {
@@ -133,8 +133,8 @@ impl App {
             // Disabled rescue card — no on_press, grayed out; still mirrors
             // the sub-row layout of the other tiles with the Qualcomm-required
             // hint so the label sits at the same height.
-            let rescue_req = if self.is_tb323fu() {
-                tr_args!("model_unsupported", model = "TB323FU")
+            let rescue_req = if self.uses_efisp_gbl_route() {
+                tr_args!("model_unsupported", model = self.device_model.as_str())
             } else {
                 self.t("sysupdate_rescue_req").to_string()
             };
