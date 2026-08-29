@@ -3,6 +3,7 @@
 use crate::*;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length, Theme};
+use ltbox_core::tr_args;
 
 impl App {
     pub(crate) fn view_unroot_wizard(&self) -> Element<'_, Message> {
@@ -26,6 +27,7 @@ impl App {
                 self.t("btn_next").to_string()
             };
             let can = self.unroot.can_next()
+                && !self.is_xiaoxin_pro13()
                 && !(self.busy && is_start)
                 && (!is_start || self.device_reachable());
             wizard_nav_generic(
@@ -82,36 +84,52 @@ impl App {
     pub(crate) fn unroot_type_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let side = self.wizard_square_side();
+        let xiaoxin_pro13 = self.is_xiaoxin_pro13();
+        let unsupported = tr_args!("model_unsupported", model = "TB376FC / TB390FU");
         // Unroot reuses the Lucide puzzle/layers glyphs that the root
         // wizard uses for the LKM/GKI pick — context (title + label)
         // disambiguates.
         let lkm_icon = lucide_primary(icon::root_lkm(), self.wizard_square_icon());
         let gki_icon = lucide_primary(icon::root_gki(), self.wizard_square_icon());
-        let col = column![
-            row![
-                icon_option_card_sub_square_sized(
-                    lkm_icon,
-                    self.t(UnrootType::MagiskLkm.label_key()),
-                    self.t(UnrootType::MagiskLkm.desc_key()),
-                    self.unroot.unroot_type == Some(UnrootType::MagiskLkm),
-                    Message::Unroot(UnrootMsg::SetUnrootType(UnrootType::MagiskLkm)),
-                    side,
-                ),
-                icon_option_card_sub_square_sized(
-                    gki_icon,
-                    self.t(UnrootType::APatchGki.label_key()),
-                    self.t(UnrootType::APatchGki.desc_key()),
-                    self.unroot.unroot_type == Some(UnrootType::APatchGki),
-                    Message::Unroot(UnrootMsg::SetUnrootType(UnrootType::APatchGki)),
-                    side,
-                ),
-            ]
-            .spacing(d.space(12.0)),
-        ]
-        .spacing(d.space(14.0))
-        .padding(d.space(28.0))
-        .width(Length::Fill)
-        .align_x(iced::Alignment::Center);
+        let lkm_card = if xiaoxin_pro13 {
+            icon_option_card_sub_square_disabled_sized(
+                lucide_disabled(icon::root_lkm(), self.wizard_square_icon()),
+                self.t(UnrootType::MagiskLkm.label_key()),
+                &unsupported,
+                side,
+            )
+        } else {
+            icon_option_card_sub_square_sized(
+                lkm_icon,
+                self.t(UnrootType::MagiskLkm.label_key()),
+                self.t(UnrootType::MagiskLkm.desc_key()),
+                self.unroot.unroot_type == Some(UnrootType::MagiskLkm),
+                Message::Unroot(UnrootMsg::SetUnrootType(UnrootType::MagiskLkm)),
+                side,
+            )
+        };
+        let gki_card = if xiaoxin_pro13 {
+            icon_option_card_sub_square_disabled_sized(
+                lucide_disabled(icon::root_gki(), self.wizard_square_icon()),
+                self.t(UnrootType::APatchGki.label_key()),
+                &unsupported,
+                side,
+            )
+        } else {
+            icon_option_card_sub_square_sized(
+                gki_icon,
+                self.t(UnrootType::APatchGki.label_key()),
+                self.t(UnrootType::APatchGki.desc_key()),
+                self.unroot.unroot_type == Some(UnrootType::APatchGki),
+                Message::Unroot(UnrootMsg::SetUnrootType(UnrootType::APatchGki)),
+                side,
+            )
+        };
+        let col = column![row![lkm_card, gki_card].spacing(d.space(12.0)),]
+            .spacing(d.space(14.0))
+            .padding(d.space(28.0))
+            .width(Length::Fill)
+            .align_x(iced::Alignment::Center);
         centered_step(col, self.square_step_max_width(2))
     }
 

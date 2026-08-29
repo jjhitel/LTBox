@@ -1032,6 +1032,12 @@ static TB323FU_HANDLE: std::sync::LazyLock<iced::widget::image::Handle> =
             include_bytes!("../assets/devices/tb323fu.png").as_slice(),
         )
     });
+static TB376FC_HANDLE: std::sync::LazyLock<iced::widget::image::Handle> =
+    std::sync::LazyLock::new(|| {
+        iced::widget::image::Handle::from_bytes(
+            include_bytes!("../assets/devices/tb376fc.png").as_slice(),
+        )
+    });
 static TB520FU_HANDLE: std::sync::LazyLock<iced::widget::image::Handle> =
     std::sync::LazyLock::new(|| {
         iced::widget::image::Handle::from_bytes(
@@ -1064,6 +1070,7 @@ pub(crate) fn device_portrait(model: &str) -> DevicePortrait {
         "TB321FU" => DevicePortrait::Png(TB321FU_HANDLE.clone()),
         "TB322FC" => DevicePortrait::Png(TB322FC_HANDLE.clone()),
         "TB323FU" => DevicePortrait::Png(TB323FU_HANDLE.clone()),
+        "TB376FC" | "TB390FU" => DevicePortrait::Png(TB376FC_HANDLE.clone()),
         "TB520FU" => DevicePortrait::Png(TB520FU_HANDLE.clone()),
         "TB710FU" => DevicePortrait::Png(TB710FU_HANDLE.clone()),
         _ => DevicePortrait::Svg(GENERIC_TABLET_SVG_HANDLE.clone()),
@@ -1412,13 +1419,20 @@ pub(crate) fn wizard_nav_cancel_generic_with_disabled_next_tooltip<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        App, Density, IMAGE_GROWTH, MaterialProgressSize, WIZARD_CARD_GROW_FROM_CONTENT,
-        WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE,
-        WIZARD_CARD_SQUARE_MAX, density_for_content_width, extended_fab_primary_style,
-        fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
-        material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
+        App, Density, DevicePortrait, IMAGE_GROWTH, MaterialProgressSize,
+        WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON_MAX,
+        WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, density_for_content_width, device_portrait,
+        extended_fab_primary_style, fab_elevation_level, fab_primary_style, fab_surface_style,
+        material_progress_arc, material_progress_gap_angle, material_progress_metrics,
+        wizard_nav_layout,
     };
     use iced::widget::button;
+
+    #[test]
+    fn xiaoxin_pro13_models_use_the_shared_png_portrait() {
+        assert!(matches!(device_portrait("TB376FC"), DevicePortrait::Png(_)));
+        assert!(matches!(device_portrait("TB390FU"), DevicePortrait::Png(_)));
+    }
 
     #[test]
     fn wizard_square_contents_track_card_growth_endpoints() {

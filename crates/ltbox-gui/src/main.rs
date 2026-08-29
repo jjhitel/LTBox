@@ -3140,6 +3140,10 @@ impl App {
         self.device_class() == DeviceClass::TB323FU
     }
 
+    fn is_xiaoxin_pro13(&self) -> bool {
+        ltbox_core::model::is_xiaoxin_pro13_model(&self.device_model)
+    }
+
     /// True when `path`'s extension is the EDL loader form the connected device
     /// needs: TB323FU (Y700 Gen 5) loads the multi-image Sahara manifest
     /// (`.xml` / `.x`); every other model loads a `.melf` single-blob programmer.

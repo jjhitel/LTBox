@@ -11,7 +11,7 @@ impl App {
                 // TB323FU can't run Boot Recovery (vendor_boot/vbmeta LUN
                 // mismatch). The card is disabled, but drop a stale dispatch
                 // here too so the action can never latch.
-                if a == SysUpdateAction::Rescue && self.is_tb323fu() {
+                if a == SysUpdateAction::Rescue && (self.is_tb323fu() || self.is_xiaoxin_pro13()) {
                     return Task::none();
                 }
                 // Switching action resets Rescue-specific state so a stale
@@ -109,8 +109,17 @@ impl App {
                 };
                 // Final guard: never start Boot Recovery on TB323FU even if a
                 // stale Rescue selection slipped past the disabled card.
-                if action == SysUpdateAction::Rescue && self.is_tb323fu() {
-                    self.error_msg = Some(tr_args!("model_unsupported", model = "TB323FU"));
+                if action == SysUpdateAction::Rescue
+                    && (self.is_tb323fu() || self.is_xiaoxin_pro13())
+                {
+                    self.error_msg = Some(tr_args!(
+                        "model_unsupported",
+                        model = if self.is_tb323fu() {
+                            "TB323FU"
+                        } else {
+                            "TB376FC / TB390FU"
+                        }
+                    ));
                     return Task::none();
                 }
                 // Rescue captures folder + region into the blocking task.
