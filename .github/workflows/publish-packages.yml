@@ -90,9 +90,6 @@ jobs:
           docker run --rm \
             -e NFPM_ARCH="${NFPM_ARCH}" \
             -e NFPM_VERSION="${version}" \
-            -e NFPM_BINARY=packaging-stage/ltbox \
-            -e NFPM_DESKTOP=packaging-stage/io.github.miner7222.LTBox.desktop \
-            -e NFPM_MARKER=packaging-stage/ltbox.install-source \
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
             "ghcr.io/goreleaser/nfpm:v${{ env.NFPM_TOOL_VERSION }}" package \
@@ -104,9 +101,6 @@ jobs:
           docker run --rm \
             -e NFPM_ARCH="${NFPM_ARCH}" \
             -e NFPM_VERSION="${version}" \
-            -e NFPM_BINARY=packaging-stage/ltbox \
-            -e NFPM_DESKTOP=packaging-stage/io.github.miner7222.LTBox.desktop \
-            -e NFPM_MARKER=packaging-stage/ltbox.install-source \
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
             "ghcr.io/goreleaser/nfpm:v${{ env.NFPM_TOOL_VERSION }}" package \
