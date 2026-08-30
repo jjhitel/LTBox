@@ -309,7 +309,7 @@ jobs:
               echo "::warning::Skipping ${repository}: could not stage the rendered repository."
               return 0
             fi
-            if ! git -C "${worktree}" commit -m "chore: publish LTBox repository ${VERSION}"; then
+            if ! git -C "${worktree}" commit -m "chore: Publish LTBox repository ${VERSION}"; then
               echo "::warning::Skipping ${repository}: could not commit the rendered repository."
               return 0
             fi
@@ -413,7 +413,7 @@ jobs:
               echo "::notice::${repository}/${destination_file} already matches ${VERSION}."
               return 0
             fi
-            if ! git -C "${worktree}" commit -m "chore: update LTBox to ${VERSION}"; then
+            if ! git -C "${worktree}" commit -m "chore: Update LTBox to ${VERSION}"; then
               echo "::warning::Skipping ${repository}: could not commit the rendered manifest."
               return 0
             fi
