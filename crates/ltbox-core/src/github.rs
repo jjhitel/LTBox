@@ -66,12 +66,14 @@ pub struct WorkflowRun {
 
 #[derive(Debug, Deserialize)]
 struct ArtifactsResponse {
-    artifacts: Vec<ArtifactInfo>,
+    artifacts: Vec<WorkflowArtifact>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ArtifactInfo {
-    name: String,
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkflowArtifact {
+    pub name: String,
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 impl GitHubClient {
@@ -230,9 +232,18 @@ impl GitHubClient {
     }
 
     pub fn workflow_artifacts(&self, run_id: u64) -> Result<Vec<String>> {
+        Ok(self
+            .workflow_artifact_details(run_id)?
+            .into_iter()
+            .map(|a| a.name)
+            .collect())
+    }
+
+    /// Workflow artifacts with the optional digest reported by GitHub.
+    pub fn workflow_artifact_details(&self, run_id: u64) -> Result<Vec<WorkflowArtifact>> {
         let resp: ArtifactsResponse =
             self.get_json(&format!("/actions/runs/{run_id}/artifacts"))?;
-        Ok(resp.artifacts.into_iter().map(|a| a.name).collect())
+        Ok(resp.artifacts)
     }
 
     pub fn workflow_run_matches(

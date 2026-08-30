@@ -1420,11 +1420,11 @@ pub(crate) fn wizard_nav_cancel_generic_with_disabled_next_tooltip<'a>(
 mod tests {
     use super::{
         App, Density, DevicePortrait, IMAGE_GROWTH, MaterialProgressSize,
-        WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON_MAX,
-        WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, density_for_content_width, device_portrait,
-        extended_fab_primary_style, fab_elevation_level, fab_primary_style, fab_surface_style,
-        material_progress_arc, material_progress_gap_angle, material_progress_metrics,
-        wizard_nav_layout,
+        WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON,
+        WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX,
+        density_for_content_width, device_portrait, extended_fab_primary_style,
+        fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
+        material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
     };
     use iced::widget::button;
 
@@ -1436,10 +1436,13 @@ mod tests {
 
     #[test]
     fn wizard_square_contents_track_card_growth_endpoints() {
-        let app = App::default();
-
-        assert_eq!(app.wizard_square_side(), WIZARD_CARD_SQUARE);
-        assert_eq!(app.wizard_square_icon(), 57.6);
+        // Pin both endpoints explicitly. `App::default()` restores the
+        // machine's persisted window size, so reading the minimum off it
+        // passes or fails depending on how the last user left the window.
+        let mut minimum = App::default();
+        minimum.window_size.0 = WIZARD_CARD_GROW_FROM_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
+        assert_eq!(minimum.wizard_square_side(), WIZARD_CARD_SQUARE);
+        assert_eq!(minimum.wizard_square_icon(), WIZARD_CARD_ICON);
 
         let mut maximized = App::default();
         maximized.window_size.0 = WIZARD_CARD_GROW_TO_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
