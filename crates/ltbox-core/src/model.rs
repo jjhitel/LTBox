@@ -1,15 +1,15 @@
 //! Device-model identity shared across LTBox crates.
 
-/// Model token reported by TB320FC firmware.
+/// Model token reported by Legion Tab Y700 (2023) firmware.
 pub const TB320FC_MODEL: &str = "TB320FC";
 
 /// Model token reported by LAVIE Tab 9QHD1 firmware.
 pub const LAVIE_TAB_9QHD1_MODEL: &str = "LAVIETab9QHD1";
 
-/// Model token reported by Xiaoxin Pro 13 PRC firmware.
+/// Model token reported by Xiaoxin Pro 13 firmware.
 pub const TB376FC_MODEL: &str = "TB376FC";
 
-/// Model token reported by Xiaoxin Pro 13 ROW firmware.
+/// Model token reported by Idea Tab Pro Gen 2 firmware.
 pub const TB390FU_MODEL: &str = "TB390FU";
 
 /// Whether `model` follows the TB320FC hardware-specific paths.
@@ -20,7 +20,8 @@ pub fn is_tb320fc_model(model: &str) -> bool {
     model.eq_ignore_ascii_case(TB320FC_MODEL) || model.eq_ignore_ascii_case(LAVIE_TAB_9QHD1_MODEL)
 }
 
-/// Whether `model` is one of the hardware-equivalent Xiaoxin Pro 13 SKUs.
+/// Whether `model` is one of the hardware-equivalent Xiaoxin Pro 13 /
+/// Idea Tab Pro Gen 2 SKUs.
 pub fn is_xiaoxin_pro13_model(model: &str) -> bool {
     model.eq_ignore_ascii_case(TB376FC_MODEL) || model.eq_ignore_ascii_case(TB390FU_MODEL)
 }

@@ -546,7 +546,8 @@ pub fn patch_country_code(
     Ok(true)
 }
 
-/// Replace the Xiaoxin Pro 13 `proinfo` channel field from `consumer` to
+/// Replace the Xiaoxin Pro 13 / Idea Tab Pro Gen 2 `proinfo` channel field
+/// from `consumer` to
 /// `commercial`. The shorter source token must be NUL-delimited and have two
 /// further NUL bytes after its terminator, leaving a NUL terminator after the
 /// longer replacement. An already-`commercial` image is a successful no-op.
