@@ -1058,6 +1058,8 @@
   "rootmode_gki_desc": "범용 커널 이미지",
   "rootmode_lkm": "LKM",
   "rootmode_lkm_desc": "로드 가능한 커널 모듈",
+  "settings_backup_folder": "백업 폴더",
+  "settings_backup_folder_open": "폴더 열기",
   "settings_cleanup": "임시 파일",
   "settings_cleanup_busy": "정리 중…",
   "settings_cleanup_button": "정리",

@@ -1058,6 +1058,8 @@
   "rootmode_gki_desc": "Generic Kernel Image",
   "rootmode_lkm": "LKM",
   "rootmode_lkm_desc": "Loadable Kernel Module",
+  "settings_backup_folder": "Backup folder",
+  "settings_backup_folder_open": "Open folder",
   "settings_cleanup": "Temporary files",
   "settings_cleanup_busy": "Cleaning…",
   "settings_cleanup_button": "Clean up",

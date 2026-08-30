@@ -441,6 +441,8 @@ pub(crate) enum SettingsMsg {
     SettingsPickDefaultLoader,
     SettingsDefaultLoaderChosen(Option<String>),
     SettingsClearDefaultLoader,
+    /// Create and open the persistent device-backup directory.
+    OpenBackupFolder,
     /// Remove leftover temp files (`work_*` scratch + `output_*` auto-output).
     CleanupTempFiles,
     /// Cleanup sweep finished; triggers a rescan.

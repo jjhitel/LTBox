@@ -85,6 +85,15 @@ impl App {
                 self.persist_settings();
                 Task::none()
             }
+            SettingsMsg::OpenBackupFolder => {
+                let path = ltbox_core::app_paths::backup_root();
+                if let Err(error) = std::fs::create_dir_all(&path) {
+                    tracing::warn!("failed to create backup folder {}: {error}", path.display());
+                } else if let Err(error) = open::that_detached(&path) {
+                    tracing::warn!("failed to open backup folder {}: {error}", path.display());
+                }
+                Task::none()
+            }
             SettingsMsg::CleanupTempFiles => {
                 // Skip while a flash/root op is live — it owns the very
                 // `work_*` dirs we'd be deleting. Also ignore a double-press.

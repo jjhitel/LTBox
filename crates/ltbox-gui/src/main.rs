@@ -276,6 +276,14 @@ fn main() -> iced::Result {
     // minute of events on a crash.
     let _log_guard = init_tracing();
 
+    // Package-manager upgrades replace/prune executable directories. Move any
+    // v3 executable-adjacent data before the first worker can create the new
+    // `%LOCALAPPDATA%\ltbox` destinations. Individual failures are non-fatal.
+    #[cfg(windows)]
+    for error in ltbox_core::app_paths::migrate_legacy_windows_data() {
+        tracing::warn!("{error}");
+    }
+
     // The error-mode guard above turns a corrupt system libusbK.dll into a
     // silent NULL, so name it here instead: this is the whole diagnosis for a
     // report that otherwise arrives as a screenshot of a Windows dialog.
