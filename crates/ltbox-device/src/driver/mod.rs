@@ -11,7 +11,7 @@
 //! | Host    | Module                  | Strategy |
 //! |---------|-------------------------|----------|
 //! | Windows | `driver::windows`       | Mode-aware `pnputil /enum-drivers` + DriverStore probe (`qcserlib.inf` for userspace / `qcwdfser.inf` for kernel); install by downloading the selected signed per-arch Qualcomm `.exe` and launching it via UAC (`Start-Process -Verb RunAs`). The installer self-elevates, so LTBox itself does not need to run as Administrator. |
-//! | Linux   | `driver::linux`         | Userspace mode detects the LTBox udev rules at `/etc/udev/rules.d/51-ltbox-qcom.rules` and installs them through `pkexec … --install-udev`. Kernel mode probes the `qud` Debian package and installs the latest `qud_*_all.zip` release through `pkexec dpkg -i`. |
+//! | Linux   | `driver::linux`         | Userspace mode detects the LTBox udev rules at `/etc/udev/rules.d/51-ltbox-qcom.rules` and installs them through `pkexec … --install-udev`. Kernel mode probes the `qud` Debian package and installs the latest `qud_*_all.zip` release through elevated `apt-get install`. |
 //! | macOS   | `driver::unsupported`   | No-op `NotWindows` — macOS is forced to userspace mode because Qualcomm publishes no macOS kernel driver and libusb claims the device directly. |
 //!
 //! The shared `DriverStatus` / `DriverError` / `Result` types live here so

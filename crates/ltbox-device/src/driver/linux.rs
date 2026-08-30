@@ -6,7 +6,7 @@
 //! Userspace mode has no driver *download*: the rules ship embedded in the
 //! binary and are written by the privileged `ltbox --install-udev` entry
 //! point. Kernel mode uses Qualcomm's `qcom-usb-kernel-drivers` Debian package
-//! (`qud`) when `dpkg` is available.
+//! (`qud`) when the Debian package tools are available.
 //!
 //! Deferred until a Lenovo Qualcomm target is available on Linux: the
 //! `/sys/bus/usb/devices` walk for `05c6:9008` + serial-node permission test
@@ -37,9 +37,19 @@ const KERNEL_DEB_PACKAGE: &str = "qud";
 const MAX_KERNEL_DRIVER_ZIP_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_KERNEL_DEB_BYTES: u64 = 256 * 1024 * 1024;
 
-/// System directories trusted for elevated helpers (`pkexec`, elevated `dpkg`).
+/// System directories trusted for elevated helpers (`pkexec`, elevated `apt-get`).
 /// Never search arbitrary `PATH` for tools that will run with root privileges.
 const TRUSTED_BIN_DIRS: &[&str] = &["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+const MAX_INSTALLER_LOG_LINES: usize = 200;
+const MAX_INSTALLER_LOG_CHARS: usize = 16 * 1024;
+
+#[derive(Debug, PartialEq, Eq)]
+enum InstallerExit {
+    Success,
+    Cancelled,
+    Failed(i32),
+    Signaled,
+}
 
 #[derive(Debug, serde::Deserialize)]
 struct GithubRelease {
@@ -99,7 +109,7 @@ fn read_optional_rules(path: &str) -> std::io::Result<Option<String>> {
 }
 
 fn check_kernel_driver() -> DriverStatus {
-    if which_program("dpkg-query").is_none() {
+    if !kernel_package_tools_available() {
         return DriverStatus::KernelDriverUnsupported;
     }
     if installed_kernel_driver_version().is_some() {
@@ -163,23 +173,12 @@ fn install_udev_rules(log: &mut Vec<String>) -> Result<()> {
     })?;
 
     log.push(format!("[driver] pkexec {} --install-udev", exe.display()));
-    let status = std::process::Command::new(pkexec)
+    let output = std::process::Command::new(pkexec)
         .arg(&exe)
         .arg("--install-udev")
-        .status()
+        .output()
         .map_err(|e| DriverError::Io(std::io::Error::new(e.kind(), format!("pkexec: {e}"))))?;
-
-    match status.code() {
-        Some(0) => {}
-        // polkit authorization denied / dialog dismissed → pkexec exits 126/127.
-        Some(126 | 127) => return Err(DriverError::InstallCancelled),
-        Some(code) => return Err(DriverError::InstallerFailed { exit_code: code }),
-        None => {
-            return Err(DriverError::Io(std::io::Error::other(
-                "pkexec terminated by a signal",
-            )));
-        }
-    }
+    handle_installer_result(&output, log)?;
 
     // Confirm the write actually landed before reporting success.
     if check_required_drivers() != DriverStatus::Present {
@@ -198,12 +197,10 @@ fn install_kernel_driver(log: &mut Vec<String>) -> Result<()> {
             "pkexec not found — install polkit or install the Qualcomm kernel driver package manually",
         )
     })?;
-    // Elevated target: never honor an attacker-controlled `dpkg` from PATH.
-    let dpkg = resolve_trusted_executable("dpkg").map_err(|e| {
-        map_not_found(
-            e,
-            "dpkg not found — automatic Linux kernel-driver install is only supported on Debian-style systems",
-        )
+    // Elevated target: never honor an attacker-controlled `apt-get` from PATH.
+    let apt_get = resolve_trusted_executable("apt-get").map_err(|e| {
+        let hint = ltbox_core::i18n::tr("driver_kernel_unsupported_desc");
+        map_not_found(e, &hint)
     })?;
 
     live!(
@@ -220,7 +217,7 @@ fn install_kernel_driver(log: &mut Vec<String>) -> Result<()> {
 
     // Private, exclusive temp dir under the process temp root. A predictable
     // `temp_dir()/ltbox_*_{pid}` path is a classic local symlink / content-
-    // swap race before the elevated `pkexec dpkg -i`; create_dir with a
+    // swap race before the elevated `pkexec apt-get install`; create_dir with a
     // unique name + owner-only mode rejects pre-created paths and keeps the
     // downloaded package private until install completes.
     let tmp_dir = PrivateTempDir::create("ltbox_qcom_kernel_drv")?;
@@ -242,22 +239,14 @@ fn install_kernel_driver(log: &mut Vec<String>) -> Result<()> {
             "[Driver] {}",
             ltbox_core::i18n::tr("live_driver_running_package_installer")
         );
-        let status = std::process::Command::new(pkexec)
-            .arg(dpkg)
-            .arg("-i")
+        let output = std::process::Command::new(pkexec)
+            .arg(apt_get)
+            .arg("install")
+            .arg("--assume-yes")
             .arg(&deb_path)
-            .status()
+            .output()
             .map_err(|e| DriverError::Io(std::io::Error::new(e.kind(), format!("pkexec: {e}"))))?;
-        match status.code() {
-            Some(0) => {}
-            Some(126 | 127) => return Err(DriverError::InstallCancelled),
-            Some(code) => return Err(DriverError::InstallerFailed { exit_code: code }),
-            None => {
-                return Err(DriverError::Io(std::io::Error::other(
-                    "pkexec terminated by a signal",
-                )));
-            }
-        }
+        handle_installer_result(&output, log)?;
         if check_kernel_driver() != DriverStatus::Present {
             return Err(DriverError::Io(std::io::Error::other(
                 "kernel driver package still not installed after installer finished",
@@ -568,11 +557,78 @@ fn cleanup(path: &std::path::Path) {
     }
 }
 
-/// Whether `dpkg-query` is on `PATH` — the signal that this Linux host is
-/// Debian-style and can use the Qualcomm kernel driver. Mirrors the gate in
-/// [`check_kernel_driver`] and backs [`super::kernel_mode_supported`].
+/// Whether the Debian query tool and trusted package manager are available.
+/// Mirrors the gate in [`check_kernel_driver`] and backs
+/// [`super::kernel_mode_supported`].
 pub(super) fn dpkg_available() -> bool {
-    which_program("dpkg-query").is_some()
+    kernel_package_tools_available()
+}
+
+fn kernel_package_tools_available() -> bool {
+    which_program("dpkg-query").is_some() && resolve_trusted_executable("apt-get").is_ok()
+}
+
+fn classify_installer_exit(code: Option<i32>) -> InstallerExit {
+    match code {
+        Some(0) => InstallerExit::Success,
+        // polkit authorization denied / dialog dismissed → pkexec exits 126/127.
+        Some(126 | 127) => InstallerExit::Cancelled,
+        Some(code) => InstallerExit::Failed(code),
+        None => InstallerExit::Signaled,
+    }
+}
+
+fn handle_installer_result(output: &std::process::Output, log: &mut Vec<String>) -> Result<()> {
+    match classify_installer_exit(output.status.code()) {
+        InstallerExit::Success => Ok(()),
+        exit => {
+            for line in capped_installer_output(&output.stdout, &output.stderr) {
+                live!(log, "[Driver] {}", line);
+            }
+            match exit {
+                InstallerExit::Cancelled => Err(DriverError::InstallCancelled),
+                InstallerExit::Failed(exit_code) => Err(DriverError::InstallerFailed { exit_code }),
+                InstallerExit::Signaled => Err(DriverError::Io(std::io::Error::other(
+                    "pkexec terminated by a signal",
+                ))),
+                InstallerExit::Success => unreachable!(),
+            }
+        }
+    }
+}
+
+fn capped_installer_output(stdout: &[u8], stderr: &[u8]) -> Vec<String> {
+    let mut lines = [stdout, stderr]
+        .into_iter()
+        .flat_map(|stream| {
+            String::from_utf8_lossy(stream)
+                .lines()
+                .map(str::trim_end)
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    // Installer failures are normally explained at the end of stderr. Keep
+    // the tail so verbose package progress cannot displace the useful error.
+    if lines.len() > MAX_INSTALLER_LOG_LINES {
+        lines.drain(..lines.len() - MAX_INSTALLER_LOG_LINES);
+    }
+
+    let mut remaining_chars = MAX_INSTALLER_LOG_CHARS;
+    let mut capped = Vec::new();
+    for line in lines.into_iter().rev() {
+        if remaining_chars == 0 {
+            break;
+        }
+        let char_count = line.chars().count();
+        let keep = char_count.min(remaining_chars);
+        capped.push(line.chars().skip(char_count - keep).collect::<String>());
+        remaining_chars -= keep;
+    }
+    capped.reverse();
+    capped
 }
 
 fn map_not_found(err: DriverError, hint: &str) -> DriverError {
@@ -586,7 +642,7 @@ fn map_not_found(err: DriverError, hint: &str) -> DriverError {
 
 /// Resolve `name` only from [`TRUSTED_BIN_DIRS`], then canonicalize and
 /// validate it as a safe elevated helper. Used for `pkexec` and for the
-/// elevated `dpkg` target passed to `pkexec` — never for plain availability
+/// elevated `apt-get` target passed to `pkexec` — never for plain availability
 /// probes like `dpkg-query`.
 fn resolve_trusted_executable(name: &str) -> Result<PathBuf> {
     for dir in TRUSTED_BIN_DIRS {
@@ -868,5 +924,44 @@ mod tests {
         let mapped = map_not_found(denied, "friendly hint");
         assert!(mapped.to_string().contains("denied"));
         assert!(!mapped.to_string().contains("friendly hint"));
+    }
+
+    #[test]
+    fn installer_output_trims_trailing_whitespace_and_drops_empty_lines() {
+        let lines = capped_installer_output(
+            b"  stdout detail  \n\n\t\n",
+            b"stderr detail\t \nlast detail\r\n",
+        );
+        assert_eq!(
+            lines,
+            vec!["  stdout detail", "stderr detail", "last detail"]
+        );
+    }
+
+    #[test]
+    fn installer_output_caps_lines_and_characters() {
+        let many_lines = (0..MAX_INSTALLER_LOG_LINES + 10)
+            .map(|line| format!("line {line}\n"))
+            .collect::<String>();
+        let lines = capped_installer_output(many_lines.as_bytes(), b"");
+        assert_eq!(lines.len(), MAX_INSTALLER_LOG_LINES);
+        assert_eq!(lines[0], "line 10");
+
+        let long_line = "x".repeat(MAX_INSTALLER_LOG_CHARS + 10);
+        let lines = capped_installer_output(long_line.as_bytes(), b"stderr detail");
+        assert_eq!(lines.last().map(String::as_str), Some("stderr detail"));
+        assert_eq!(
+            lines.iter().map(|line| line.chars().count()).sum::<usize>(),
+            MAX_INSTALLER_LOG_CHARS
+        );
+    }
+
+    #[test]
+    fn installer_exit_codes_are_classified() {
+        assert_eq!(classify_installer_exit(Some(0)), InstallerExit::Success);
+        assert_eq!(classify_installer_exit(Some(126)), InstallerExit::Cancelled);
+        assert_eq!(classify_installer_exit(Some(127)), InstallerExit::Cancelled);
+        assert_eq!(classify_installer_exit(Some(1)), InstallerExit::Failed(1));
+        assert_eq!(classify_installer_exit(None), InstallerExit::Signaled);
     }
 }
