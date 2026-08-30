@@ -11,7 +11,9 @@ impl App {
                 // Efisp/GBL-route models can't run Boot Recovery (vendor_boot/vbmeta LUN
                 // mismatch). The card is disabled, but drop a stale dispatch
                 // here too so the action can never latch.
-                if a == SysUpdateAction::Rescue && self.uses_efisp_gbl_route() {
+                if a == SysUpdateAction::Rescue
+                    && (self.uses_efisp_gbl_route() || self.is_xiaoxin_pro13())
+                {
                     return Task::none();
                 }
                 // Switching action resets Rescue-specific state so a stale
@@ -109,10 +111,16 @@ impl App {
                 };
                 // Final guard: never start Boot Recovery on an efisp/GBL-route model even if a
                 // stale Rescue selection slipped past the disabled card.
-                if action == SysUpdateAction::Rescue && self.uses_efisp_gbl_route() {
+                if action == SysUpdateAction::Rescue
+                    && (self.uses_efisp_gbl_route() || self.is_xiaoxin_pro13())
+                {
                     self.error_msg = Some(tr_args!(
                         "model_unsupported",
-                        model = self.device_model.as_str()
+                        model = if self.uses_efisp_gbl_route() {
+                            self.device_model.as_str()
+                        } else {
+                            "TB376FC / TB390FU"
+                        }
                     ));
                     return Task::none();
                 }

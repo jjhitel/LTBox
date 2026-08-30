@@ -7,6 +7,9 @@ impl App {
     pub(crate) fn update_unroot(&mut self, msg: UnrootMsg) -> Task<Message> {
         match msg {
             UnrootMsg::SetUnrootType(t) => {
+                if self.is_xiaoxin_pro13() {
+                    return Task::none();
+                }
                 self.unroot.unroot_type = Some(t);
                 Task::none()
             }
@@ -53,6 +56,11 @@ impl App {
                 Task::none()
             }
             UnrootMsg::UnrootExecStart => {
+                if self.is_xiaoxin_pro13() {
+                    self.error_msg =
+                        Some(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+                    return Task::none();
+                }
                 let Some(unroot_type) = self.unroot.unroot_type else {
                     return Task::none();
                 };
@@ -60,6 +68,7 @@ impl App {
                     return Task::none();
                 };
                 let conn = self.connection;
+                let device_model = self.device_model.clone();
                 // Loader is decoupled from the backup folder — `folder`
                 // holds boot.img + vbmeta.img, the loader can live
                 // anywhere (Settings default, or whatever the user
@@ -86,6 +95,7 @@ impl App {
                                     folder,
                                     unroot_type,
                                     loader_override,
+                                    device_model,
                                     conn,
                                     ll,
                                     phases,

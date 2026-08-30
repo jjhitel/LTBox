@@ -30,6 +30,9 @@ impl App {
 
         let nav: Element<'_, Message> = if konabess_nav_visible(self.konabess.step) {
             let is_confirm = self.konabess.step == 2;
+            let unsupported = self
+                .is_xiaoxin_pro13()
+                .then(|| tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
             let label = if is_confirm {
                 self.t("btn_start")
             } else {
@@ -38,8 +41,8 @@ impl App {
             if self.konabess.step == 1 {
                 wizard_nav_cancel_generic_with_disabled_next_tooltip(
                     label,
-                    self.konabess.can_next() && !self.busy,
-                    None,
+                    self.konabess.can_next() && !self.busy && !self.is_xiaoxin_pro13(),
+                    unsupported,
                     self.t("btn_cancel"),
                     Message::KonaBess(KonaBessMsg::KonaBessBack),
                     Message::KonaBess(KonaBessMsg::KonaBessNext),
@@ -48,8 +51,8 @@ impl App {
                 wizard_nav_generic_with_disabled_next_tooltip(
                     self.konabess.step > 0,
                     label,
-                    self.konabess.can_next() && !self.busy,
-                    None,
+                    self.konabess.can_next() && !self.busy && !self.is_xiaoxin_pro13(),
+                    unsupported,
                     self.t("btn_back"),
                     Message::KonaBess(KonaBessMsg::KonaBessBack),
                     Message::KonaBess(KonaBessMsg::KonaBessNext),

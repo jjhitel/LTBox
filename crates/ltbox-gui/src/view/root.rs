@@ -58,6 +58,7 @@ impl App {
                 self.t("btn_next").to_string()
             };
             let can = self.root.can_next()
+                && !self.is_xiaoxin_pro13()
                 && !(self.busy && is_start)
                 && (!is_start || self.device_reachable());
             wizard_nav(self.root.step > 0, &label_owned, can, self.t("btn_back"))
@@ -472,6 +473,8 @@ impl App {
 
     pub(crate) fn root_family_step(&self) -> Element<'_, Message> {
         let d = self.density();
+        let xiaoxin_pro13 = self.is_xiaoxin_pro13();
+        let unsupported = tr_args!("model_unsupported", model = "TB376FC / TB390FU");
         let families = [
             Family::Magisk,
             Family::KernelSU,
@@ -484,9 +487,13 @@ impl App {
             let card = Self::root_list_option_card(
                 f.icon_sized(icon_size),
                 self.t(f.label_key()),
-                self.t(f.desc_key()),
+                if xiaoxin_pro13 {
+                    &unsupported
+                } else {
+                    self.t(f.desc_key())
+                },
                 self.root.family == Some(f),
-                Some(Message::Root(RootMsg::RootFamily(f))),
+                (!xiaoxin_pro13).then_some(Message::Root(RootMsg::RootFamily(f))),
                 metrics,
             );
             if f == Family::KernelSU {

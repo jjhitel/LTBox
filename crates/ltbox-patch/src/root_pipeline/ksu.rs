@@ -8,9 +8,10 @@
 use std::path::{Path, PathBuf};
 
 use fs_err as fs;
+use sha2::{Digest, Sha256};
 
 use ltbox_core::downloader::download_to_file;
-use ltbox_core::github::GitHubClient;
+use ltbox_core::github::{GitHubClient, WorkflowArtifact};
 use ltbox_core::i18n::tr;
 use ltbox_core::{LtboxError, Result, tr_args};
 
@@ -263,24 +264,217 @@ fn select_ksu_release_ko_asset(
         .cloned()
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ArtifactArchitecture {
+    Aarch64,
+    Unmarked,
+    Rejected,
+}
+
+fn artifact_architecture(name: &str) -> ArtifactArchitecture {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("x86_64") || lower.contains("x86") || lower.contains("amd64") {
+        ArtifactArchitecture::Rejected
+    } else if lower.contains("aarch64") || lower.contains("arm64") {
+        ArtifactArchitecture::Aarch64
+    } else {
+        ArtifactArchitecture::Unmarked
+    }
+}
+
+/// Pick an arm64-safe artifact independently of the order returned by GitHub.
+/// Current aarch64 names win over legacy names with no architecture marker;
+/// explicitly x86-family names are never eligible.
+fn select_arch_safe_artifact(
+    artifact_names: &[String],
+    matches_payload: impl Fn(&str) -> bool,
+) -> Option<String> {
+    artifact_names
+        .iter()
+        .find(|name| {
+            matches_payload(name) && artifact_architecture(name) == ArtifactArchitecture::Aarch64
+        })
+        .or_else(|| {
+            artifact_names.iter().find(|name| {
+                matches_payload(name)
+                    && artifact_architecture(name) == ArtifactArchitecture::Unmarked
+            })
+        })
+        .cloned()
+}
+
 fn select_ksu_nightly_ko_artifact(artifact_names: &[String], kver: &str) -> Option<String> {
     // Accept legacy `_kernelsu.ko` and current `-{kver}-lkm` naming.
     // Trailing `-`/EOS sentinel prevents `6.1` matching `6.10/6.11/6.12`.
     let want = kver.to_lowercase();
     let lkm_marker = format!("-{want}-lkm");
-    artifact_names
-        .iter()
-        .find(|n| {
-            let lower = n.to_lowercase();
-            // Legacy: "*-{kver}_kernelsu.ko"
-            if lower.contains("_kernelsu.ko") && ksu_ko_kver_matches(&lower, &want) {
-                return true;
-            }
-            // Current: "android<api>-{kver}-lkm" (zip wrapper, real
-            // .ko inside).
-            lower.contains(&lkm_marker)
+    select_arch_safe_artifact(artifact_names, |n| {
+        let lower = n.to_lowercase();
+        // Legacy: "*-{kver}_kernelsu.ko"
+        if lower.contains("_kernelsu.ko") && ksu_ko_kver_matches(&lower, &want) {
+            return true;
+        }
+        // Current: "android<api>-{kver}-lkm" (zip wrapper, real
+        // .ko inside).
+        lower.contains(&lkm_marker)
+    })
+}
+
+fn select_ksuinit_artifact(artifact_names: &[String]) -> Option<String> {
+    select_arch_safe_artifact(artifact_names, |name| {
+        name.to_ascii_lowercase().starts_with("ksuinit")
+    })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ArtifactDigestStatus {
+    Verified,
+    Skipped,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ArtifactDigestMismatch {
+    expected: String,
+    actual: String,
+}
+
+fn compare_artifact_digest(
+    reported_digest: Option<&str>,
+    actual_sha256: &str,
+) -> std::result::Result<ArtifactDigestStatus, ArtifactDigestMismatch> {
+    let Some(reported) = reported_digest.filter(|digest| !digest.is_empty()) else {
+        return Ok(ArtifactDigestStatus::Skipped);
+    };
+    let Some(expected) = reported.strip_prefix("sha256:") else {
+        return Ok(ArtifactDigestStatus::Skipped);
+    };
+    if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Ok(ArtifactDigestStatus::Skipped);
+    }
+    if expected.eq_ignore_ascii_case(actual_sha256) {
+        Ok(ArtifactDigestStatus::Verified)
+    } else {
+        Err(ArtifactDigestMismatch {
+            expected: expected.to_string(),
+            actual: actual_sha256.to_string(),
         })
-        .cloned()
+    }
+}
+
+fn sha256_hex_file(path: &Path) -> Result<String> {
+    use std::io::Read;
+
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
+fn verify_nightly_artifact_zip(
+    path: &Path,
+    artifact_name: &str,
+    reported_digest: Option<&str>,
+    log: &mut Vec<String>,
+) -> Result<()> {
+    let actual = sha256_hex_file(path)?;
+    match compare_artifact_digest(reported_digest, &actual) {
+        Ok(ArtifactDigestStatus::Verified) => Ok(()),
+        Ok(ArtifactDigestStatus::Skipped) => {
+            ltbox_core::live!(
+                log,
+                "[KSU] {}",
+                tr_args!("log_ksu_artifact_hash_skipped", artifact = artifact_name)
+            );
+            Ok(())
+        }
+        Err(mismatch) => {
+            let _ = fs::remove_file(path);
+            Err(LtboxError::Download(tr_args!(
+                "err_ksu_artifact_hash_mismatch",
+                artifact = artifact_name,
+                expected = mismatch.expected,
+                actual = mismatch.actual,
+            )))
+        }
+    }
+}
+
+fn artifact_digest<'a>(artifacts: &'a [WorkflowArtifact], name: &str) -> Option<&'a str> {
+    artifacts
+        .iter()
+        .find(|artifact| artifact.name == name)
+        .and_then(|artifact| artifact.digest.as_deref())
+}
+
+fn download_ksu_ko_artifact(
+    repo: &str,
+    run_id: u64,
+    ko_artifact: &str,
+    reported_digest: Option<&str>,
+    staging_dir: &Path,
+    log: &mut Vec<String>,
+) -> Result<()> {
+    let ko_zip_path = staging_dir.join("ksu_lkm_artifact.zip");
+    let ko_url = nightly_artifact_url(repo, run_id, ko_artifact);
+    download_to_file(&ko_url, &ko_zip_path, log)?;
+    verify_nightly_artifact_zip(&ko_zip_path, ko_artifact, reported_digest, log)?;
+    {
+        let f = fs::File::open(&ko_zip_path)?;
+        let mut archive = zip::ZipArchive::new(f)
+            .map_err(|e| LtboxError::Patch(format!("{repo}: LKM artifact not a zip: {e}")))?;
+        let member_name: String = archive
+            .file_names()
+            .find(|n| n.to_lowercase().ends_with(".ko"))
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                LtboxError::Patch(format!("{repo} {ko_artifact}: no .ko entry in zip"))
+            })?;
+        let mut entry = archive
+            .by_name(&member_name)
+            .map_err(|e| LtboxError::Patch(format!("{repo} {ko_artifact}: {e}")))?;
+        let ko_path = staging_dir.join("kernelsu.ko");
+        crate::zip_util::copy_capped(
+            &mut entry,
+            &ko_path,
+            crate::zip_util::MAX_ENTRY_BYTES,
+            &member_name,
+        )?;
+    }
+    let _ = fs::remove_file(&ko_zip_path);
+    Ok(())
+}
+
+fn stable_lkm_sources_exhausted(
+    tag: &str,
+    kver: &str,
+    details: impl std::fmt::Display,
+) -> LtboxError {
+    let details = details.to_string();
+    let translated = tr_args!(
+        "err_ksu_stable_lkm_sources_exhausted",
+        tag = tag,
+        kver = kver,
+        details = details,
+    );
+    let message = if translated == "err_ksu_stable_lkm_sources_exhausted" {
+        format!(
+            "No KernelSU LKM was found after trying both release assets and workflow artifacts for release {tag} and kernel {kver}. Workflow artifacts may have expired (typically after about 90 days). Details: {details}"
+        )
+    } else {
+        translated
+    };
+    LtboxError::Download(message)
 }
 
 pub fn download_ksu_payload(
@@ -310,38 +504,75 @@ pub fn download_ksu_payload(
                     .into(),
             )
         })?;
-    let (ko_name, ko_url) = select_ksu_release_ko_asset(&assets, &kver).ok_or_else(|| {
-        LtboxError::Download(format!(
-            "No `_kernelsu.ko` release asset on latest {repo} matching kernel `{kver}`."
-        ))
-    })?;
-    ltbox_core::live!(
-        log,
-        "[KSU] {}",
-        tr_args!("log_ksu_downloading_lkm", name = ko_name)
-    );
     fs::create_dir_all(staging_dir)?;
-    let ko_path = staging_dir.join("kernelsu.ko");
-    download_to_file(&ko_url, &ko_path, log)?;
+    let release_ko = select_ksu_release_ko_asset(&assets, &kver);
+    if let Some((ko_name, ko_url)) = release_ko.as_ref() {
+        ltbox_core::live!(
+            log,
+            "[KSU] {}",
+            tr_args!("log_ksu_downloading_lkm_release_asset", name = ko_name)
+        );
+        let ko_path = staging_dir.join("kernelsu.ko");
+        download_to_file(ko_url, &ko_path, log)?;
+    }
+
+    // Resolve the release-tag run once. It always supplies ksuinit and, when
+    // the release no longer publishes a raw .ko, supplies the LKM fallback.
+    let run_id = client.workflow_run_for_tag(&tag).map_err(|e| {
+        if release_ko.is_none() {
+            stable_lkm_sources_exhausted(&tag, &kver, e)
+        } else {
+            LtboxError::Download(format!(
+                "No workflow run found for tag {tag} on {repo}: {e}"
+            ))
+        }
+    })?;
+    let artifacts = client.workflow_artifact_details(run_id).map_err(|e| {
+        if release_ko.is_none() {
+            stable_lkm_sources_exhausted(&tag, &kver, e)
+        } else {
+            LtboxError::Download(format!("Cannot list artifacts for run {run_id}: {e}"))
+        }
+    })?;
+    let artifact_names: Vec<String> = artifacts
+        .iter()
+        .map(|artifact| artifact.name.clone())
+        .collect();
+
+    if release_ko.is_none() {
+        let ko_artifact =
+            select_ksu_nightly_ko_artifact(&artifact_names, &kver).ok_or_else(|| {
+                stable_lkm_sources_exhausted(
+                    &tag,
+                    &kver,
+                    format!("run {run_id} artifacts: {artifact_names:?}"),
+                )
+            })?;
+        ltbox_core::live!(
+            log,
+            "[KSU] {}",
+            tr_args!(
+                "log_ksu_downloading_lkm_workflow_artifact",
+                name = ko_artifact
+            )
+        );
+        download_ksu_ko_artifact(
+            repo,
+            run_id,
+            &ko_artifact,
+            artifact_digest(&artifacts, &ko_artifact),
+            staging_dir,
+            log,
+        )
+        .map_err(|e| stable_lkm_sources_exhausted(&tag, &kver, e))?;
+    }
 
     // -------- 2. `ksuinit` binary via nightly.link --------
-    let run_id = client.workflow_run_for_tag(&tag).map_err(|e| {
+    let ksuinit_artifact = select_ksuinit_artifact(&artifact_names).ok_or_else(|| {
         LtboxError::Download(format!(
-            "No workflow run found for tag {tag} on {repo}: {e}"
+            "No arm64-safe `ksuinit*` workflow artifact on run {run_id} of {repo}"
         ))
     })?;
-    let artifacts = client.workflow_artifacts(run_id).map_err(|e| {
-        LtboxError::Download(format!("Cannot list artifacts for run {run_id}: {e}"))
-    })?;
-    let ksuinit_artifact = artifacts
-        .iter()
-        .find(|n| n.to_lowercase().starts_with("ksuinit"))
-        .cloned()
-        .ok_or_else(|| {
-            LtboxError::Download(format!(
-                "No `ksuinit*` workflow artifact on run {run_id} of {repo}"
-            ))
-        })?;
     let nightly_url = format!(
         "https://nightly.link/{repo}/actions/runs/{run_id}/{ksuinit_artifact}.zip",
         repo = repo,
@@ -355,6 +586,12 @@ pub fn download_ksu_payload(
     );
     let tmp_zip = staging_dir.join(format!("{ksuinit_artifact}.zip"));
     download_to_file(&nightly_url, &tmp_zip, log)?;
+    verify_nightly_artifact_zip(
+        &tmp_zip,
+        &ksuinit_artifact,
+        artifact_digest(&artifacts, &ksuinit_artifact),
+        log,
+    )?;
 
     let file = fs::File::open(&tmp_zip)
         .map_err(|e| LtboxError::Patch(format!("open ksuinit zip: {e}")))?;
@@ -402,7 +639,11 @@ pub fn download_ksu_payload_nightly(
 ) -> Result<u64> {
     let (repo, run_id) = resolve_nightly_run(provider, manual_run_id, log)?;
     let client = GitHubClient::new(repo)?;
-    let artifact_names = client.workflow_artifacts(run_id)?;
+    let artifacts = client.workflow_artifact_details(run_id)?;
+    let artifact_names: Vec<String> = artifacts
+        .iter()
+        .map(|artifact| artifact.name.clone())
+        .collect();
     if artifact_names.is_empty() {
         return Err(LtboxError::Patch(format!(
             "{repo} run {run_id} has no artifacts"
@@ -430,44 +671,21 @@ pub fn download_ksu_payload_nightly(
         "[KSU] {}",
         tr_args!("log_ksu_nightly_lkm_artifact", artifact = ko_artifact)
     );
-    let ko_zip_path = staging_dir.join("ksu_nightly_lkm.zip");
-    let ko_url = nightly_artifact_url(repo, run_id, &ko_artifact);
-    download_to_file(&ko_url, &ko_zip_path, log)?;
-    {
-        let f = fs::File::open(&ko_zip_path)?;
-        let mut archive = zip::ZipArchive::new(f)
-            .map_err(|e| LtboxError::Patch(format!("{repo}: LKM artifact not a zip: {e}")))?;
-        // First `.ko` entry → staging_dir/kernelsu.ko.
-        let member_name: String = archive
-            .file_names()
-            .find(|n| n.to_lowercase().ends_with(".ko"))
-            .map(|s| s.to_string())
-            .ok_or_else(|| {
-                LtboxError::Patch(format!("{repo} {ko_artifact}: no .ko entry in zip"))
-            })?;
-        let mut entry = archive
-            .by_name(&member_name)
-            .map_err(|e| LtboxError::Patch(format!("{repo} {ko_artifact}: {e}")))?;
-        let ko_path = staging_dir.join("kernelsu.ko");
-        crate::zip_util::copy_capped(
-            &mut entry,
-            &ko_path,
-            crate::zip_util::MAX_ENTRY_BYTES,
-            &member_name,
-        )?;
-    }
-    let _ = fs::remove_file(&ko_zip_path);
+    download_ksu_ko_artifact(
+        repo,
+        run_id,
+        &ko_artifact,
+        artifact_digest(&artifacts, &ko_artifact),
+        staging_dir,
+        log,
+    )?;
 
     // -------- 2. ksuinit → `init` --------
-    let init_artifact = artifact_names
-        .iter()
-        .find(|n| n.to_lowercase().starts_with("ksuinit"))
-        .cloned()
-        .ok_or_else(|| {
-            LtboxError::Patch(format!(
-                "{repo} run {run_id}: no ksuinit artifact (got {artifact_names:?})"
-            ))
-        })?;
+    let init_artifact = select_ksuinit_artifact(&artifact_names).ok_or_else(|| {
+        LtboxError::Patch(format!(
+            "{repo} run {run_id}: no arm64-safe ksuinit artifact (got {artifact_names:?})"
+        ))
+    })?;
     ltbox_core::live!(
         log,
         "[KSU] {}",
@@ -476,6 +694,12 @@ pub fn download_ksu_payload_nightly(
     let init_zip_path = staging_dir.join("ksu_nightly_init.zip");
     let init_url = nightly_artifact_url(repo, run_id, &init_artifact);
     download_to_file(&init_url, &init_zip_path, log)?;
+    verify_nightly_artifact_zip(
+        &init_zip_path,
+        &init_artifact,
+        artifact_digest(&artifacts, &init_artifact),
+        log,
+    )?;
     {
         let f = fs::File::open(&init_zip_path)?;
         let mut archive = zip::ZipArchive::new(f)
@@ -506,11 +730,60 @@ pub fn download_ksu_payload_nightly(
 #[cfg(test)]
 mod tests {
     use super::{
-        RootProvider, download_ksu_manager_apk_nightly, download_ksu_manager_apk_stable,
-        download_ksu_payload, download_ksu_payload_nightly, ksu_ko_kver_matches,
-        normalize_ksu_kernel_version, select_ksu_nightly_ko_artifact, select_ksu_release_ko_asset,
-        select_skroot_manager_asset,
+        ArtifactDigestMismatch, ArtifactDigestStatus, RootProvider, compare_artifact_digest,
+        download_ksu_manager_apk_nightly, download_ksu_manager_apk_stable, download_ksu_payload,
+        download_ksu_payload_nightly, ksu_ko_kver_matches, normalize_ksu_kernel_version,
+        select_ksu_nightly_ko_artifact, select_ksu_release_ko_asset, select_ksuinit_artifact,
+        select_skroot_manager_asset, stable_lkm_sources_exhausted,
     };
+
+    const SHA256_LOWER: &str = "df471282e461086739bebb088aa07c7226158ffc7a8f5495c86d2e10dba37e83";
+
+    #[test]
+    fn artifact_digest_match_passes() {
+        let reported = format!("sha256:{SHA256_LOWER}");
+        assert_eq!(
+            compare_artifact_digest(Some(&reported), SHA256_LOWER),
+            Ok(ArtifactDigestStatus::Verified)
+        );
+    }
+
+    #[test]
+    fn artifact_digest_mismatch_fails() {
+        let reported = format!("sha256:{SHA256_LOWER}");
+        let actual = "0000000000000000000000000000000000000000000000000000000000000000";
+        assert_eq!(
+            compare_artifact_digest(Some(&reported), actual),
+            Err(ArtifactDigestMismatch {
+                expected: SHA256_LOWER.to_string(),
+                actual: actual.to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn artifact_digest_absent_or_unusable_skips() {
+        for reported in [
+            None,
+            Some(""),
+            Some(SHA256_LOWER),
+            Some("sha256:not-a-hex-digest"),
+        ] {
+            assert_eq!(
+                compare_artifact_digest(reported, SHA256_LOWER),
+                Ok(ArtifactDigestStatus::Skipped)
+            );
+        }
+    }
+
+    #[test]
+    fn artifact_digest_hex_comparison_is_case_insensitive() {
+        let reported = format!("sha256:{}", SHA256_LOWER.to_ascii_uppercase());
+        assert_eq!(
+            compare_artifact_digest(Some(&reported), SHA256_LOWER),
+            Ok(ArtifactDigestStatus::Verified)
+        );
+    }
 
     #[test]
     fn exact_major_minor_matches() {
@@ -623,6 +896,50 @@ mod tests {
         );
         // No 4.x in this artifact set.
         assert_eq!(select_ksu_nightly_ko_artifact(&artifacts, "4.14"), None);
+    }
+
+    #[test]
+    fn ksu_artifact_selection_prefers_aarch64_in_live_upstream_order() {
+        // Regression fixture from tiann/KernelSU run 33170552380: GitHub listed
+        // the matching x86_64 LKM before aarch64 and ksuinit-x86_64 before
+        // ksuinit-aarch64.
+        let artifacts = vec![
+            "x86_64-android14-6.1-lkm".to_string(),
+            "aarch64-android14-6.1-lkm".to_string(),
+            "ksuinit-x86_64".to_string(),
+            "ksuinit-aarch64".to_string(),
+        ];
+
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "6.1"),
+            Some("aarch64-android14-6.1-lkm".to_string())
+        );
+        assert_eq!(
+            select_ksuinit_artifact(&artifacts),
+            Some("ksuinit-aarch64".to_string())
+        );
+    }
+
+    #[test]
+    fn ksu_artifact_selection_rejects_x86_only_matches() {
+        let artifacts = vec![
+            "x86_64-android14-6.1-lkm".to_string(),
+            "ksuinit-amd64".to_string(),
+        ];
+
+        assert_eq!(select_ksu_nightly_ko_artifact(&artifacts, "6.1"), None);
+        assert_eq!(select_ksuinit_artifact(&artifacts), None);
+    }
+
+    #[test]
+    fn stable_lkm_exhausted_error_names_both_sources_and_match() {
+        let error =
+            stable_lkm_sources_exhausted("v3.3.0", "6.1", "no matching artifact").to_string();
+
+        assert!(error.contains("both release assets and workflow artifacts"));
+        assert!(error.contains("v3.3.0"));
+        assert!(error.contains("6.1"));
+        assert!(error.contains("90 days"));
     }
 
     #[test]

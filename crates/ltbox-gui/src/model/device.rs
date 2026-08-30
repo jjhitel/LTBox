@@ -130,6 +130,16 @@ mod tests {
         assert!(is_rollback_protected_model(TB324ZC_MODEL));
         assert!(!is_rollback_protected_model("TB322FC"));
     }
+
+    #[test]
+    fn xiaoxin_pro13_models_are_rollback_protected() {
+        assert!(is_rollback_protected_model(
+            ltbox_core::model::TB376FC_MODEL
+        ));
+        assert!(is_rollback_protected_model(
+            ltbox_core::model::TB390FU_MODEL
+        ));
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -27,6 +27,9 @@ impl App {
     pub(crate) fn update_root(&mut self, msg: RootMsg) -> Task<Message> {
         match msg {
             RootMsg::RootFamily(f) => {
+                if self.is_xiaoxin_pro13() {
+                    return Task::none();
+                }
                 self.root.family = Some(f);
                 self.root.provider = None;
                 self.root.mode = None;
@@ -55,6 +58,9 @@ impl App {
                 Task::none()
             }
             RootMsg::RootMode(m) => {
+                if self.is_xiaoxin_pro13() {
+                    return Task::none();
+                }
                 // TODO(root): LTBox currently only swaps the boot.img Image
                 // for GKI, which corrupts boot on efisp/GBL-route models. Keep it disabled
                 // until vbmeta handling is added.
@@ -368,6 +374,11 @@ impl App {
                 // still-held KSU probe reservation). Callers that own the
                 // probe path release it before re-entering here.
                 if self.busy {
+                    return Task::none();
+                }
+                if self.is_xiaoxin_pro13() {
+                    self.error_msg =
+                        Some(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
                     return Task::none();
                 }
                 // TODO(root): LTBox currently only swaps the boot.img Image

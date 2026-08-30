@@ -7,6 +7,15 @@ use ltbox_core::tr_args;
 
 impl App {
     pub(crate) fn update_konabess(&mut self, msg: KonaBessMsg) -> Task<Message> {
+        if self.is_xiaoxin_pro13()
+            && matches!(
+                &msg,
+                KonaBessMsg::KonaBessSelectLoader | KonaBessMsg::KonaBessNext
+            )
+        {
+            self.error_msg = Some(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+            return Task::none();
+        }
         match msg {
             KonaBessMsg::KonaBessSelectLoader => self.pick_loader_with_default(|path| {
                 Message::KonaBess(KonaBessMsg::KonaBessLoaderChosen(path))
@@ -111,6 +120,7 @@ impl App {
                                     .begin_phased_op(View::KonaBess, OperationPhaseKind::KonaBess);
                                 let conn = self.connection;
                                 let uses_efisp_gbl_route = self.uses_efisp_gbl_route();
+                                let device_model = self.device_model.clone();
                                 let ll = self.live_labels();
                                 let loader = std::path::PathBuf::from(loader);
                                 return Task::perform(
@@ -121,6 +131,7 @@ impl App {
                                                     conn,
                                                     loader,
                                                     uses_efisp_gbl_route,
+                                                    device_model,
                                                     ll,
                                                     phases,
                                                 )
@@ -175,7 +186,6 @@ impl App {
                         let Some(table) = self.konabess.edited_table.clone() else {
                             return Task::none();
                         };
-
                         self.konabess.next();
                         let phases =
                             self.begin_phased_op(View::KonaBess, OperationPhaseKind::KonaBess);

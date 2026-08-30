@@ -65,6 +65,7 @@ struct DeviceBackend<'a> {
     conn: ConnectionStatus,
     loader: &'a Path,
     uses_efisp_gbl_route: bool,
+    device_model: &'a str,
     session: Option<ltbox_device::edl::EdlSession>,
     writes_started: bool,
 }
@@ -127,6 +128,19 @@ impl KonaBessInspectionBackend for DeviceBackend<'_> {
         work_dir: &Path,
         log: &mut Vec<String>,
     ) -> Result<(), String> {
+        let detected_xiaoxin = ltbox_patch::avb::extract_image_avb_info(vendor_boot)
+            .ok()
+            .and_then(|info| ltbox_patch::avb::build_fingerprint(&info))
+            .is_some_and(|fingerprint| {
+                // Bidirectional SKU equivalence makes the TB376FC token match TB390FU too.
+                ltbox_core::model::fingerprint_model_match(
+                    &fingerprint,
+                    ltbox_core::model::TB376FC_MODEL,
+                )
+            });
+        if ltbox_core::model::is_xiaoxin_pro13_model(self.device_model) || detected_xiaoxin {
+            return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+        }
         match exploit_gate_kind(self.uses_efisp_gbl_route) {
             ExploitGateKind::EfispGbl => {
                 let efi_dir = work_dir.join("efisp_gbl");
@@ -252,10 +266,14 @@ pub(crate) fn konabess_inspection_worker(
     conn: ConnectionStatus,
     loader: PathBuf,
     uses_efisp_gbl_route: bool,
+    device_model: String,
     ll: LiveLabels,
     phases: PhaseReporter,
 ) -> Result<KonaBessInspectionResult, String> {
     let mut log = Vec::new();
+    if ltbox_core::model::is_xiaoxin_pro13_model(&device_model) {
+        return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+    }
     let work_dir = ltbox_core::app_paths::work_dir_for("konabess");
     let _ = std::fs::remove_dir_all(&work_dir);
     std::fs::create_dir_all(&work_dir).map_err(|error| error.to_string())?;
@@ -272,6 +290,7 @@ pub(crate) fn konabess_inspection_worker(
         conn,
         loader: &loader,
         uses_efisp_gbl_route,
+        device_model: &device_model,
         session: None,
         writes_started: false,
     };
@@ -514,6 +533,19 @@ pub(crate) fn konabess_flash_worker(
     phases: PhaseReporter,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
+    let prepared_xiaoxin = ltbox_patch::avb::extract_image_avb_info(&prepared.vendor_boot)
+        .ok()
+        .and_then(|info| ltbox_patch::avb::build_fingerprint(&info))
+        .is_some_and(|fingerprint| {
+            // Bidirectional SKU equivalence makes the TB376FC token match TB390FU too.
+            ltbox_core::model::fingerprint_model_match(
+                &fingerprint,
+                ltbox_core::model::TB376FC_MODEL,
+            )
+        });
+    if prepared_xiaoxin {
+        return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+    }
     let mut backend = FlashDeviceBackend {
         loader: &loader,
         session: None,

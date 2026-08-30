@@ -12,6 +12,12 @@ pub const TB323FU_MODEL: &str = "TB323FU";
 /// Model token reported by Lenovo Y700 Infinite firmware.
 pub const TB324ZC_MODEL: &str = "TB324ZC";
 
+/// Model token reported by Xiaoxin Pro 13 PRC firmware.
+pub const TB376FC_MODEL: &str = "TB376FC";
+
+/// Model token reported by Xiaoxin Pro 13 ROW firmware.
+pub const TB390FU_MODEL: &str = "TB390FU";
+
 /// Whether `model` follows the TB320FC hardware-specific paths.
 ///
 /// LAVIE Tab 9QHD1 reports its domestic model token despite using the same
@@ -20,11 +26,16 @@ pub fn is_tb320fc_model(model: &str) -> bool {
     model.eq_ignore_ascii_case(TB320FC_MODEL) || model.eq_ignore_ascii_case(LAVIE_TAB_9QHD1_MODEL)
 }
 
+/// Whether `model` is one of the hardware-equivalent Xiaoxin Pro 13 SKUs.
+pub fn is_xiaoxin_pro13_model(model: &str) -> bool {
+    model.eq_ignore_ascii_case(TB376FC_MODEL) || model.eq_ignore_ascii_case(TB390FU_MODEL)
+}
+
 /// Match a model token inside a fingerprint or probe string.
 ///
 /// Matches keep alphanumeric word boundaries so a future suffixed model cannot
 /// collide. TB320FC and the token reported by LAVIE Tab 9QHD1 are the sole
-/// bidirectional equivalence handled here.
+/// bidirectional equivalences handled here.
 pub fn fingerprint_model_match(haystack: &str, model: &str) -> bool {
     if token_match(haystack, model) {
         return true;
@@ -34,6 +45,10 @@ pub fn fingerprint_model_match(haystack: &str, model: &str) -> bool {
         token_match(haystack, LAVIE_TAB_9QHD1_MODEL)
     } else if model == LAVIE_TAB_9QHD1_MODEL {
         token_match(haystack, TB320FC_MODEL)
+    } else if model == TB376FC_MODEL {
+        token_match(haystack, TB390FU_MODEL)
+    } else if model == TB390FU_MODEL {
+        token_match(haystack, TB376FC_MODEL)
     } else {
         false
     }
@@ -67,6 +82,10 @@ mod tests {
         "qti/TB320FC/TB320FC:15/AQ3A.240812.002/ZUI_17.0.313_250808_ROW:user/release-keys";
     const LAVIE_TAB_9QHD1_FINGERPRINT: &str = "qti/LAVIETab9QHD1/LAVIETab9QHD1:15/\
          AQ3A.240812.002/S104127_260624_NEC:user/release-keys";
+    const TB376FC_FINGERPRINT: &str =
+        "Lenovo/TB376FC_PRC/TB376FC:15/build/TB376FC_CN_OPEN_USER:user/release-keys";
+    const TB390FU_FINGERPRINT: &str =
+        "Lenovo/TB390FU/TB390FU:15/build/TB390FU_ROW_OPEN_USER:user/release-keys";
 
     #[test]
     fn lavie_tab_9qhd1_device_accepts_tb320fc_firmware() {
@@ -82,6 +101,16 @@ mod tests {
             LAVIE_TAB_9QHD1_FINGERPRINT,
             TB320FC_MODEL
         ));
+    }
+
+    #[test]
+    fn xiaoxin_pro13_models_are_bidirectionally_equivalent() {
+        assert!(fingerprint_model_match(TB390FU_FINGERPRINT, TB376FC_MODEL));
+        assert!(fingerprint_model_match(TB376FC_FINGERPRINT, TB390FU_MODEL));
+        assert!(fingerprint_model_match(TB376FC_FINGERPRINT, TB376FC_MODEL));
+        assert!(fingerprint_model_match(TB390FU_FINGERPRINT, TB390FU_MODEL));
+        assert!(is_xiaoxin_pro13_model(TB376FC_MODEL));
+        assert!(is_xiaoxin_pro13_model(TB390FU_MODEL));
     }
 
     #[test]

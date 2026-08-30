@@ -102,7 +102,9 @@ impl App {
         // Efisp/GBL-route models' vendor_boot/vbmeta sit on a different UFS LUN than the
         // Boot Recovery worker targets, so the flow can't run on it — disable
         // the card (alongside the non-Qualcomm platform gate).
-        let rescue_disabled = self.platform_supported == Some(false) || self.uses_efisp_gbl_route();
+        let rescue_disabled = self.platform_supported == Some(false)
+            || self.uses_efisp_gbl_route()
+            || self.is_xiaoxin_pro13();
         // Gray the icon when disabled, matching the other wizards' disabled
         // option cards (region ROW / OtherRegion).
         let rescue_icon = if rescue_disabled {
@@ -135,6 +137,8 @@ impl App {
             // hint so the label sits at the same height.
             let rescue_req = if self.uses_efisp_gbl_route() {
                 tr_args!("model_unsupported", model = self.device_model.as_str())
+            } else if self.is_xiaoxin_pro13() {
+                tr_args!("model_unsupported", model = "TB376FC / TB390FU")
             } else {
                 self.t("sysupdate_rescue_req").to_string()
             };

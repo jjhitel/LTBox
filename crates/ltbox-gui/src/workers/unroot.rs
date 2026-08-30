@@ -14,11 +14,15 @@ pub(crate) fn unroot_worker(
     folder: String,
     unroot_type: UnrootType,
     loader_override: Option<String>,
+    device_model: String,
     conn: ConnectionStatus,
     ll: LiveLabels,
     phases: PhaseReporter,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
+    if ltbox_core::model::is_xiaoxin_pro13_model(&device_model) {
+        return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+    }
     let dir = std::path::Path::new(&folder);
 
     live!(log, "[Unroot] {}", phases.marker(1));
@@ -46,6 +50,16 @@ pub(crate) fn unroot_worker(
     }
     if vbmeta_path.as_ref().is_some_and(|path| !path.exists()) {
         return Err(tr("err_unroot_vbmeta_missing"));
+    }
+    if let Ok(info) = ltbox_patch::avb::extract_image_avb_info(&root_image_path)
+        && let Some(fingerprint) = ltbox_patch::avb::build_fingerprint(&info)
+        // Bidirectional SKU equivalence makes the TB376FC token match TB390FU too.
+        && ltbox_core::model::fingerprint_model_match(
+            &fingerprint,
+            ltbox_core::model::TB376FC_MODEL,
+        )
+    {
+        return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
     }
     // Names the images this run will write, so the pre-flight line and the
     // Phase 4 header agree with what actually gets flashed.

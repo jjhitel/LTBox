@@ -70,6 +70,9 @@ pub(crate) fn root_worker(
     phases: PhaseReporter,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
+    if ltbox_core::model::is_xiaoxin_pro13_model(&device_model) {
+        return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+    }
     let skip_adb = conn.skip_adb();
 
     // GKI route: AnyKernel3 zip is the full input —
@@ -389,6 +392,13 @@ pub(crate) fn root_worker(
                             image = root_image_name
                         )
                     })?;
+                // Bidirectional SKU equivalence makes the TB376FC token match TB390FU too.
+                if ltbox_core::model::fingerprint_model_match(
+                    &root_image_fingerprint,
+                    ltbox_core::model::TB376FC_MODEL,
+                ) {
+                    return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+                }
                 if !fingerprint_matches_detected_model(&root_image_fingerprint, &device_model) {
                     return Err(tr_args!(
                         "live_rescue_model_mismatch_abort",
