@@ -15,6 +15,9 @@ cask "ltbox" do
   depends_on macos: :big_sur
 
   app "LTBox.app"
+  # Symlinked into Homebrew's bin so `ltbox` works from a terminal. The target
+  # is inside the bundle, so Info.plist and Contents/Resources stay reachable.
+  binary "#{appdir}/LTBox.app/Contents/MacOS/ltbox"
 
   # The release bundle is ad-hoc signed before it is archived. Add the
   # package-manager marker to the staged bundle, then refresh that ad-hoc
