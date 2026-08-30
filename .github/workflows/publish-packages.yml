@@ -47,7 +47,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          # Packaging inputs come from the ref being run, not the release tag:
+          # a dry run against an older tag still needs this branch's templates.
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - name: Download and verify published Linux binary
         env:
@@ -146,7 +148,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          # Packaging inputs come from the ref being run, not the release tag:
+          # a dry run against an older tag still needs this branch's templates.
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - name: Download published checksum sidecars
         env:

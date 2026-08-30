@@ -19,16 +19,16 @@ cask "ltbox" do
   # The release bundle is ad-hoc signed before it is archived. Add the
   # package-manager marker to the staged bundle, then refresh that ad-hoc
   # signature while preserving the USB entitlement.
-  preflight_steps do
-    write_file "LTBox.app/Contents/MacOS/ltbox.install-source", "homebrew"
-    run "/usr/bin/codesign",
-        args: [
-          "--force",
-          "--preserve-metadata=entitlements",
-          "--sign",
-          "-",
-          "{{staged_path}}/LTBox.app",
-        ]
+  preflight do
+    (staged_path/"LTBox.app/Contents/MacOS/ltbox.install-source").write("homebrew")
+    system_command "/usr/bin/codesign",
+                   args: [
+                     "--force",
+                     "--preserve-metadata=entitlements",
+                     "--sign",
+                     "-",
+                     staged_path/"LTBox.app",
+                   ]
   end
 
   uninstall quit: "io.github.miner7222.LTBox"
