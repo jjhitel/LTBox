@@ -82,6 +82,7 @@ LTBox 是以侧边栏为核心的桌面 GUI，每个入口都会打开一个引�
 - **[갓파더](https://ppomppu.co.kr/zboard/view.php?id=androidtab&page=1&divpage=38&no=197457)**
 - **[limzei89](https://note.com/limzei89/n/nd5217eb57827)**
 - **[hitin911](https://xdaforums.com/m/hitin911.12861404/)**
+- **[corrupt3904](https://gall.dcinside.com/mgallery/board/view/?id=andtabcus&no=20290)**
 
 ---
 
