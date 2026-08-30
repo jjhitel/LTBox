@@ -237,6 +237,25 @@ fn main() -> iced::Result {
         }
     };
 
+    // libusb (via `adb_client` → `rusb`) probes for optional backends by
+    // calling LoadLibrary on `%SystemRoot%\System32\libusbK.dll`, and it
+    // already treats a NULL handle as "backend unavailable". But when that
+    // system DLL is present and corrupt, the Windows hard-error handler
+    // raises a modal "Bad Image" box (0xc000012f) on every probe, which the
+    // user cannot dismiss for good and which LTBox never gets to explain.
+    // SEM_FAILCRITICALERRORS turns that into the plain NULL libusb already
+    // handles, leaving the WinUSB backend — and every `nusb` EDL path, which
+    // never touches libusbK — working. Must run before the first USB probe.
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Diagnostics::Debug::{
+            SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX, SetErrorMode,
+        };
+        unsafe {
+            SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+        }
+    }
+
     // Override AppUserModelID so taskbar / jump-list show "LTBox"
     // instead of the Cargo crate name. Must run before window creation.
     #[cfg(windows)]
@@ -256,6 +275,32 @@ fn main() -> iced::Result {
     // flushes the non-blocking writer; losing it loses the last
     // minute of events on a crash.
     let _log_guard = init_tracing();
+
+    // The error-mode guard above turns a corrupt system libusbK.dll into a
+    // silent NULL, so name it here instead: this is the whole diagnosis for a
+    // report that otherwise arrives as a screenshot of a Windows dialog.
+    #[cfg(windows)]
+    if let Some(system_root) = std::env::var_os("SystemRoot") {
+        let dll = std::path::Path::new(&system_root)
+            .join("System32")
+            .join("libusbK.dll");
+        // Only a present-but-not-a-PE file is worth reporting. Absent is
+        // normal (libusb falls back to WinUSB), and an unreadable file is
+        // someone else's permissions problem.
+        let head = std::fs::File::open(&dll).and_then(|mut f| {
+            use std::io::Read;
+            let mut magic = [0u8; 2];
+            f.read_exact(&mut magic).map(|()| magic)
+        });
+        if let Ok(magic) = head
+            && &magic != b"MZ"
+        {
+            tracing::warn!(
+                path = %dll.display(),
+                "system libusbK.dll is not a PE image; libusb's libusbK backend will be unavailable"
+            );
+        }
+    }
 
     let win_icon =
         iced::window::icon::from_rgba(include_bytes!("../assets/icon_32.bin").to_vec(), 32, 32)
