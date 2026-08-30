@@ -4,9 +4,9 @@
 
 use crate::{
     ConnectionStatus, Family, LiveLabels, PhaseReporter, Provider, RootMode, VerChoice,
-    fingerprint_token_match, install_root_manager_apk, open_edl_session, prepare_tb323fu_efisp,
-    provision_tb323fu_efisp, stage_manager_apk_for_manual_install, transition_to_edl,
-    wait_and_install_root_manager_apk,
+    fingerprint_token_match, fingerprint_uses_efisp_gbl_route, install_root_manager_apk,
+    open_edl_session, prepare_tb323fu_efisp, provision_tb323fu_efisp,
+    stage_manager_apk_for_manual_install, transition_to_edl, wait_and_install_root_manager_apk,
 };
 use ltbox_core::{i18n::tr, live, tr_args};
 
@@ -335,11 +335,11 @@ pub(crate) fn root_worker(
             let backup_dir = ltbox_core::app_paths::backup_dir_for(&format!("backup_{base_name}"));
             // Set inside the dump block from the dumped root image's
             // fingerprint; carried to Phase 5 to skip AVB + vbmeta.
-            let is_tb323fu;
+            let uses_efisp_gbl_route;
             // Whether the stock vbmeta ended up in the backup folder, so the
             // manifest can tell Unroot which partitions to restore.
             let vbmeta_backed_up;
-            // TB323FU only: when the dumped efisp is empty (stock,
+            // Efisp/GBL route: when the dumped efisp is empty (stock,
             // GBL-unprovisioned) we download the region GBL here and
             // flash it alongside the patched root target image at Phase 6.
             let mut root_efisp_efi: Option<std::path::PathBuf> = None;
@@ -406,12 +406,12 @@ pub(crate) fn root_worker(
                         fingerprint = root_image_fingerprint
                     ));
                 }
-                is_tb323fu = fingerprint_token_match(&root_image_fingerprint, "TB323FU");
+                uses_efisp_gbl_route = fingerprint_uses_efisp_gbl_route(&root_image_fingerprint);
 
-                // vbmeta is read only when the run rebuilds it: TB323FU takes
+                // vbmeta is read only when the run rebuilds it: efisp/GBL models take
                 // the GBL route, and every other non-TB320FC model chains the
                 // boot target, which leaves vbmeta byte-identical either way.
-                vbmeta_backed_up = rebuild_vbmeta && !is_tb323fu;
+                vbmeta_backed_up = rebuild_vbmeta && !uses_efisp_gbl_route;
                 if vbmeta_backed_up {
                     session
                         .dump_partition(
@@ -430,10 +430,10 @@ pub(crate) fn root_worker(
                         })?;
                 }
 
-                // TB323FU root needs provisioned efisp; once present, skip AVB
+                // Efisp/GBL root needs provisioned efisp; once present, skip AVB
                 // footer and vbmeta writes. Keep the verified fingerprint so
                 // an empty efisp can fetch the matching region GBL.
-                if is_tb323fu {
+                if uses_efisp_gbl_route {
                     let efi_dir = ltbox_core::app_paths::work_dir_for("root_efisp");
                     root_efisp_efi = prepare_tb323fu_efisp(
                         &mut session,
@@ -525,7 +525,7 @@ pub(crate) fn root_worker(
             // keeps the two phases in lockstep automatically
             // if a future field gets added to the struct.
             let cfg = manager_cfg.clone();
-            let artifacts = build_patched_artifacts(&cfg, is_tb323fu, &mut log)
+            let artifacts = build_patched_artifacts(&cfg, uses_efisp_gbl_route, &mut log)
                 .map_err(|e| tr_args!("err_root_patch_failed", error = e))?;
             if manager_apk.is_none() {
                 manager_apk = artifacts.manager_apk.clone();
@@ -705,10 +705,14 @@ mod tests {
     fn dumped_image_fingerprint_must_match_detected_model() {
         let tb320fc = "qti/TB320FC/TB320FC:15/build:user/release-keys";
         let tb323fu = "qti/TB323FU/TB323FU:15/build:user/release-keys";
+        let tb324zc = "qti/TB324ZC/TB324ZC:16/build:user/release-keys";
 
         assert!(fingerprint_matches_detected_model(tb320fc, "TB320FC"));
         assert!(fingerprint_matches_detected_model(tb320fc, "LAVIETab9QHD1"));
         assert!(!fingerprint_matches_detected_model(tb323fu, "TB320FC"));
+        assert!(fingerprint_matches_detected_model(tb324zc, "TB324ZC"));
+        assert!(fingerprint_uses_efisp_gbl_route(tb324zc));
+        assert!(!fingerprint_uses_efisp_gbl_route(tb320fc));
     }
 
     #[test]

@@ -24,12 +24,12 @@ struct InspectionPaths {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExploitGateKind {
     SignedVbmeta,
-    Tb323fuEfisp,
+    EfispGbl,
 }
 
-const fn exploit_gate_kind(is_tb323fu: bool) -> ExploitGateKind {
-    if is_tb323fu {
-        ExploitGateKind::Tb323fuEfisp
+const fn exploit_gate_kind(uses_efisp_gbl_route: bool) -> ExploitGateKind {
+    if uses_efisp_gbl_route {
+        ExploitGateKind::EfispGbl
     } else {
         ExploitGateKind::SignedVbmeta
     }
@@ -64,7 +64,7 @@ trait KonaBessInspectionBackend {
 struct DeviceBackend<'a> {
     conn: ConnectionStatus,
     loader: &'a Path,
-    is_tb323fu: bool,
+    uses_efisp_gbl_route: bool,
     device_model: &'a str,
     session: Option<ltbox_device::edl::EdlSession>,
     writes_started: bool,
@@ -141,8 +141,8 @@ impl KonaBessInspectionBackend for DeviceBackend<'_> {
         if ltbox_core::model::is_xiaoxin_pro13_model(self.device_model) || detected_xiaoxin {
             return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
         }
-        match exploit_gate_kind(self.is_tb323fu) {
-            ExploitGateKind::Tb323fuEfisp => {
+        match exploit_gate_kind(self.uses_efisp_gbl_route) {
+            ExploitGateKind::EfispGbl => {
                 let efi_dir = work_dir.join("efisp_gbl");
                 let staged = prepare_tb323fu_efisp(
                     self.session()?,
@@ -236,7 +236,7 @@ fn execute_inspection<B: KonaBessInspectionBackend>(
     backend.dump_partition(&vendor_boot_partition, &vendor_boot, log)?;
     backend.dump_partition(&vbmeta_partition, &vbmeta, log)?;
 
-    // Gate only after both source images exist. TB323FU takes the shared efisp
+    // Gate only after both source images exist. Efisp/GBL-route models take the shared efisp
     // path; every other model resolves vbmeta through KEY_MAP and permits an
     // absent key as unsigned.
     backend.run_exploit_gate(&slot_suffix, &vendor_boot, &vbmeta, &paths.work_dir, log)?;
@@ -265,7 +265,7 @@ fn execute_inspection<B: KonaBessInspectionBackend>(
 pub(crate) fn konabess_inspection_worker(
     conn: ConnectionStatus,
     loader: PathBuf,
-    is_tb323fu: bool,
+    uses_efisp_gbl_route: bool,
     device_model: String,
     ll: LiveLabels,
     phases: PhaseReporter,
@@ -289,7 +289,7 @@ pub(crate) fn konabess_inspection_worker(
     let mut backend = DeviceBackend {
         conn,
         loader: &loader,
-        is_tb323fu,
+        uses_efisp_gbl_route,
         device_model: &device_model,
         session: None,
         writes_started: false,
@@ -816,8 +816,8 @@ mod tests {
     }
 
     #[test]
-    fn tb323fu_empty_efisp_requires_provision_and_bypasses_avb_gate() {
-        assert_eq!(exploit_gate_kind(true), ExploitGateKind::Tb323fuEfisp);
+    fn efisp_gbl_route_requires_provision_and_bypasses_avb_gate() {
+        assert_eq!(exploit_gate_kind(true), ExploitGateKind::EfispGbl);
         assert_eq!(exploit_gate_kind(false), ExploitGateKind::SignedVbmeta);
         assert!(crate::efisp_is_empty(&[0; 32]));
         assert!(!crate::efisp_is_empty(&[0, 0, 1, 0]));

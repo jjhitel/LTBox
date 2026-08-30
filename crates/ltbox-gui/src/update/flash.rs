@@ -7,11 +7,11 @@ impl App {
     pub(crate) fn update_flash(&mut self, msg: FlashMsg) -> Task<Message> {
         match msg {
             FlashMsg::FlashRegion(r) => {
-                // TB322FC is a PRC-only SKU. The region card UI grays
+                // PRC-only SKUs gray
                 // out ROW, but a stale message from a pre-poll click
                 // could still land here. Drop it so the wizard never
                 // accepts a region the hardware doesn't ship with.
-                if self.is_tb322fc() && r == DeviceRegion::Row {
+                if self.is_prc_only() && r == DeviceRegion::Row {
                     return Task::none();
                 }
                 self.flash.device_region = Some(r);
@@ -86,10 +86,10 @@ impl App {
                 Task::none()
             }
             FlashMsg::FlashTarget(t) => {
-                // TB322FC: cross-region (OtherRegion) flashes are blocked
+                // PRC-only SKUs block cross-region (OtherRegion) flashes
                 // because the only valid region is PRC. Drop the message
                 // even if a stale dispatch slips past the disabled card.
-                if self.is_tb322fc() && t == FlashTarget::OtherRegion {
+                if self.is_prc_only() && t == FlashTarget::OtherRegion {
                     return Task::none();
                 }
                 self.flash.target = Some(t);
@@ -288,18 +288,18 @@ impl App {
                 Task::none()
             }
             FlashMsg::FlashConfirmSetRegion(r) => {
-                // TB322FC is PRC-only; the editor grays out ROW, but drop a
+                // PRC-only models gray out ROW; drop a
                 // stale dispatch defensively like the region card handler does.
-                if !(self.is_tb322fc() && r == DeviceRegion::Row) {
+                if !(self.is_prc_only() && r == DeviceRegion::Row) {
                     self.wf_config.device_region = Some(r);
                 }
                 self.confirm_edit_field = None;
                 Task::none()
             }
             FlashMsg::FlashConfirmSetTarget(t) => {
-                // Target ↔ region edit both map onto `modify_region`. TB322FC
+                // Target ↔ region edit both map onto `modify_region`. PRC-only models
                 // can't cross regions, so block OtherRegion defensively.
-                if !(self.is_tb322fc() && t == FlashTarget::OtherRegion) {
+                if !(self.is_prc_only() && t == FlashTarget::OtherRegion) {
                     self.wf_config.modify_region = t == FlashTarget::OtherRegion;
                 }
                 self.confirm_edit_field = None;
@@ -324,9 +324,9 @@ impl App {
             }
             FlashMsg::FlashConfirmSetRegionEdit(on) => {
                 // Region edit drives the same `modify_region` cross-region flag
-                // as the Target row, so apply the TB322FC PRC-only guard here
+                // as the Target row, so apply the PRC-only guard here
                 // too — otherwise this path bypasses the disabled Target option.
-                if !(self.is_tb322fc() && on) {
+                if !(self.is_prc_only() && on) {
                     self.wf_config.modify_region = on;
                 }
                 self.confirm_edit_field = None;
@@ -448,5 +448,34 @@ mod tests {
                 "{setting:?} never reached the opening log lines: {lines:?}"
             );
         }
+    }
+
+    #[test]
+    fn tb324zc_rejects_stale_row_and_cross_region_dispatches() {
+        let mut app = App {
+            device_model: "TB324ZC".into(),
+            flash: FlashWizard {
+                device_region: Some(DeviceRegion::Prc),
+                target: Some(FlashTarget::SameRegion),
+                ..FlashWizard::default()
+            },
+            wf_config: WorkflowConfig {
+                device_region: Some(DeviceRegion::Prc),
+                modify_region: false,
+                ..WorkflowConfig::default()
+            },
+            ..App::default()
+        };
+
+        let _ = app.update_flash(FlashMsg::FlashRegion(DeviceRegion::Row));
+        let _ = app.update_flash(FlashMsg::FlashTarget(FlashTarget::OtherRegion));
+        let _ = app.update_flash(FlashMsg::FlashConfirmSetRegion(DeviceRegion::Row));
+        let _ = app.update_flash(FlashMsg::FlashConfirmSetTarget(FlashTarget::OtherRegion));
+        let _ = app.update_flash(FlashMsg::FlashConfirmSetRegionEdit(true));
+
+        assert_eq!(app.flash.device_region, Some(DeviceRegion::Prc));
+        assert_eq!(app.flash.target, Some(FlashTarget::SameRegion));
+        assert_eq!(app.wf_config.device_region, Some(DeviceRegion::Prc));
+        assert!(!app.wf_config.modify_region);
     }
 }

@@ -73,16 +73,16 @@ impl App {
         let d = self.density();
         let side = self.wizard_square_side();
         let prc_icon = lucide_primary(icon::region_prc(), self.wizard_square_icon());
-        // TB322FC is a PRC-only SKU. Render ROW as a disabled card with
+        // PRC-only SKUs render ROW as a disabled card with
         // a grayed icon so the constraint is visible — silent skip
         // would confuse users who expect both options.
-        let tb322fc = self.is_tb322fc();
-        let unsupported_tb322fc = tr_args!("model_unsupported", model = "TB322FC");
-        let row_card: Element<'_, Message> = if tb322fc {
+        let prc_only = self.is_prc_only();
+        let unsupported_model = tr_args!("model_unsupported", model = self.device_model.as_str());
+        let row_card: Element<'_, Message> = if prc_only {
             icon_option_card_sub_square_disabled_sized(
                 lucide_disabled(icon::region_row(), self.wizard_square_icon()),
                 self.t("region_row"),
-                &unsupported_tb322fc,
+                &unsupported_model,
                 side,
             )
         } else {
@@ -143,11 +143,11 @@ impl App {
         let d = self.density();
         let side = self.wizard_square_side();
         let device = lucide_primary(icon::tile_device(), self.wizard_square_icon());
-        // TB322FC ships only in PRC, so cross-region (OtherRegion) is
+        // PRC-only SKUs cannot use a cross-region (OtherRegion) target, so it is
         // never a valid target. Disable the card with a grayed icon to
         // keep the constraint visible on the picker.
-        let tb322fc = self.is_tb322fc();
-        let unsupported_tb322fc = tr_args!("model_unsupported", model = "TB322FC");
+        let prc_only = self.is_prc_only();
+        let unsupported_model = tr_args!("model_unsupported", model = self.device_model.as_str());
         // Region-aware target descriptions spell out the hardware market and
         // the ROM being installed so users don't conflate the two (the most
         // common point of confusion in this wizard). device_region is chosen
@@ -157,11 +157,11 @@ impl App {
             Some(DeviceRegion::Row) => ("flashtarget_same_desc_row", "flashtarget_other_desc_row"),
             None => ("flashtarget_same_desc", "flashtarget_other_desc"),
         };
-        let other_card: Element<'_, Message> = if tb322fc {
+        let other_card: Element<'_, Message> = if prc_only {
             icon_option_card_sub_square_disabled_sized(
                 lucide_disabled(icon::tile_globe(), self.wizard_square_icon()),
                 self.t(FlashTarget::OtherRegion.label_key()),
-                &unsupported_tb322fc,
+                &unsupported_model,
                 side,
             )
         } else {

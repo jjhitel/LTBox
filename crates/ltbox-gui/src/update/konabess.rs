@@ -119,7 +119,7 @@ impl App {
                                 let phases = self
                                     .begin_phased_op(View::KonaBess, OperationPhaseKind::KonaBess);
                                 let conn = self.connection;
-                                let is_tb323fu = self.is_tb323fu();
+                                let uses_efisp_gbl_route = self.uses_efisp_gbl_route();
                                 let device_model = self.device_model.clone();
                                 let ll = self.live_labels();
                                 let loader = std::path::PathBuf::from(loader);
@@ -130,7 +130,7 @@ impl App {
                                                 konabess_inspection_worker(
                                                     conn,
                                                     loader,
-                                                    is_tb323fu,
+                                                    uses_efisp_gbl_route,
                                                     device_model,
                                                     ll,
                                                     phases,

@@ -728,8 +728,8 @@ impl App {
     pub(crate) fn root_mode_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let side = self.wizard_square_side();
-        let tb323fu = self.is_tb323fu();
-        let unsupported_tb323fu = tr_args!("model_unsupported", model = "TB323FU");
+        let uses_efisp_gbl_route = self.uses_efisp_gbl_route();
+        let unsupported_model = tr_args!("model_unsupported", model = self.device_model.as_str());
         let lkm_card = icon_option_card_sub_square_sized(
             RootMode::Lkm.icon(self.wizard_square_icon()),
             self.t(RootMode::Lkm.label_key()),
@@ -740,13 +740,13 @@ impl App {
         );
         let lkm_card = recommended_overlay(d, lkm_card, self.t("root_recommended_tip").to_string());
         // TODO(root): LTBox currently only swaps the boot.img Image for
-        // GKI, which corrupts boot on TB323FU. Keep GKI disabled until
+        // GKI, which corrupts boot on efisp/GBL-route models. Keep GKI disabled until
         // vbmeta handling is added.
-        let gki_card: Element<'_, Message> = if tb323fu {
+        let gki_card: Element<'_, Message> = if uses_efisp_gbl_route {
             icon_option_card_sub_square_disabled_sized(
                 RootMode::Gki.icon_disabled(self.wizard_square_icon()),
                 self.t(RootMode::Gki.label_key()),
-                &unsupported_tb323fu,
+                &unsupported_model,
                 side,
             )
         } else {

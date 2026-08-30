@@ -1016,16 +1016,16 @@ impl App {
             );
             list = list.push(widget::rule::horizontal(1));
         }
-        // TB322FC PRC-only: only CN is selectable in the Flash wizard. Non-CN
+        // PRC-only models: only CN is selectable in the Flash wizard. Non-CN
         // rows render as disabled buttons so the constraint stays visible. The
         // Advanced "Change Country Code" op has no such restriction (any country,
         // any model), so the gate is lifted there. "Do not change" stays usable.
-        let tb322fc = self.is_tb322fc() && !self.adv_needs_country;
+        let prc_only = self.is_prc_only() && !self.adv_needs_country;
         for entry in COUNTRY_CODES {
             let code = entry.code.to_string();
             let selected = selected_code == Some(entry.code);
             let label = format!("{} — {}", entry.code, entry.name);
-            let disabled = tb322fc && !entry.code.eq_ignore_ascii_case("CN");
+            let disabled = prc_only && !entry.code.eq_ignore_ascii_case("CN");
             let mut btn = button(text(label).size(13))
                 .padding([6, 14])
                 .width(Length::Fill)
@@ -1140,7 +1140,7 @@ impl App {
     pub(crate) fn flash_confirm_edit_popup(&self, field: ConfirmField) -> Element<'_, Message> {
         // (label, selected, on_press, disabled)
         let cfg = &self.wf_config;
-        let tb322 = self.is_tb322fc();
+        let prc_only = self.is_prc_only();
         let opts: Vec<(String, bool, Message, bool)> = match field {
             ConfirmField::Region => [DeviceRegion::Prc, DeviceRegion::Row]
                 .into_iter()
@@ -1149,7 +1149,7 @@ impl App {
                         self.t(r.label_key()).to_string(),
                         cfg.device_region == Some(r),
                         Message::Flash(FlashMsg::FlashConfirmSetRegion(r)),
-                        tb322 && r == DeviceRegion::Row,
+                        prc_only && r == DeviceRegion::Row,
                     )
                 })
                 .collect(),
@@ -1160,7 +1160,7 @@ impl App {
                         self.t(t.label_key()).to_string(),
                         cfg.modify_region == (t == FlashTarget::OtherRegion),
                         Message::Flash(FlashMsg::FlashConfirmSetTarget(t)),
-                        tb322 && t == FlashTarget::OtherRegion,
+                        prc_only && t == FlashTarget::OtherRegion,
                     )
                 })
                 .collect(),
@@ -1192,9 +1192,9 @@ impl App {
                         .to_string(),
                         cfg.modify_region == on,
                         Message::Flash(FlashMsg::FlashConfirmSetRegionEdit(on)),
-                        // PRC-only TB322FC can't cross regions — disable "On"
+                        // PRC-only models can't cross regions — disable "On"
                         // to match the Target editor's OtherRegion gate.
-                        tb322 && on,
+                        prc_only && on,
                     )
                 })
                 .collect(),

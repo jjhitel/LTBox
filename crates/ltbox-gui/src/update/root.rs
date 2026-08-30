@@ -62,9 +62,9 @@ impl App {
                     return Task::none();
                 }
                 // TODO(root): LTBox currently only swaps the boot.img Image
-                // for GKI, which corrupts boot on TB323FU. Keep it disabled
+                // for GKI, which corrupts boot on efisp/GBL-route models. Keep it disabled
                 // until vbmeta handling is added.
-                if self.is_tb323fu() && m == RootMode::Gki {
+                if self.uses_efisp_gbl_route() && m == RootMode::Gki {
                     return Task::none();
                 }
                 self.root.mode = Some(m);
@@ -382,14 +382,17 @@ impl App {
                     return Task::none();
                 }
                 // TODO(root): LTBox currently only swaps the boot.img Image
-                // for GKI, which corrupts boot on TB323FU. The mode card is
+                // for GKI, which corrupts boot on efisp/GBL-route models. The mode card is
                 // disabled, but stale selections can survive from before the
                 // model was identified; refuse them until vbmeta handling is
                 // added.
-                if self.is_tb323fu() && self.root.is_gki() {
+                if self.uses_efisp_gbl_route() && self.root.is_gki() {
                     self.root.mode = None;
                     self.root.step = 1; // Mode step
-                    self.error_msg = Some(tr_args!("model_unsupported", model = "TB323FU"));
+                    self.error_msg = Some(tr_args!(
+                        "model_unsupported",
+                        model = self.device_model.as_str()
+                    ));
                     return Task::none();
                 }
                 if self
@@ -700,6 +703,26 @@ mod tests {
         assert_eq!(app.busy_view, Some(View::Flash));
         // Must not have started a root op or clobbered the foreign reservation.
         assert!(app.op_steps.is_empty());
+    }
+
+    #[test]
+    fn tb324zc_blocks_gki_dispatch_and_start_with_its_own_model_name() {
+        let mut app = App {
+            device_model: "TB324ZC".into(),
+            ..App::default()
+        };
+        let _ = app.update_root(RootMsg::RootMode(RootMode::Gki));
+        assert_eq!(app.root.mode, None);
+
+        app.root.mode = Some(RootMode::Gki);
+        let _ = app.update_root(RootMsg::RootExecStart);
+        assert_eq!(app.root.mode, None);
+        assert_eq!(app.root.step, 1);
+        assert!(
+            app.error_msg
+                .as_deref()
+                .is_some_and(|msg| msg.contains("TB324ZC"))
+        );
     }
 
     #[test]

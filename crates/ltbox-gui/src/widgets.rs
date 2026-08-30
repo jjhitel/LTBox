@@ -4,6 +4,7 @@
 use crate::*;
 use iced::widget::{Space, button, canvas, container, row, text};
 use iced::{Element, Length, Point, Radians, Rectangle, Renderer, Theme, mouse, window};
+use ltbox_core::model::TB324ZC_MODEL;
 
 const MATERIAL_PROGRESS_PERIOD: std::time::Duration = std::time::Duration::from_millis(1_400);
 const MATERIAL_PROGRESS_FRAME: std::time::Duration = std::time::Duration::from_millis(33);
@@ -1032,6 +1033,12 @@ static TB323FU_HANDLE: std::sync::LazyLock<iced::widget::image::Handle> =
             include_bytes!("../assets/devices/tb323fu.png").as_slice(),
         )
     });
+static TB324ZC_HANDLE: std::sync::LazyLock<iced::widget::image::Handle> =
+    std::sync::LazyLock::new(|| {
+        iced::widget::image::Handle::from_bytes(
+            include_bytes!("../assets/devices/tb324zc.png").as_slice(),
+        )
+    });
 static TB376FC_HANDLE: std::sync::LazyLock<iced::widget::image::Handle> =
     std::sync::LazyLock::new(|| {
         iced::widget::image::Handle::from_bytes(
@@ -1070,6 +1077,7 @@ pub(crate) fn device_portrait(model: &str) -> DevicePortrait {
         "TB321FU" => DevicePortrait::Png(TB321FU_HANDLE.clone()),
         "TB322FC" => DevicePortrait::Png(TB322FC_HANDLE.clone()),
         "TB323FU" => DevicePortrait::Png(TB323FU_HANDLE.clone()),
+        TB324ZC_MODEL => DevicePortrait::Png(TB324ZC_HANDLE.clone()),
         "TB376FC" | "TB390FU" => DevicePortrait::Png(TB376FC_HANDLE.clone()),
         "TB520FU" => DevicePortrait::Png(TB520FU_HANDLE.clone()),
         "TB710FU" => DevicePortrait::Png(TB710FU_HANDLE.clone()),
@@ -1427,6 +1435,16 @@ mod tests {
         material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
     };
     use iced::widget::button;
+
+    #[test]
+    fn tb324zc_has_its_own_portrait_handle() {
+        match (device_portrait("TB323FU"), device_portrait("TB324ZC")) {
+            (DevicePortrait::Png(tb323fu), DevicePortrait::Png(tb324zc)) => {
+                assert!(tb323fu != tb324zc);
+            }
+            _ => panic!("both models must dispatch to a PNG portrait"),
+        }
+    }
 
     #[test]
     fn xiaoxin_pro13_models_use_the_shared_png_portrait() {

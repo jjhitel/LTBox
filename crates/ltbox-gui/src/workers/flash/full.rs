@@ -1,5 +1,34 @@
 use super::*;
-use crate::{ManualRollbackIndices, PhaseReporter};
+use crate::{
+    CountryAction, DeviceClass, ManualRollbackIndices, PhaseReporter,
+    fingerprint_uses_efisp_gbl_route,
+};
+
+fn prc_only_flash_violation(
+    model: &str,
+    modify_region: bool,
+    country_action: &CountryAction,
+) -> bool {
+    if !DeviceClass::from_model(model).is_prc_only() {
+        return false;
+    }
+    let non_cn_country = country_action
+        .target()
+        .map(|code| !code.eq_ignore_ascii_case("CN"))
+        .unwrap_or(false);
+    modify_region || non_cn_country
+}
+
+fn target_uses_efisp_gbl_route(firmware_fingerprint: Option<&str>) -> bool {
+    firmware_fingerprint
+        .map(fingerprint_uses_efisp_gbl_route)
+        .unwrap_or(false)
+}
+
+fn efisp_gbl_skip_region(firmware_fingerprint: Option<&str>, device_model: &str) -> bool {
+    target_uses_efisp_gbl_route(firmware_fingerprint)
+        || DeviceClass::from_model(device_model).uses_efisp_gbl_route()
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flash_worker(
@@ -334,21 +363,15 @@ pub(crate) fn flash_worker(
     // Phase 4/9 — Prepare the flash and safety plan.
     live!(log, "[Flash] {}", phases.marker(4));
 
-    // TB323FU keeps region vendor_boot/vbmeta AVB conversion off (it
+    // Efisp/GBL-route models keep region vendor_boot/vbmeta AVB conversion off (they
     // provisions a GBL on efisp instead) but DOES take ARB
     // overlays. Region detect uses fp first, then model.
-    let tb323fu_skip_region = firmware_fingerprint
-        .as_deref()
-        .map(|fp| fingerprint_token_match(fp, "TB323FU"))
-        .unwrap_or(false)
-        || fingerprint_token_match(&device_model, "TB323FU");
+    let skip_region_for_efisp_gbl =
+        efisp_gbl_skip_region(firmware_fingerprint.as_deref(), &device_model);
 
     // GBL/ARB work follows the TARGET firmware identity
     // (vendor_boot fp), never the connected device.
-    let target_is_tb323fu = firmware_fingerprint
-        .as_deref()
-        .map(|fp| fingerprint_token_match(fp, "TB323FU"))
-        .unwrap_or(false);
+    let target_efisp_gbl = target_uses_efisp_gbl_route(firmware_fingerprint.as_deref());
     let xiaoxin_skip_region = xiaoxin_pro13_token(&device_model).is_some()
         || firmware_fingerprint
             .as_deref()
@@ -363,24 +386,24 @@ pub(crate) fn flash_worker(
     // user's selected rollback-bypass + region modes are preserved exactly as
     // on an ADB/bootloader start.
 
-    // TB323FU must never run a blind ON: ON bumps even
+    // Efisp/GBL-route models must never run a blind ON: ON bumps even
     // matching indices and would force the testkey/_arb
     // chain when no downgrade is in play. Demote to AUTO so
     // the EDL-dumped device index decides per partition.
-    if target_is_tb323fu && rb_mode != ltbox_patch::rollback::RollbackMode::Off {
+    if target_efisp_gbl && rb_mode != ltbox_patch::rollback::RollbackMode::Off {
         if rb_mode == ltbox_patch::rollback::RollbackMode::On {
             rb_mode = ltbox_patch::rollback::RollbackMode::Auto;
             ltbox_core::live!(
                 log,
                 "[ARB] {}",
-                ltbox_core::i18n::tr("live_flash_tb323fu_force_auto")
+                ltbox_core::i18n::tr("live_flash_efisp_force_auto")
             );
         } else if rb_mode == ltbox_patch::rollback::RollbackMode::Manual {
             rb_mode = ltbox_patch::rollback::RollbackMode::Off;
             ltbox_core::live!(
                 log,
                 "[ARB] {}",
-                ltbox_core::i18n::tr("rollback_manual_tb323fu_disabled")
+                ltbox_core::i18n::tr("rollback_manual_efisp_disabled")
             );
         }
     }
@@ -392,11 +415,11 @@ pub(crate) fn flash_worker(
             ltbox_core::i18n::tr("live_flash_xiaoxin_force_auto")
         );
     }
-    if tb323fu_skip_region {
+    if skip_region_for_efisp_gbl {
         ltbox_core::live!(
             log,
             "[Flash] {}",
-            ltbox_core::i18n::tr("live_flash_tb323fu_region_efisp")
+            ltbox_core::i18n::tr("live_flash_region_efisp")
         );
     }
     if xiaoxin_skip_region {
@@ -451,7 +474,7 @@ pub(crate) fn flash_worker(
     // ARB dump decides `_arb` (testkey-root) vs stock — see
     // the post-rawprogram-staging block below.
     let mut efisp_efi: Option<std::path::PathBuf> = None;
-    let mut tb323fu_arb_need = false;
+    let mut efisp_gbl_arb_need = false;
 
     // Count .x and .xml files
     // Count flashable `.x` (rawprogram) files. The
@@ -502,7 +525,7 @@ pub(crate) fn flash_worker(
     // via testkeys in KEY_MAP). Classify the firmware via vbmeta_system's pubkey
     // (the unified key source): an `Unknown` key aborts; a fixed-key ("key2")
     // firmware aborts on cross-region for now (same-region key2 is handled after
-    // EDL opens; cross-region key2 re-sign is a separate change). TB323FU has its
+    // EDL opens; cross-region key2 re-sign is a separate change). Efisp/GBL models have their
     // own region path (efisp GBL) and is exempt here.
     let fw_key_class = match ltbox_patch::avb::extract_image_avb_info(&vbmeta_system) {
         Ok(info) => ltbox_patch::key_map::classify_pubkey(info.public_key_sha1.as_deref()),
@@ -524,7 +547,7 @@ pub(crate) fn flash_worker(
     //    (testkey device) or an abort (fixed device).
     let mut region_pair: Option<ltbox_patch::region::RegionAvbOutput> = None;
     if cfg.modify_region
-        && !tb323fu_skip_region
+        && !skip_region_for_efisp_gbl
         && !xiaoxin_skip_region
         && fw_key_class != ltbox_patch::key_map::KeyClass::Fixed
     {
@@ -753,6 +776,13 @@ pub(crate) fn flash_worker(
         match read_edl_start_device(&mut session, firmware_fingerprint.as_deref(), &mut log) {
             Ok(probe) => {
                 device_model = probe.model_token;
+                if prc_only_flash_violation(&device_model, cfg.modify_region, &cfg.country_action) {
+                    let _ = session.reset_to_edl(&mut log);
+                    return Err(tr_args!(
+                        "err_flash_prc_only",
+                        model = device_model.as_str()
+                    ));
+                }
                 if !xiaoxin_pro13_flash && ltbox_core::model::is_xiaoxin_pro13_model(&device_model)
                 {
                     xiaoxin_pro13_flash = true;
@@ -767,29 +797,16 @@ pub(crate) fn flash_worker(
                 }
                 match probe.rollback_floors {
                     None => {
-                        // TB322FC is PRC-only. The pre-EDL UI gates that block
-                        // cross-region / non-CN country never fired (the model
-                        // was unknown until now), so enforce the constraint
-                        // here, before any region or country write.
-                        let non_cn_country = cfg
-                            .country_action
-                            .target()
-                            .map(|c| !c.eq_ignore_ascii_case("CN"))
-                            .unwrap_or(false);
+                        // TB322FC has no rollback protection. PRC-only
+                        // restrictions were enforced explicitly above, without
+                        // coupling them to this missing-floor sentinel.
                         if rb_mode != ltbox_patch::rollback::RollbackMode::Manual {
-                            if cfg.modify_region || non_cn_country {
-                                let _ = session.reset_to_edl(&mut log);
-                                return Err(ltbox_core::i18n::tr("err_flash_tb322fc_prc_only"));
-                            }
                             rb_mode = ltbox_patch::rollback::RollbackMode::Off;
                             ltbox_core::live!(
                                 log,
                                 "[ARB] {}",
                                 ltbox_core::i18n::tr("live_arb_device_index_none")
                             );
-                        } else if cfg.modify_region || non_cn_country {
-                            let _ = session.reset_to_edl(&mut log);
-                            return Err(ltbox_core::i18n::tr("err_flash_tb322fc_prc_only"));
                         }
                     }
                     Some(floors) => {
@@ -881,13 +898,13 @@ pub(crate) fn flash_worker(
 
     // AVB root-of-trust gate (device side). The firmware vbmeta was already
     // classified (`fw_key_class`): `Unknown` aborted before region conversion;
-    // `Testkey` firmware and a `Fixed` firmware on TB323FU take their existing
+    // `Testkey` firmware and a `Fixed` firmware on the efisp/GBL route take their existing
     // paths. Here a `Fixed` ("key2") firmware on any other model classifies the
     // device's active-slot vbmeta and either proceeds as-is (fixed device, same
     // region, no downgrade), re-signs to the testkey + preserves the device
     // bootloader (testkey device — including a cross-region convert-then-resign),
     // or aborts (fixed device cross-region/downgrade, or unknown device key).
-    if fw_key_class == ltbox_patch::key_map::KeyClass::Fixed && !target_is_tb323fu {
+    if fw_key_class == ltbox_patch::key_map::KeyClass::Fixed && !target_efisp_gbl {
         let kc_dir = ltbox_core::app_paths::work_dir_for("flash_keyclass");
         let _ = std::fs::remove_dir_all(&kc_dir);
         std::fs::create_dir_all(&kc_dir)
@@ -1163,8 +1180,8 @@ pub(crate) fn flash_worker(
                 )
             );
         }
-    } else if rb_mode != ltbox_patch::rollback::RollbackMode::Off && target_is_tb323fu {
-        // TB323FU stages the testkey chain whenever the
+    } else if rb_mode != ltbox_patch::rollback::RollbackMode::Off && target_efisp_gbl {
+        // Efisp/GBL-route models stage the testkey chain whenever the
         // install is a downgrade, independent of region /
         // wipe: the matching `_arb` GBL is flashed to efisp
         // below in the exact same `need` cases, so the chain
@@ -1186,7 +1203,7 @@ pub(crate) fn flash_worker(
             None,
             &mut log,
         )?;
-        tb323fu_arb_need = need;
+        efisp_gbl_arb_need = need;
         arb_patched = overlays;
     } else if rb_mode != ltbox_patch::rollback::RollbackMode::Off {
         let arb_work_dir = ltbox_core::app_paths::work_dir_for("flash_arb");
@@ -1410,12 +1427,12 @@ pub(crate) fn flash_worker(
     // gated on data wipe — flashing efisp no longer forces
     // a data reset, so it provisions in data-keep mode too.
     // Both flash below.
-    if target_is_tb323fu && (tb323fu_arb_need || cfg.modify_region) {
-        // TB323FU's AVB fingerprint carries no region token; read the region
+    if target_efisp_gbl && (efisp_gbl_arb_need || cfg.modify_region) {
+        // The AVB fingerprint carries no region token; read the region
         // from the firmware vendor_boot's `product_region` DTB marker instead.
         let is_prc = ltbox_patch::region::detect_product_region(&vendor_boot)
             == Some(ltbox_patch::region::RegionTarget::Prc);
-        let suffix = efisp_asset_suffix(is_prc, tb323fu_arb_need);
+        let suffix = efisp_asset_suffix(is_prc, efisp_gbl_arb_need);
         let expected_name = efisp_expected_asset(suffix).ok_or_else(|| {
             tr_args!(
                 "err_flash_efisp_asset_unknown",
@@ -1545,7 +1562,7 @@ pub(crate) fn flash_worker(
     // variant on a region-provisioning wipe (best-effort).
     // With no EFI fetched, a same-region wipe strips efisp;
     // every other mode leaves it untouched.
-    if target_is_tb323fu {
+    if target_efisp_gbl {
         let efisp_lun = ltbox_core::partition_lun::lun_for_partition("efisp").unwrap_or(4);
         match &efisp_efi {
             Some(efi) => {
@@ -1564,7 +1581,7 @@ pub(crate) fn flash_worker(
                     // with this `_arb` GBL. Abort loudly
                     // (device stays in EDL for retry) rather
                     // than resetting into a rollback brick.
-                    if tb323fu_arb_need {
+                    if efisp_gbl_arb_need {
                         return Err(tr_args!(
                             "err_flash_efisp_arb_failed",
                             error = e.to_string()
@@ -1582,7 +1599,7 @@ pub(crate) fn flash_worker(
                 // A downgrade always fetches the `_arb` GBL,
                 // so reaching here with `need` set is an
                 // internal inconsistency — fail safe.
-                if tb323fu_arb_need {
+                if efisp_gbl_arb_need {
                     return Err(ltbox_core::i18n::tr("err_flash_efisp_arb_missing"));
                 }
                 // Same-region wipe with no downgrade strips
@@ -1762,30 +1779,30 @@ fn xiaoxin_rollback_decision(
 }
 
 /// Pinned gbl_root_baldur release used for TB323FU efisp GBL images.
-const EFISP_GBL_RELEASE_TAG: &str = "5.3.120-mod5";
+const EFISP_GBL_RELEASE_TAG: &str = "5.3.120-mod6";
 
 /// Exact asset names accepted for the pinned efisp release.
 const EFISP_EXPECTED_ASSETS: &[(&str, &str)] = &[
     (
         "generic_superfastboot_prc.efi",
-        "22471c543e13a433cb05c5c54bcfaf107f2643a6cfd7e46d8d73764b349e8cf2",
+        "375d3f4ec5ca9f02745077fba6ef8b5b7e7c5ad77c17b7bdb28b794da4fb72f2",
     ),
     (
         "generic_superfastboot_prc_arb.efi",
-        "fc55e6a4912f20c1bf0c664bb985e10d0c4e0944f92fab5e4f855b22e2aefcdf",
+        "d0496c898667bd63fe30809c3ab68a4bcd009dae8f961048583c37ee4a004086",
     ),
     (
         "generic_superfastboot_row.efi",
-        "90b16cacc4f2f6aded2c5bf0eed7d20b6a294115f6cf09dab555b4a4496e2628",
+        "024244ea7d2ac42947ced7688eada4082bf642e1cf205cf64a0b82a7f6291155",
     ),
     (
         "generic_superfastboot_row_arb.efi",
-        "99b62f4aeca619df4f480f6bffa3f0fea3ef2516a8fe48a092613c2aa68d10e2",
+        "defa391eed6164801cb5e8bec0a5175a164aa0ed44f776f9637e2c6c108efc33",
     ),
 ];
 
 /// Map a region/ARB suffix to the exact pinned asset name for the
-/// `5.3.120-mod5` gbl_root_baldur release. Unknown suffixes refuse.
+/// `5.3.120-mod6` gbl_root_baldur release. Unknown suffixes refuse.
 fn efisp_expected_asset(suffix: &str) -> Option<&'static str> {
     match suffix {
         "_prc.efi" => Some("generic_superfastboot_prc.efi"),
@@ -1848,6 +1865,51 @@ fn verify_efisp_asset(path: &std::path::Path, asset_name: &str) -> Result<(), St
 }
 
 #[cfg(test)]
+mod tb324zc_route_tests {
+    use super::{efisp_gbl_skip_region, prc_only_flash_violation, target_uses_efisp_gbl_route};
+    use crate::CountryAction;
+
+    const TB324ZC_FP: &str = "qti/TB324ZC/TB324ZC:16/build:user/release-keys";
+
+    #[test]
+    fn target_and_live_efisp_predicates_keep_their_inputs_separate() {
+        assert!(target_uses_efisp_gbl_route(Some(TB324ZC_FP)));
+        assert!(!target_uses_efisp_gbl_route(None));
+        assert!(efisp_gbl_skip_region(None, "TB324ZC"));
+        assert!(!efisp_gbl_skip_region(None, "TB520FU"));
+    }
+
+    #[test]
+    fn edl_start_prc_recheck_is_independent_of_rollback_floors() {
+        assert!(prc_only_flash_violation(
+            "TB324ZC",
+            true,
+            &CountryAction::Set("CN".into())
+        ));
+        assert!(prc_only_flash_violation(
+            "TB324ZC",
+            false,
+            &CountryAction::Set("KR".into())
+        ));
+        assert!(!prc_only_flash_violation(
+            "TB324ZC",
+            false,
+            &CountryAction::Set("CN".into())
+        ));
+        assert!(prc_only_flash_violation(
+            "TB322FC",
+            true,
+            &CountryAction::Skip
+        ));
+        assert!(!prc_only_flash_violation(
+            "TB520FU",
+            true,
+            &CountryAction::Set("KR".into())
+        ));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
         EFISP_EXPECTED_ASSETS, EFISP_GBL_RELEASE_TAG, XiaoxinRollbackDecision,
@@ -1902,7 +1964,7 @@ mod tests {
 
     #[test]
     fn expected_hashes_cover_all_accepted_assets() {
-        assert_eq!(EFISP_GBL_RELEASE_TAG, "5.3.120-mod5");
+        assert_eq!(EFISP_GBL_RELEASE_TAG, "5.3.120-mod6");
         assert_eq!(EFISP_EXPECTED_ASSETS.len(), 4);
         for (name, hash) in EFISP_EXPECTED_ASSETS {
             assert_eq!(hash.len(), 64, "{name} hash length");
