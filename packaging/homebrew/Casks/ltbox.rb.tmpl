@@ -43,11 +43,9 @@ cask "ltbox" do
   ]
 
   caveats <<~EOS
-    LTBox is ad-hoc signed, not Developer ID signed, and is not notarized.
-
-    Homebrew no longer applies Gatekeeper quarantine to casks, so no extra
-    step is normally needed. If macOS still refuses to open the app, clear the
-    attribute once with:
+    LTBox is ad-hoc signed, not Developer ID signed, and is not notarized, so
+    Gatekeeper refuses to open it until the quarantine attribute is cleared.
+    Run this once after installing:
 
       xattr -dr com.apple.quarantine /Applications/LTBox.app
   EOS
