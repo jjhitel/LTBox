@@ -18,6 +18,18 @@ mod unroot;
 mod window;
 
 impl App {
+    fn open_available_release_page(&self) {
+        let Some(release) = self.update_available.as_ref() else {
+            return;
+        };
+        // `open` crate dispatches via `xdg-open` (Linux) / `start` (Windows) /
+        // `open` (macOS). Failure is logged but not surfaced, matching other
+        // external links in the app.
+        if let Err(error) = open::that_detached(&release.html_url) {
+            tracing::warn!("failed to open update URL: {error}");
+        }
+    }
+
     pub(crate) fn update(&mut self, msg: Message) -> Task<Message> {
         #[cfg(feature = "demo")]
         if demo::blocks_device_action(self, &msg) {
@@ -959,18 +971,67 @@ impl App {
                 // render identically: nothing in the sidebar.
                 self.update_available = result;
             }
-            Message::OpenUpdateUrl => {
-                if let Some(release) = self.update_available.as_ref() {
-                    // `open` crate dispatches via `xdg-open` (Linux) /
-                    // `start` (Windows) / `open` (macOS). Failure here is
-                    // logged but not surfaced — the user can copy the URL
-                    // out of the release notes if their default browser
-                    // is misconfigured.
-                    if let Err(e) = open::that_detached(&release.html_url) {
-                        tracing::warn!("failed to open update URL: {e}");
+            Message::OpenUpdate => {
+                let source = ltbox_core::install_source::install_source();
+                match source {
+                    ltbox_core::install_source::InstallSource::Direct => {
+                        self.direct_update_state = DirectUpdateState::Ready;
+                        self.update_dialog_source = Some(source);
+                    }
+                    _ => {
+                        self.update_dialog_source = Some(source);
                     }
                 }
             }
+            Message::UpdateDialogClose => {
+                if !self.direct_update_state.is_active() {
+                    self.update_dialog_source = None;
+                }
+            }
+            Message::InstallSelfUpdate => {
+                if self.update_dialog_source
+                    != Some(ltbox_core::install_source::InstallSource::Direct)
+                    || self.direct_update_state.is_active()
+                {
+                    return Task::none();
+                }
+                let Some(release) = self.update_available.as_ref() else {
+                    return Task::none();
+                };
+                let tag = release.tag.clone();
+                self.direct_update_state = DirectUpdateState::Updating;
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            self_update::install_release_and_restart(tag)
+                        })
+                        .await
+                        .unwrap_or_else(|_| {
+                            Err(SelfUpdateFailure {
+                                kind: SelfUpdateFailureKind::Swap,
+                                detail: ltbox_core::i18n::tr("err_task_panicked"),
+                            })
+                        })
+                    },
+                    Message::SelfUpdateFinished,
+                );
+            }
+            Message::SelfUpdateFinished(result) => match result {
+                Ok(()) => {
+                    self.direct_update_state = DirectUpdateState::Restarting;
+                    return Task::perform(
+                        async {
+                            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                        },
+                        |_| Message::ExitAfterUpdate,
+                    );
+                }
+                Err(error) => {
+                    self.direct_update_state = DirectUpdateState::Failed(error);
+                }
+            },
+            Message::ExitAfterUpdate => return iced::exit(),
+            Message::OpenUpdateReleasePage => self.open_available_release_page(),
             Message::InstallDrivers => {
                 if self.installing_drivers {
                     return Task::none();

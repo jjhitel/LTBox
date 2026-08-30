@@ -1,0 +1,53 @@
+cask "ltbox" do
+  version "@@VERSION@@"
+  sha256 "@@MACOS_UNIVERSAL_SHA256@@"
+
+  url "https://github.com/miner7222/LTBox/releases/download/v#{version}/LTBox-macos_universal-v#{version}.tar.gz"
+  name "LTBox"
+  desc "Lenovo tablet firmware, root, and EDL toolkit"
+  homepage "https://github.com/miner7222/LTBox"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  depends_on macos: ">= :big_sur"
+
+  app "LTBox.app"
+
+  # The release bundle is ad-hoc signed before it is archived. Add the
+  # package-manager marker to the staged bundle, then refresh that ad-hoc
+  # signature while preserving the USB entitlement.
+  preflight do
+    (staged_path/"LTBox.app/Contents/MacOS/ltbox.install-source").write("homebrew")
+    system_command "/usr/bin/codesign",
+                   args: [
+                     "--force",
+                     "--preserve-metadata=entitlements",
+                     "--sign",
+                     "-",
+                     staged_path/"LTBox.app",
+                   ]
+  end
+
+  uninstall quit: "io.github.miner7222.LTBox"
+
+  zap trash: [
+    "~/Library/Application Support/ltbox",
+    "~/Library/Caches/io.github.miner7222.LTBox",
+    "~/Library/Preferences/io.github.miner7222.LTBox.plist",
+    "~/Library/Saved Application State/io.github.miner7222.LTBox.savedState",
+  ]
+
+  caveats <<~EOS
+    LTBox is ad-hoc signed, not Developer ID signed, and is not notarized.
+    Install it without Gatekeeper quarantine with:
+
+      brew install --cask --no-quarantine miner7222/tap/ltbox
+
+    If it was already installed with quarantine enabled, remove that attribute with:
+
+      xattr -dr com.apple.quarantine /Applications/LTBox.app
+  EOS
+end

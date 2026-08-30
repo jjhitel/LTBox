@@ -21,13 +21,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ltbox_core::{live, tr_args};
 
 use super::{
-    DriverError, DriverStatus, DriverUpdate, Result, classify_udev_rules, parse_version,
-    qcom_driver_mode, version_from_tag, version_lt,
+    DriverError, DriverStatus, DriverUpdate, Result, parse_version, qcom_driver_mode,
+    version_from_tag, version_lt,
 };
 
-/// Where `ltbox --install-udev` writes the rules; kept in sync with the GUI's
-/// `UDEV_RULES_PATH`.
-const UDEV_RULES_PATH: &str = "/etc/udev/rules.d/51-ltbox-qcom.rules";
+/// Administrator-managed location written by `ltbox --install-udev`; kept in
+/// sync with the GUI's `UDEV_RULES_PATH`.
+const UDEV_ADMIN_RULES_PATH: &str = "/etc/udev/rules.d/51-ltbox-qcom.rules";
+/// Vendor-package location used by LTBox's `.deb` and `.rpm` packages.
+const UDEV_PACKAGE_RULES_PATH: &str = "/usr/lib/udev/rules.d/51-ltbox-qcom.rules";
 const KERNEL_RELEASES_API: &str =
     "https://api.github.com/repos/qualcomm/qcom-usb-kernel-drivers/releases?per_page=10";
 const LINUX_TAG_NEEDLE: &str = "lnx";
@@ -69,12 +71,30 @@ pub fn check_required_drivers() -> DriverStatus {
 }
 
 fn check_udev_rules() -> DriverStatus {
-    match std::fs::read_to_string(UDEV_RULES_PATH) {
-        Ok(content) => classify_udev_rules(Some(&content)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => classify_udev_rules(None),
+    let admin_rules = match read_optional_rules(UDEV_ADMIN_RULES_PATH) {
+        Ok(contents) => contents,
+        // An administrator override with the same filename takes precedence
+        // over the packaged copy, so an unreadable override is not safely
+        // replaceable by assuming the package file is active.
+        Err(_) => return DriverStatus::UdevRulesNoPermission,
+    };
+    if admin_rules.is_some() {
+        return super::classify_udev_rule_locations(admin_rules.as_deref(), None);
+    }
+
+    match read_optional_rules(UDEV_PACKAGE_RULES_PATH) {
+        Ok(package_rules) => super::classify_udev_rule_locations(None, package_rules.as_deref()),
         // File exists but is unreadable (permission or otherwise) — surface a
         // repairable state rather than silently claiming the rules are fine.
         Err(_) => DriverStatus::UdevRulesNoPermission,
+    }
+}
+
+fn read_optional_rules(path: &str) -> std::io::Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
     }
 }
 

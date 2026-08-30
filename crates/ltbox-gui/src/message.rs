@@ -114,7 +114,21 @@ pub(crate) enum Message {
     InstallDrivers,
     InstallDriversDone(Result<Vec<String>, String>),
     UpdateCheckDone(Option<ltbox_core::github::StableRelease>),
-    OpenUpdateUrl,
+    /// Click the sidebar update pill. Direct installs open the self-updater;
+    /// package-managed installs open channel-specific upgrade instructions.
+    OpenUpdate,
+    UpdateDialogClose,
+    /// Begin the verified direct-download update worker.
+    InstallSelfUpdate,
+    /// Direct-download update worker completion. Success means the replacement
+    /// has been installed and its lock-aware relaunch process was spawned.
+    SelfUpdateFinished(Result<(), crate::SelfUpdateFailure>),
+    /// Briefly show the successful result, then exit so the waiting replacement
+    /// process can acquire the singleton lock.
+    ExitAfterUpdate,
+    /// Open the available release in the host's default browser from the
+    /// package-manager instructions dialog.
+    OpenUpdateReleasePage,
     /// Startup GitHub-reachability probe result. Gates the driver
     /// install/update buttons (offline → disabled + "needs internet" tip).
     ConnectivityChecked(bool),
@@ -441,6 +455,8 @@ pub(crate) enum SettingsMsg {
     SettingsPickDefaultLoader,
     SettingsDefaultLoaderChosen(Option<String>),
     SettingsClearDefaultLoader,
+    /// Create and open the persistent device-backup directory.
+    OpenBackupFolder,
     /// Remove leftover temp files (`work_*` scratch + `output_*` auto-output).
     CleanupTempFiles,
     /// Cleanup sweep finished; triggers a rescan.

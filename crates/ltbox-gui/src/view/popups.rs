@@ -6,6 +6,196 @@ use iced::{Element, Length, Theme};
 use theme::with_alpha;
 
 impl App {
+    /// Update flow opened from the sidebar pill. Direct downloads get the
+    /// verified self-updater; package-managed installs keep their command.
+    pub(crate) fn update_dialog_view(&self) -> Element<'_, Message> {
+        let (Some(source), Some(release)) =
+            (self.update_dialog_source, self.update_available.as_ref())
+        else {
+            return container(text("")).into();
+        };
+        if source == ltbox_core::install_source::InstallSource::Direct {
+            return self.direct_update_dialog_view(release);
+        }
+
+        let upgrade = package_upgrade_command(source);
+        let title = text(self.t("update_dialog_title").to_string())
+            .size(theme::text_size::WIZARD_STEP_TITLE)
+            .font(theme::emphasis::bold());
+        let version = text(
+            // Tags carry a leading `v`; the string already says "version",
+            // so trim it rather than rendering "Version v3.3.0".
+            self.t("update_dialog_version")
+                .replace("{version}", release.tag.trim_start_matches('v')),
+        )
+        .size(theme::text_size::BODY_LARGE);
+        let body_key = if upgrade.available {
+            "update_dialog_package_body"
+        } else {
+            "update_dialog_other_body"
+        };
+        let body = text(self.t(body_key).to_string())
+            .size(theme::text_size::BODY_MEDIUM)
+            .style(muted_style)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+
+        let command_area: Element<'_, Message> = if upgrade.available {
+            let command = iced::widget::text_input("", upgrade.command)
+                // Keep the field selectable without allowing the displayed
+                // package-manager command to be changed.
+                .on_input(|_| Message::Noop)
+                .padding([10, 12])
+                .size(theme::text_size::BODY_MEDIUM)
+                .style(m3_text_input_style);
+            let copy = m3_text_button(self.t("update_dialog_copy").to_string())
+                .on_press(Message::CopyToClipboard(upgrade.command.to_string()));
+            column![
+                text(self.t("update_dialog_command_label").to_string())
+                    .size(theme::text_size::LABEL_SMALL)
+                    .style(muted_style),
+                row![command, copy]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+            ]
+            .spacing(6)
+            .into()
+        } else {
+            column![].into()
+        };
+
+        let close =
+            m3_text_button(self.t("btn_close").to_string()).on_press(Message::UpdateDialogClose);
+        let release_page = m3_filled_button(self.t("update_dialog_release_page").to_string())
+            .on_press(Message::OpenUpdateReleasePage);
+        let actions = row![Space::new().width(Length::Fill), close, release_page]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+
+        let content = column![
+            title,
+            version,
+            body,
+            command_area,
+            widget::rule::horizontal(1),
+            actions,
+        ]
+        .spacing(14)
+        .padding(24)
+        .width(520);
+
+        m3_dialog(content.into())
+    }
+
+    fn direct_update_dialog_view(
+        &self,
+        release: &ltbox_core::github::StableRelease,
+    ) -> Element<'_, Message> {
+        let title = text(self.t("update_dialog_title").to_string())
+            .size(theme::text_size::WIZARD_STEP_TITLE)
+            .font(theme::emphasis::bold());
+        let version = text(
+            self.t("update_dialog_version")
+                .replace("{version}", release.tag.trim_start_matches('v')),
+        )
+        .size(theme::text_size::BODY_LARGE);
+
+        let state_body: Element<'_, Message> = match &self.direct_update_state {
+            DirectUpdateState::Ready => text(self.t("update_dialog_direct_body").to_string())
+                .size(theme::text_size::BODY_MEDIUM)
+                .style(muted_style)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .width(Length::Fill)
+                .into(),
+            DirectUpdateState::Updating => row![
+                material_circular_progress(MaterialProgressSize::Standard),
+                text(self.t("update_dialog_downloading").to_string())
+                    .size(theme::text_size::BODY_MEDIUM)
+                    .style(muted_style),
+            ]
+            .spacing(14)
+            .align_y(iced::Alignment::Center)
+            .into(),
+            DirectUpdateState::Failed(failure) => {
+                let reason_key = match failure.kind {
+                    SelfUpdateFailureKind::NoMatchingBuild => "update_dialog_error_no_build",
+                    SelfUpdateFailureKind::InstallLocation => {
+                        "update_dialog_error_install_location"
+                    }
+                    SelfUpdateFailureKind::NotWritable => "update_dialog_error_not_writable",
+                    SelfUpdateFailureKind::Download => "update_dialog_error_download",
+                    SelfUpdateFailureKind::HashMismatch => "update_dialog_error_hash",
+                    SelfUpdateFailureKind::Extract => "update_dialog_error_extract",
+                    SelfUpdateFailureKind::ArchiveLayout => "update_dialog_error_layout",
+                    SelfUpdateFailureKind::Swap => "update_dialog_error_swap",
+                    SelfUpdateFailureKind::Restart => "update_dialog_error_restart",
+                };
+                let detail = self
+                    .t("update_dialog_error_detail")
+                    .replace("{error}", &failure.detail);
+                column![
+                    text(self.t("update_dialog_failed").to_string())
+                        .size(theme::text_size::BODY_MEDIUM)
+                        .style(|theme: &Theme| iced::widget::text::Style {
+                            color: Some(pal_of(theme).error),
+                        }),
+                    text(self.t(reason_key).to_string())
+                        .size(theme::text_size::BODY_MEDIUM)
+                        .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                        .width(Length::Fill),
+                    text(detail)
+                        .size(theme::text_size::BODY_SMALL)
+                        .style(muted_style)
+                        .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                        .width(Length::Fill),
+                ]
+                .spacing(6)
+                .into()
+            }
+            DirectUpdateState::Restarting => text(self.t("update_dialog_restarting").to_string())
+                .size(theme::text_size::BODY_MEDIUM)
+                .style(success_style)
+                .into(),
+        };
+
+        let mut actions = row![Space::new().width(Length::Fill)]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+        if matches!(
+            &self.direct_update_state,
+            DirectUpdateState::Ready | DirectUpdateState::Failed(_)
+        ) {
+            actions = actions.push(
+                m3_text_button(self.t("btn_close").to_string())
+                    .on_press(Message::UpdateDialogClose),
+            );
+            actions = actions.push(
+                m3_text_button(self.t("update_dialog_release_page").to_string())
+                    .on_press(Message::OpenUpdateReleasePage),
+            );
+            let install_label = if matches!(&self.direct_update_state, DirectUpdateState::Ready) {
+                self.t("update_dialog_install")
+            } else {
+                self.t("btn_retry")
+            };
+            actions = actions.push(
+                m3_filled_button(install_label.to_string()).on_press(Message::InstallSelfUpdate),
+            );
+        }
+
+        let content = column![
+            title,
+            version,
+            state_body,
+            widget::rule::horizontal(1),
+            actions,
+        ]
+        .spacing(14)
+        .padding(24)
+        .width(520);
+        m3_dialog(content.into())
+    }
+
     /// Device-info popup: render the Lenovo PTSTPD `data` block as a
     /// 2-column key/value table. Branches on `DeviceInfoState` so the
     /// modal stays open through Loading / Error / Ready transitions

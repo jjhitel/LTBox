@@ -342,6 +342,17 @@ pub(crate) fn classify_udev_rules(installed: Option<&str>) -> DriverStatus {
     }
 }
 
+/// Classify the effective LTBox rules across udev's administrator and vendor
+/// package directories. A same-named file in `/etc/udev/rules.d` overrides the
+/// packaged copy in `/usr/lib/udev/rules.d`, so its content wins when present.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn classify_udev_rule_locations(
+    admin_rules: Option<&str>,
+    package_rules: Option<&str>,
+) -> DriverStatus {
+    classify_udev_rules(admin_rules.or(package_rules))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,6 +378,18 @@ mod tests {
         assert_eq!(classify_udev_rules(Some(UDEV_RULES)), DriverStatus::Present);
         assert_eq!(
             classify_udev_rules(Some("# hand-edited or older rules\n")),
+            DriverStatus::UdevRulesStale
+        );
+    }
+
+    #[test]
+    fn packaged_udev_rules_are_present_without_an_admin_copy() {
+        assert_eq!(
+            classify_udev_rule_locations(None, Some(UDEV_RULES)),
+            DriverStatus::Present
+        );
+        assert_eq!(
+            classify_udev_rule_locations(Some("# stale admin override\n"), Some(UDEV_RULES)),
             DriverStatus::UdevRulesStale
         );
     }

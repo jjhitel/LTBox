@@ -481,6 +481,65 @@ impl App {
             widget::tooltip::Position::Top,
         );
 
+        let backup_btn = button(
+            container(lucide_icon(
+                icon::fab_open_folder(),
+                d.image(18.0),
+                |t: &Theme| pal_of(t).on_secondary_container,
+            ))
+            .width(icon_btn)
+            .height(icon_btn)
+            .center_x(icon_btn)
+            .center_y(icon_btn),
+        )
+        .on_press(Message::Settings(SettingsMsg::OpenBackupFolder))
+        .padding(0)
+        .style(|t: &Theme, status| {
+            let p = pal_of(t);
+            let base = p.secondary_container;
+            let bg = match status {
+                button::Status::Hovered => {
+                    mix_color(base, p.on_secondary_container, theme::state::HOVER)
+                }
+                button::Status::Pressed => {
+                    mix_color(base, p.on_secondary_container, theme::state::PRESSED)
+                }
+                _ => base,
+            };
+            button::Style {
+                background: Some(bg.into()),
+                border: iced::Border {
+                    radius: theme::shape::FULL.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        });
+        let backup_action = widget::tooltip(
+            backup_btn,
+            container(text(self.t("settings_backup_folder_open").to_string()).size(d.text(11.0)))
+                .padding([6, 10])
+                .style(|t: &Theme| theme::tooltip_style(t, theme::shape::XS)),
+            widget::tooltip::Position::Top,
+        );
+        let backup_path = ltbox_core::app_paths::backup_root();
+        let backup_row = row![
+            column![
+                text(self.t("settings_backup_folder").to_string())
+                    .size(d.text(13.0))
+                    .line_height(1.0),
+                text(backup_path.display().to_string())
+                    .size(d.text(11.0))
+                    .style(muted_style),
+            ]
+            .spacing(d.space(6.0)),
+            Space::new().width(Length::Fill),
+            backup_action,
+        ]
+        .spacing(d.space(8.0))
+        .width(Length::Fill)
+        .align_y(iced::Alignment::Center);
+
         // Size readout sits in parens between the label and the help icon;
         // shown once a scan has landed. Explanation lives only in the tooltip.
         let cleanup_size: Element<'_, Message> = match self.temp_files_bytes {
@@ -506,7 +565,7 @@ impl App {
         // Device / maintenance card: Qualcomm driver + default loader sit
         // above, with the temp-file cleanup row kept at the very bottom.
         let cleanup_card = container(
-            column![driver_row, default_loader_row, cleanup_top]
+            column![driver_row, default_loader_row, backup_row, cleanup_top]
                 .spacing(d.space(14.0))
                 .padding(d.padding(14.0, 18.0))
                 .width(Length::Fill),

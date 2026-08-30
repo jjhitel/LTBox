@@ -34,6 +34,12 @@ impl App {
                 })
                 .unwrap_or_else(Task::none),
             WindowMsg::WindowClose => {
+                // Exiting a process while its updater may be between filesystem
+                // operations would defeat the rollback guarantee. Native close
+                // requests and the custom titlebar both route through here.
+                if self.direct_update_state.is_active() {
+                    return Task::none();
+                }
                 // Closing while a flash/root/probe (or any other busy op)
                 // is live would tear down the process mid-work. Refuse and
                 // surface the same "X is in progress" wording the progress

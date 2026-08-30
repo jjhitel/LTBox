@@ -1,0 +1,257 @@
+name: Publish package-manager artifacts
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package, e.g. v3.2.8
+        required: true
+        type: string
+      publish_manifests:
+        description: Also push the rendered manifests to the bucket and tap
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: publish-packages-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NFPM_TOOL_VERSION: "2.47.0"
+
+jobs:
+  package-linux:
+    name: Package Linux ${{ matrix.release_arch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release_arch: x86_64
+            nfpm_arch: amd64
+            deb_arch: amd64
+            rpm_arch: x86_64
+          - release_arch: arm64
+            nfpm_arch: arm64
+            deb_arch: arm64
+            rpm_arch: aarch64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Packaging inputs come from the ref being run, not the release tag:
+          # a dry run against an older tag still needs this branch's templates.
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Download and verify published Linux binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          RELEASE_ARCH: ${{ matrix.release_arch }}
+        run: |
+          set -euo pipefail
+          asset="LTBox-linux_${RELEASE_ARCH}-${TAG}.tar.gz"
+          mkdir -p release-assets packaging-stage
+          gh release download "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir release-assets \
+            --pattern "${asset}" \
+            --pattern "${asset}.sha256"
+          (cd release-assets && sha256sum --check "${asset}.sha256")
+          tar -xzf "release-assets/${asset}" -C release-assets
+          install -m 0755 \
+            "release-assets/LTBox-linux_${RELEASE_ARCH}-${TAG}/ltbox" \
+            packaging-stage/ltbox
+          sed 's|__LTBOX_EXEC__|/usr/bin/ltbox|g' \
+            misc/desktop/io.github.miner7222.LTBox.desktop \
+            > packaging-stage/io.github.miner7222.LTBox.desktop
+
+      - name: Build deb and rpm from the release binary
+        env:
+          RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.tag }}
+          NFPM_ARCH: ${{ matrix.nfpm_arch }}
+          DEB_ARCH: ${{ matrix.deb_arch }}
+          RPM_ARCH: ${{ matrix.rpm_arch }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_VERSION#v}"
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          mkdir -p dist
+
+          printf 'deb\n' > packaging-stage/ltbox.install-source
+          docker run --rm \
+            -e NFPM_ARCH="${NFPM_ARCH}" \
+            -e NFPM_VERSION="${version}" \
+            -e NFPM_BINARY=packaging-stage/ltbox \
+            -e NFPM_DESKTOP=packaging-stage/io.github.miner7222.LTBox.desktop \
+            -e NFPM_MARKER=packaging-stage/ltbox.install-source \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            "ghcr.io/goreleaser/nfpm:v${{ env.NFPM_TOOL_VERSION }}" package \
+            --config packaging/linux/nfpm.yaml \
+            --packager deb \
+            --target "/work/dist/ltbox_${version}_${DEB_ARCH}.deb"
+
+          printf 'rpm\n' > packaging-stage/ltbox.install-source
+          docker run --rm \
+            -e NFPM_ARCH="${NFPM_ARCH}" \
+            -e NFPM_VERSION="${version}" \
+            -e NFPM_BINARY=packaging-stage/ltbox \
+            -e NFPM_DESKTOP=packaging-stage/io.github.miner7222.LTBox.desktop \
+            -e NFPM_MARKER=packaging-stage/ltbox.install-source \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            "ghcr.io/goreleaser/nfpm:v${{ env.NFPM_TOOL_VERSION }}" package \
+            --config packaging/linux/nfpm.yaml \
+            --packager rpm \
+            --target "/work/dist/ltbox-${version}-1.${RPM_ARCH}.rpm"
+
+          (
+            cd dist
+            sha256sum "ltbox_${version}_${DEB_ARCH}.deb" \
+              > "ltbox_${version}_${DEB_ARCH}.deb.sha256"
+            sha256sum "ltbox-${version}-1.${RPM_ARCH}.rpm" \
+              > "ltbox-${version}-1.${RPM_ARCH}.rpm.sha256"
+          )
+
+      - name: Upload Linux packages as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages-${{ matrix.release_arch }}
+          path: dist/*
+
+      - name: Attach Linux packages to the published release
+        # A manual run inspects the artifact above instead of mutating a release.
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+
+  publish-manifests:
+    name: Publish Scoop and Homebrew manifests
+    needs: package-linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Packaging inputs come from the ref being run, not the release tag:
+          # a dry run against an older tag still needs this branch's templates.
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Download published checksum sidecars
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-sidecars
+          for asset in \
+            "LTBox-win_x86_64-${TAG}.zip.sha256" \
+            "LTBox-win_arm64-${TAG}.zip.sha256" \
+            "LTBox-macos_universal-${TAG}.tar.gz.sha256"
+          do
+            gh release download "${TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --dir release-sidecars \
+              --pattern "${asset}"
+          done
+
+      - name: Render and validate manifests from sidecars
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 packaging/render_manifests.py \
+            --tag "${TAG}" \
+            --win-x86-64-sidecar "release-sidecars/LTBox-win_x86_64-${TAG}.zip.sha256" \
+            --win-arm64-sidecar "release-sidecars/LTBox-win_arm64-${TAG}.zip.sha256" \
+            --macos-universal-sidecar "release-sidecars/LTBox-macos_universal-${TAG}.tar.gz.sha256" \
+            --output-dir rendered
+          ruby -c rendered/homebrew/Casks/ltbox.rb
+
+      - name: Publish external manifests when repositories are ready
+        # Manual runs render and validate by default; pushing is opt-in.
+        if: github.event_name == 'release' || inputs.publish_manifests
+        env:
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          publish_file() {
+            local token="$1"
+            local secret_name="$2"
+            local repository="$3"
+            local source_file="$4"
+            local destination_file="$5"
+
+            if [[ -z "${token}" ]]; then
+              echo "::notice::Skipping ${repository}: Actions secret ${secret_name} is not configured."
+              return 0
+            fi
+
+            local repository_json
+            if ! repository_json="$(GH_TOKEN="${token}" gh api "repos/${repository}" 2>/dev/null)"; then
+              echo "::warning::Skipping ${repository}: repository is missing or ${secret_name} cannot access it."
+              return 0
+            fi
+
+            local default_branch
+            default_branch="$(jq -r '.default_branch // "main"' <<<"${repository_json}")"
+            local worktree="external-${repository##*/}"
+            rm -rf "${worktree}"
+            if ! GH_TOKEN="${token}" gh repo clone "${repository}" "${worktree}" -- --depth 1; then
+              echo "::warning::Skipping ${repository}: clone failed with ${secret_name}."
+              return 0
+            fi
+
+            mkdir -p "${worktree}/$(dirname "${destination_file}")"
+            cp "${source_file}" "${worktree}/${destination_file}"
+            git -C "${worktree}" config user.name "github-actions[bot]"
+            git -C "${worktree}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "${worktree}" add "${destination_file}"
+            if git -C "${worktree}" diff --cached --quiet; then
+              echo "::notice::${repository}/${destination_file} already matches ${VERSION}."
+              return 0
+            fi
+            if ! git -C "${worktree}" commit -m "chore: update LTBox to ${VERSION}"; then
+              echo "::warning::Skipping ${repository}: could not commit the rendered manifest."
+              return 0
+            fi
+
+            GH_TOKEN="${token}" gh auth setup-git >/dev/null
+            if ! GH_TOKEN="${token}" git -C "${worktree}" push origin "HEAD:${default_branch}"; then
+              echo "::warning::Skipping ${repository}: ${secret_name} lacks push access or the branch requires a pull request."
+              return 0
+            fi
+            echo "::notice::Published ${destination_file} to ${repository}@${default_branch}."
+          }
+
+          publish_file \
+            "${SCOOP_BUCKET_TOKEN}" \
+            SCOOP_BUCKET_TOKEN \
+            miner7222/scoop-bucket \
+            rendered/scoop/ltbox.json \
+            bucket/ltbox.json
+
+          publish_file \
+            "${HOMEBREW_TAP_TOKEN}" \
+            HOMEBREW_TAP_TOKEN \
+            miner7222/homebrew-tap \
+            rendered/homebrew/Casks/ltbox.rb \
+            Casks/ltbox.rb
