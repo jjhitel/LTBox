@@ -17,6 +17,10 @@ pub(crate) fn sysupdate_worker(
     phases: PhaseReporter,
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
+    if action == SysUpdateAction::Rescue && ltbox_core::model::is_xiaoxin_pro13_model(&device_model)
+    {
+        return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+    }
     // Disable/Enable need a running Android shell;
     // Rescue needs EDL. The previous flow assumed
     // ADB at start and bailed otherwise — so a
@@ -306,6 +310,16 @@ pub(crate) fn sysupdate_worker(
             if let Some(vb_probe) = dumped.iter().find(|(b, _, _)| b == "vendor_boot") {
                 match ltbox_patch::avb::extract_image_avb_info(&vb_probe.2) {
                     Ok(info) => {
+                        if ltbox_patch::avb::build_fingerprint(&info).is_some_and(|fingerprint| {
+                            // Bidirectional SKU equivalence makes the TB376FC token match TB390FU too.
+                            ltbox_core::model::fingerprint_model_match(
+                                &fingerprint,
+                                ltbox_core::model::TB376FC_MODEL,
+                            )
+                        }) {
+                            session.reset_tolerant(&mut log);
+                            return Err(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+                        }
                         use ltbox_patch::region::{ModelValidation, validate_device_model};
                         match validate_device_model(&info, &device_model) {
                             ModelValidation::Match { fingerprint } => {

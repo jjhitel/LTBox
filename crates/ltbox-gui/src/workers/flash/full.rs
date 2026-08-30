@@ -349,6 +349,12 @@ pub(crate) fn flash_worker(
         .as_deref()
         .map(|fp| fingerprint_token_match(fp, "TB323FU"))
         .unwrap_or(false);
+    let xiaoxin_skip_region = xiaoxin_pro13_token(&device_model).is_some()
+        || firmware_fingerprint
+            .as_deref()
+            .and_then(xiaoxin_pro13_token)
+            .is_some();
+    let mut xiaoxin_pro13_flash = xiaoxin_skip_region;
 
     // EDL-start no longer forces rollback-bypass (or region) off. The device
     // model and committed rollback index are read by dumping vendor_boot +
@@ -378,11 +384,26 @@ pub(crate) fn flash_worker(
             );
         }
     }
+    if xiaoxin_pro13_flash && rb_mode != ltbox_patch::rollback::RollbackMode::Auto {
+        rb_mode = ltbox_patch::rollback::RollbackMode::Auto;
+        ltbox_core::live!(
+            log,
+            "[ARB] {}",
+            ltbox_core::i18n::tr("live_flash_xiaoxin_force_auto")
+        );
+    }
     if tb323fu_skip_region {
         ltbox_core::live!(
             log,
             "[Flash] {}",
             ltbox_core::i18n::tr("live_flash_tb323fu_region_efisp")
+        );
+    }
+    if xiaoxin_skip_region {
+        ltbox_core::live!(
+            log,
+            "[Flash] {}",
+            ltbox_core::i18n::tr("live_flash_xiaoxin_region_proinfo")
         );
     }
 
@@ -504,6 +525,7 @@ pub(crate) fn flash_worker(
     let mut region_pair: Option<ltbox_patch::region::RegionAvbOutput> = None;
     if cfg.modify_region
         && !tb323fu_skip_region
+        && !xiaoxin_skip_region
         && fw_key_class != ltbox_patch::key_map::KeyClass::Fixed
     {
         if has_vendor_boot && has_vbmeta {
@@ -731,6 +753,18 @@ pub(crate) fn flash_worker(
         match read_edl_start_device(&mut session, firmware_fingerprint.as_deref(), &mut log) {
             Ok(probe) => {
                 device_model = probe.model_token;
+                if !xiaoxin_pro13_flash && ltbox_core::model::is_xiaoxin_pro13_model(&device_model)
+                {
+                    xiaoxin_pro13_flash = true;
+                    if rb_mode != ltbox_patch::rollback::RollbackMode::Auto {
+                        rb_mode = ltbox_patch::rollback::RollbackMode::Auto;
+                        ltbox_core::live!(
+                            log,
+                            "[ARB] {}",
+                            ltbox_core::i18n::tr("live_flash_xiaoxin_force_auto")
+                        );
+                    }
+                }
                 match probe.rollback_floors {
                     None => {
                         // TB322FC is PRC-only. The pre-EDL UI gates that block
@@ -768,8 +802,66 @@ pub(crate) fn flash_worker(
                 }
             }
             Err(e) => {
-                let _ = session.reset_to_edl(&mut log);
+                if e == ltbox_core::i18n::tr("err_flash_xiaoxin_arb_floor_unreadable") {
+                    session.reset_tolerant(&mut log);
+                } else {
+                    let _ = session.reset_to_edl(&mut log);
+                }
                 return Err(e);
+            }
+        }
+    }
+
+    // TB376FC/TB390FU bootloaders do not expose rollback variables. Even on an
+    // ADB/Fastboot start, determine both component floors from EDL dumps and
+    // fail closed before rawprogram can write anything.
+    if !edl_start && xiaoxin_pro13_flash {
+        let floor_dir = ltbox_core::app_paths::work_dir_for("flash_xiaoxin_arb");
+        let _ = std::fs::remove_dir_all(&floor_dir);
+        if let Err(error) = std::fs::create_dir_all(&floor_dir) {
+            ltbox_core::live!(
+                log,
+                "[ARB] {}",
+                tr_args!("err_arb_work_dir_failed", error = error)
+            );
+            session.reset_tolerant(&mut log);
+            return Err(ltbox_core::i18n::tr(
+                "err_flash_xiaoxin_arb_floor_unreadable",
+            ));
+        }
+        match read_device_vbmeta(&mut session, active_slot.as_deref(), &floor_dir, &mut log) {
+            Ok(device) => edl_floors = Some((device.boot_floor, device.vbs_floor)),
+            Err(error) => {
+                ltbox_core::live!(log, "[ARB] {error}");
+                session.reset_tolerant(&mut log);
+                return Err(ltbox_core::i18n::tr(
+                    "err_flash_xiaoxin_arb_floor_unreadable",
+                ));
+            }
+        }
+    }
+
+    // TB376FC/TB390FU require a dedicated fail-closed comparison before the
+    // fixed-key device gate so every unsafe or unreadable case reboots to system.
+    if xiaoxin_pro13_flash {
+        let firmware_indices = match (
+            ltbox_patch::avb::extract_image_avb_info(&fw_dir.join("boot.img")),
+            ltbox_patch::avb::extract_image_avb_info(&fw_dir.join("vbmeta_system.img")),
+        ) {
+            (Ok(boot), Ok(vbs)) => Some((boot.rollback_index, vbs.rollback_index)),
+            _ => None,
+        };
+        match xiaoxin_rollback_decision(edl_floors, firmware_indices) {
+            XiaoxinRollbackDecision::Proceed => {}
+            XiaoxinRollbackDecision::Downgrade => {
+                session.reset_tolerant(&mut log);
+                return Err(ltbox_core::i18n::tr("err_flash_xiaoxin_arb_downgrade"));
+            }
+            XiaoxinRollbackDecision::Unreadable => {
+                session.reset_tolerant(&mut log);
+                return Err(ltbox_core::i18n::tr(
+                    "err_flash_xiaoxin_arb_floor_unreadable",
+                ));
             }
         }
     }
@@ -822,9 +914,9 @@ pub(crate) fn flash_worker(
                 return Err(ltbox_core::i18n::tr("err_flash_device_key_unknown"));
             }
             FixedFirmwareDevicePolicy::KeepFixed => {
-                // Fixed device + fixed firmware: the bootloader enforces region
-                // + rollback, so only a same-region, non-downgrade install can
-                // proceed (no re-sign, flash as-is).
+                // Fixed device + fixed firmware: the bootloader enforces rollback.
+                // Other models still reject region conversion; TB376FC/TB390FU
+                // flash the selected package as-is and store identity in proinfo.
                 let fw_boot_idx = ltbox_patch::avb::extract_image_avb_info(&boot)
                     .map(|i| i.rollback_index)
                     .unwrap_or(0);
@@ -833,7 +925,7 @@ pub(crate) fn flash_worker(
                         .map(|i| i.rollback_index)
                         .unwrap_or(0);
                 let downgrade = fw_boot_idx < dev.boot_floor || fw_vbs_idx < dev.vbs_floor;
-                if cfg.modify_region || downgrade {
+                if (!xiaoxin_pro13_flash && cfg.modify_region) || downgrade {
                     if edl_start {
                         let _ = session.reset_to_edl(&mut log);
                     } else {
@@ -1150,6 +1242,11 @@ pub(crate) fn flash_worker(
                     "[ARB] {}",
                     tr_args!("live_arb_skip_no_lun", name = log_name)
                 );
+                if xiaoxin_pro13_flash {
+                    let err = tr_args!("err_no_hardcoded_lun", partition = log_name);
+                    session.reset_tolerant(&mut log);
+                    return Err(err);
+                }
                 continue;
             };
             let source = fw_dir.join(filename);
@@ -1197,6 +1294,10 @@ pub(crate) fn flash_worker(
             );
             if !analysis.needs_patch {
                 continue;
+            }
+            if xiaoxin_pro13_flash {
+                session.reset_tolerant(&mut log);
+                return Err(ltbox_core::i18n::tr("err_flash_xiaoxin_arb_downgrade"));
             }
             let Some(target) = loc_floor else {
                 // needs_patch implies a committed device floor under On/Auto;
@@ -1544,14 +1645,20 @@ pub(crate) fn flash_worker(
         }
     }
 
-    // Country-code patch is best-effort after firmware flash.
-    // TB320FC/TB323FU use oemowninfo; others use devinfo.
-    if let Some(target_code) = cfg.country_action.target() {
-        live!(
-            log,
-            "[Flash] {}",
-            tr_args!("live_flash_country_patch_target", target = target_code)
-        );
+    // Country-code/channel patch is best-effort after firmware flash. A
+    // TB376FC↔TB390FU cross-flash must flip proinfo even when no country target
+    // was requested; in that case only proinfo is dumped and flashed.
+    let target_code = cfg.country_action.target();
+    let flip_proinfo_channel =
+        xiaoxin_pro13_cross_model(&device_model, firmware_fingerprint.as_deref());
+    if target_code.is_some() || flip_proinfo_channel {
+        if let Some(target_code) = target_code {
+            live!(
+                log,
+                "[Flash] {}",
+                tr_args!("live_flash_country_patch_target", target = target_code)
+            );
+        }
         let work_dir = ltbox_core::app_paths::work_dir_for("flash_country");
         let _ = std::fs::remove_dir_all(&work_dir);
         if let Err(e) = std::fs::create_dir_all(&work_dir) {
@@ -1575,7 +1682,7 @@ pub(crate) fn flash_worker(
         if !getvar_raw.is_empty() {
             let _ = std::fs::write(critical_backup.join("getvar.txt"), &getvar_raw);
         }
-        // devinfo + persist resolve through the hardcoded
+        // Model-specific country partitions resolve through the hardcoded
         // LUN map; start/num come from the device GPT via
         // `dump_partition_by_name`. Avoids re-decrypting
         // `rawprogram*.x` mid-flow when the catalog scratch
@@ -1589,6 +1696,8 @@ pub(crate) fn flash_worker(
             &device_model,
             firmware_fingerprint.as_deref(),
             target_code,
+            flip_proinfo_channel,
+            target_code.is_none().then_some(&["proinfo"][..]),
             &ll,
             &mut log,
             None,
@@ -1627,6 +1736,29 @@ pub(crate) fn flash_worker(
     // Flash succeeded — drop the `work_*` scratch (a mid-flow abort keeps it).
     ltbox_core::app_paths::clean_work_dirs();
     Ok(log)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum XiaoxinRollbackDecision {
+    Proceed,
+    Downgrade,
+    Unreadable,
+}
+
+fn xiaoxin_rollback_decision(
+    device_floors: Option<(u64, u64)>,
+    firmware_indices: Option<(u64, u64)>,
+) -> XiaoxinRollbackDecision {
+    let (Some((device_boot, device_vbs)), Some((firmware_boot, firmware_vbs))) =
+        (device_floors, firmware_indices)
+    else {
+        return XiaoxinRollbackDecision::Unreadable;
+    };
+    if device_boot > firmware_boot || device_vbs > firmware_vbs {
+        XiaoxinRollbackDecision::Downgrade
+    } else {
+        XiaoxinRollbackDecision::Proceed
+    }
 }
 
 /// Pinned gbl_root_baldur release used for TB323FU efisp GBL images.
@@ -1716,11 +1848,35 @@ fn verify_efisp_asset(path: &std::path::Path, asset_name: &str) -> Result<(), St
 }
 
 #[cfg(test)]
-mod efisp_pin_tests {
+mod tests {
     use super::{
-        EFISP_EXPECTED_ASSETS, EFISP_GBL_RELEASE_TAG, efisp_expected_asset, efisp_expected_sha256,
-        verify_efisp_asset,
+        EFISP_EXPECTED_ASSETS, EFISP_GBL_RELEASE_TAG, XiaoxinRollbackDecision,
+        efisp_expected_asset, efisp_expected_sha256, verify_efisp_asset, xiaoxin_rollback_decision,
     };
+
+    #[test]
+    fn xiaoxin_rollback_decision_fails_closed_and_rejects_either_downgrade() {
+        assert_eq!(
+            xiaoxin_rollback_decision(Some((11, 7)), Some((10, 7))),
+            XiaoxinRollbackDecision::Downgrade
+        );
+        assert_eq!(
+            xiaoxin_rollback_decision(Some((10, 8)), Some((10, 7))),
+            XiaoxinRollbackDecision::Downgrade
+        );
+        assert_eq!(
+            xiaoxin_rollback_decision(Some((10, 7)), Some((10, 8))),
+            XiaoxinRollbackDecision::Proceed
+        );
+        assert_eq!(
+            xiaoxin_rollback_decision(None, Some((10, 8))),
+            XiaoxinRollbackDecision::Unreadable
+        );
+        assert_eq!(
+            xiaoxin_rollback_decision(Some((10, 7)), None),
+            XiaoxinRollbackDecision::Unreadable
+        );
+    }
 
     #[test]
     fn maps_suffix_to_exact_asset_name() {

@@ -546,6 +546,61 @@ pub fn patch_country_code(
     Ok(true)
 }
 
+/// Replace the Xiaoxin Pro 13 `proinfo` channel field from `consumer` to
+/// `commercial`. The shorter source token must be NUL-delimited and have two
+/// further NUL bytes after its terminator, leaving a NUL terminator after the
+/// longer replacement. An already-`commercial` image is a successful no-op.
+pub fn patch_proinfo_channel(input: &Path, output: &Path) -> Result<bool> {
+    const FROM: &[u8] = b"consumer";
+    const TO: &[u8] = b"commercial";
+
+    let mut data = fs::read(input)
+        .map_err(|e| LtboxError::Patch(format!("Cannot read {}: {e}", input.display())))?;
+
+    let commercial_present = data.windows(TO.len()).enumerate().any(|(i, window)| {
+        window == TO && i > 0 && data[i - 1] == 0 && data.get(i + TO.len()) == Some(&0)
+    });
+
+    let consumer = data
+        .windows(FROM.len())
+        .enumerate()
+        .find_map(|(i, window)| {
+            (window == FROM && i > 0 && data[i - 1] == 0 && data.get(i + FROM.len()) == Some(&0))
+                .then_some(i)
+        });
+
+    let Some(offset) = consumer else {
+        if commercial_present {
+            if input != output {
+                fs::copy(input, output)
+                    .map_err(|e| LtboxError::Patch(format!("Copy failed: {e}")))?;
+            }
+            return Ok(false);
+        }
+        return Err(LtboxError::Patch(
+            "proinfo channel field not found".to_string(),
+        ));
+    };
+
+    let terminator = offset + FROM.len();
+    if data.get(terminator + 1) != Some(&0) || data.get(terminator + 2) != Some(&0) {
+        return Err(LtboxError::Patch(
+            "proinfo consumer channel lacks two trailing NUL bytes".to_string(),
+        ));
+    }
+
+    data[offset..offset + TO.len()].copy_from_slice(TO);
+    if &data[offset..offset + TO.len()] != TO || data.get(offset + TO.len()) != Some(&0) {
+        return Err(LtboxError::Patch(
+            "proinfo channel post-patch verification failed".to_string(),
+        ));
+    }
+
+    fs::write(output, &data)
+        .map_err(|e| LtboxError::Patch(format!("Cannot write {}: {e}", output.display())))?;
+    Ok(true)
+}
+
 fn count_occurrences(haystack: &[u8], needle: &[u8]) -> usize {
     if needle.is_empty() || needle.len() > haystack.len() {
         return 0;
@@ -768,6 +823,95 @@ mod tests {
         assert!(patch_country_code(&src2, &out2, "CN", "KR", EU_COUNTRY_CODES, true).unwrap());
         let patched = fs::read(&out2).unwrap();
         assert_eq!(&patched[EXT4_BLOCK..EXT4_BLOCK + 4], b"KRXX");
+    }
+
+    #[test]
+    fn field_only_matches_xiaoxin_pro13_real_layouts_without_log_decoys() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let mut proinfo = vec![0u8; 0x2000];
+        proinfo[0x0e10..0x0e14].copy_from_slice(b"CNXX");
+        let proinfo_path = dir.path().join("proinfo.img");
+        fs::write(&proinfo_path, &proinfo).unwrap();
+        assert_eq!(
+            detect_country_code(&proinfo_path, &["CN"], true).unwrap(),
+            Some("CN".to_string())
+        );
+
+        let mut persist = vec![0xabu8; EXT4_BLOCK * 3];
+        let real = EXT4_BLOCK * 2;
+        persist[real..real + 4].copy_from_slice(b"CNXX");
+        persist[real + 4..real + EXT4_BLOCK].fill(0);
+        let decoy = b"countryCode = CNXX\0";
+        persist[128..128 + decoy.len()].copy_from_slice(decoy);
+        let persist_path = dir.path().join("persist.img");
+        fs::write(&persist_path, &persist).unwrap();
+        assert_eq!(
+            detect_country_code(&persist_path, &["CN"], true).unwrap(),
+            Some("CN".to_string())
+        );
+
+        let patched_path = dir.path().join("persist.patched.img");
+        assert!(
+            patch_country_code(
+                &persist_path,
+                &patched_path,
+                "CN",
+                "KR",
+                EU_COUNTRY_CODES,
+                true,
+            )
+            .unwrap()
+        );
+        let patched = fs::read(patched_path).unwrap();
+        assert_eq!(&patched[real..real + 4], b"KRXX");
+        assert_eq!(&patched[128..128 + decoy.len()], decoy);
+    }
+
+    #[test]
+    fn patch_proinfo_channel_flips_consumer_to_commercial() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("proinfo.img");
+        let out = dir.path().join("proinfo.patched.img");
+        let mut data = vec![0u8; 0x2000];
+        let build_marker = b"TB376FC_PRC/TB376FC_CN_OPEN_USER_release_build!";
+        data[..build_marker.len()].copy_from_slice(build_marker);
+        data[0x0e1a..0x0e22].copy_from_slice(b"consumer");
+        fs::write(&src, &data).unwrap();
+
+        assert!(patch_proinfo_channel(&src, &out).unwrap());
+        let patched = fs::read(&out).unwrap();
+        assert_eq!(&patched[0x0e1a..0x0e24], b"commercial");
+        assert_eq!(patched[0x0e24], 0);
+        assert_eq!(&patched[..build_marker.len()], &data[..build_marker.len()]);
+    }
+
+    #[test]
+    fn patch_proinfo_channel_is_idempotent_for_commercial() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("proinfo.img");
+        let out = dir.path().join("proinfo.patched.img");
+        let mut data = vec![0u8; 256];
+        data[32..42].copy_from_slice(b"commercial");
+        fs::write(&src, &data).unwrap();
+
+        assert!(!patch_proinfo_channel(&src, &out).unwrap());
+        assert_eq!(fs::read(out).unwrap(), data);
+    }
+
+    #[test]
+    fn patch_proinfo_channel_refuses_non_nul_trailing_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("proinfo.img");
+        let out = dir.path().join("proinfo.patched.img");
+        let mut data = vec![0u8; 256];
+        data[32..40].copy_from_slice(b"consumer");
+        data[41] = 1;
+        fs::write(&src, data).unwrap();
+
+        let error = patch_proinfo_channel(&src, &out).unwrap_err().to_string();
+        assert!(error.contains("trailing NUL"), "got: {error}");
+        assert!(!out.exists());
     }
 
     #[test]

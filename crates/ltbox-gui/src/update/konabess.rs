@@ -7,6 +7,15 @@ use ltbox_core::tr_args;
 
 impl App {
     pub(crate) fn update_konabess(&mut self, msg: KonaBessMsg) -> Task<Message> {
+        if self.is_xiaoxin_pro13()
+            && matches!(
+                &msg,
+                KonaBessMsg::KonaBessSelectLoader | KonaBessMsg::KonaBessNext
+            )
+        {
+            self.error_msg = Some(tr_args!("model_unsupported", model = "TB376FC / TB390FU"));
+            return Task::none();
+        }
         match msg {
             KonaBessMsg::KonaBessSelectLoader => self.pick_loader_with_default(|path| {
                 Message::KonaBess(KonaBessMsg::KonaBessLoaderChosen(path))
@@ -111,6 +120,7 @@ impl App {
                                     .begin_phased_op(View::KonaBess, OperationPhaseKind::KonaBess);
                                 let conn = self.connection;
                                 let is_tb323fu = self.is_tb323fu();
+                                let device_model = self.device_model.clone();
                                 let ll = self.live_labels();
                                 let loader = std::path::PathBuf::from(loader);
                                 return Task::perform(
@@ -118,7 +128,12 @@ impl App {
                                         tokio::task::spawn_blocking(move || {
                                             ltbox_core::runtime::run_heavy(move || {
                                                 konabess_inspection_worker(
-                                                    conn, loader, is_tb323fu, ll, phases,
+                                                    conn,
+                                                    loader,
+                                                    is_tb323fu,
+                                                    device_model,
+                                                    ll,
+                                                    phases,
                                                 )
                                             })
                                             .and_then(|result| result)
@@ -171,7 +186,6 @@ impl App {
                         let Some(table) = self.konabess.edited_table.clone() else {
                             return Task::none();
                         };
-
                         self.konabess.next();
                         let phases =
                             self.begin_phased_op(View::KonaBess, OperationPhaseKind::KonaBess);

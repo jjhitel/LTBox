@@ -78,9 +78,39 @@ fn fixed_firmware_device_policy(
 /// model from an EDL-dumped vendor_boot when fastboot/ADB never ran.
 /// LAVIE Tab 9QHD1 is represented by TB320FC because the shared matcher treats
 /// its reported token as equivalent and the recovered value is internal only.
-const SUPPORTED_MODELS: [&str; 6] = [
-    "TB320FC", "TB321FU", "TB322FC", "TB323FU", "TB520FU", "TB710FU",
+const SUPPORTED_MODELS: [&str; 8] = [
+    "TB320FC", "TB321FU", "TB322FC", "TB323FU", "TB376FC", "TB390FU", "TB520FU", "TB710FU",
 ];
+
+fn xiaoxin_pro13_token(text: &str) -> Option<&'static str> {
+    [
+        ltbox_core::model::TB376FC_MODEL,
+        ltbox_core::model::TB390FU_MODEL,
+    ]
+    .into_iter()
+    .find(|model| {
+        text.split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|token| token.eq_ignore_ascii_case(model))
+    })
+}
+
+fn xiaoxin_pro13_cross_model(device_model: &str, firmware_fingerprint: Option<&str>) -> bool {
+    matches!(
+        (
+            xiaoxin_pro13_token(device_model),
+            firmware_fingerprint.and_then(xiaoxin_pro13_token),
+        ),
+        (Some(device), Some(firmware)) if !device.eq_ignore_ascii_case(firmware)
+    )
+}
+
+fn supported_model_identity_match(fingerprint: &str, model: &str) -> bool {
+    if ltbox_core::model::is_xiaoxin_pro13_model(model) {
+        xiaoxin_pro13_token(fingerprint).is_some_and(|token| token.eq_ignore_ascii_case(model))
+    } else {
+        fingerprint_token_match(fingerprint, model)
+    }
+}
 
 /// EDL-start device identity + rollback floor, read over the open EDL session.
 struct EdlStartProbe {
@@ -138,7 +168,13 @@ fn read_edl_start_device(
         let _ = std::fs::remove_file(&out);
     }
     if device_fps.is_empty() {
-        return Err(ltbox_core::i18n::tr("err_flash_edl_avb_invalid"));
+        return Err(ltbox_core::i18n::tr(
+            if firmware_fp.and_then(xiaoxin_pro13_token).is_some() {
+                "err_flash_xiaoxin_arb_floor_unreadable"
+            } else {
+                "err_flash_edl_avb_invalid"
+            },
+        ));
     }
 
     // Recover the model token, preferring a slot whose SKU the target firmware
@@ -152,7 +188,7 @@ fn read_edl_start_device(
     let mut model_token = String::new();
     'find: for fp in &device_fps {
         for m in SUPPORTED_MODELS {
-            if fingerprint_token_match(fp, m) {
+            if supported_model_identity_match(fp, m) {
                 let matches_fw = firmware_fp
                     .map(|fw| fingerprint_token_match(fw, m))
                     .unwrap_or(false);
@@ -221,7 +257,13 @@ fn read_edl_start_device(
         let _ = std::fs::remove_file(&boot_img);
     }
     let Some(floors) = rollback_floors(boot_idx, vbs_idx) else {
-        return Err(ltbox_core::i18n::tr("err_flash_edl_avb_invalid"));
+        return Err(ltbox_core::i18n::tr(
+            if ltbox_core::model::is_xiaoxin_pro13_model(&model_token) {
+                "err_flash_xiaoxin_arb_floor_unreadable"
+            } else {
+                "err_flash_edl_avb_invalid"
+            },
+        ));
     };
     Ok(EdlStartProbe {
         model_token,
@@ -642,6 +684,20 @@ fn country_partitions_for(
     device_model: &str,
     firmware_fingerprint: Option<&str>,
 ) -> &'static [&'static str] {
+    let xiaoxin_pro13_sku = [
+        ltbox_core::model::TB376FC_MODEL,
+        ltbox_core::model::TB390FU_MODEL,
+    ]
+    .iter()
+    .any(|m| {
+        firmware_fingerprint
+            .map(|fp| fingerprint_token_match(fp, m))
+            .unwrap_or(false)
+            || fingerprint_token_match(device_model, m)
+    });
+    if xiaoxin_pro13_sku {
+        return &["proinfo", "persist"];
+    }
     let oemowninfo_sku = ["TB320FC", "TB323FU"].iter().any(|m| {
         firmware_fingerprint
             .map(|fp| fingerprint_token_match(fp, m))
@@ -653,6 +709,10 @@ fn country_partitions_for(
     } else {
         &["devinfo", "persist"]
     }
+}
+
+fn is_field_only_country_partition(label: &str) -> bool {
+    matches!(label, "persist" | "proinfo")
 }
 
 /// Rewrite the device's country code in the model's country partitions over an
@@ -667,7 +727,9 @@ fn run_country_change(
     critical_backup: &std::path::Path,
     device_model: &str,
     firmware_fingerprint: Option<&str>,
-    target_code: &str,
+    target_code: Option<&str>,
+    flip_proinfo_channel: bool,
+    only_partitions: Option<&'static [&'static str]>,
     ll: &LiveLabels,
     log: &mut Vec<String>,
     phases: Option<&PhaseReporter>,
@@ -681,7 +743,8 @@ fn run_country_change(
         detected: Option<String>,
     }
 
-    let country_partitions = country_partitions_for(device_model, firmware_fingerprint);
+    let country_partitions = only_partitions
+        .unwrap_or_else(|| country_partitions_for(device_model, firmware_fingerprint));
     let mut country_progress = CountryPatchProgress::new(country_partitions);
     if let Some(phases) = phases {
         live!(log, "[Country] {}", phases.marker(3));
@@ -743,26 +806,30 @@ fn run_country_change(
             country_progress.mark_failed(label, reason);
             continue;
         }
-        let detected = match ltbox_patch::region::detect_country_code(
-            &dump_path,
-            KNOWN_CODES,
-            label == "persist",
-        ) {
-            Ok(c) => c,
-            Err(e) => {
-                let reason = tr_args!("country_reason_detect_failed", error = e);
-                ltbox_core::live!(
-                    log,
-                    "[Country] {}",
-                    tr_args!(
-                        "live_country_partition_status",
-                        label = label,
-                        reason = reason
-                    )
-                );
-                country_progress.mark_failed(label, reason);
-                continue;
+        let detected = if target_code.is_some() {
+            match ltbox_patch::region::detect_country_code(
+                &dump_path,
+                KNOWN_CODES,
+                is_field_only_country_partition(label),
+            ) {
+                Ok(c) => c,
+                Err(e) => {
+                    let reason = tr_args!("country_reason_detect_failed", error = e);
+                    ltbox_core::live!(
+                        log,
+                        "[Country] {}",
+                        tr_args!(
+                            "live_country_partition_status",
+                            label = label,
+                            reason = reason
+                        )
+                    );
+                    country_progress.mark_failed(label, reason);
+                    continue;
+                }
             }
+        } else {
+            None
         };
 
         staged.push(CountryPartitionWork {
@@ -789,29 +856,47 @@ fn run_country_change(
         // matches live in captured logs), so it is a no-op
         // pass-through here — dump + backup already happened.
         let mut changed = false;
-        match detected {
-            Some(ref old_code) => {
-                live!(
-                    log,
-                    "[Country] {}",
-                    tr_args!(
-                        "live_country_patch_transition",
-                        label = label,
-                        from = old_code,
-                        to = target_code
-                    )
-                );
-                match ltbox_patch::region::patch_country_code(
-                    &dump_path,
-                    &patched_path,
-                    old_code,
-                    target_code,
-                    EU_CODES,
-                    label == "persist",
-                ) {
-                    Ok(c) => changed |= c,
-                    Err(e) => {
-                        let reason = tr_args!("country_reason_patch_failed", error = e);
+        if let Some(target_code) = target_code {
+            match detected {
+                Some(ref old_code) => {
+                    live!(
+                        log,
+                        "[Country] {}",
+                        tr_args!(
+                            "live_country_patch_transition",
+                            label = label,
+                            from = old_code,
+                            to = target_code
+                        )
+                    );
+                    match ltbox_patch::region::patch_country_code(
+                        &dump_path,
+                        &patched_path,
+                        old_code,
+                        target_code,
+                        EU_CODES,
+                        is_field_only_country_partition(label),
+                    ) {
+                        Ok(c) => changed |= c,
+                        Err(e) => {
+                            let reason = tr_args!("country_reason_patch_failed", error = e);
+                            ltbox_core::live!(
+                                log,
+                                "[Country] {}",
+                                tr_args!(
+                                    "live_country_partition_status",
+                                    label = label,
+                                    reason = reason
+                                )
+                            );
+                            country_progress.mark_failed(label, reason);
+                            continue;
+                        }
+                    }
+                }
+                None => {
+                    if label != "persist" {
+                        let reason = ltbox_core::i18n::tr("country_reason_no_known_code");
                         ltbox_core::live!(
                             log,
                             "[Country] {}",
@@ -824,11 +909,33 @@ fn run_country_change(
                         country_progress.mark_failed(label, reason);
                         continue;
                     }
+                    // persist has no country code — nothing to patch;
+                    // `changed` stays false and it is marked handled below.
                 }
             }
-            None => {
-                if label != "persist" {
-                    let reason = ltbox_core::i18n::tr("country_reason_no_known_code");
+        }
+
+        if flip_proinfo_channel && label == "proinfo" {
+            let channel_input = if target_code.is_some() {
+                patched_path.as_path()
+            } else {
+                dump_path.as_path()
+            };
+            match ltbox_patch::region::patch_proinfo_channel(channel_input, &patched_path) {
+                Ok(channel_changed) => {
+                    changed |= channel_changed;
+                    ltbox_core::live!(
+                        log,
+                        "[Country] {}",
+                        ltbox_core::i18n::tr(if channel_changed {
+                            "live_proinfo_channel_transition"
+                        } else {
+                            "live_proinfo_channel_already"
+                        })
+                    );
+                }
+                Err(e) => {
+                    let reason = tr_args!("country_reason_channel_patch_failed", error = e);
                     ltbox_core::live!(
                         log,
                         "[Country] {}",
@@ -841,9 +948,6 @@ fn run_country_change(
                     country_progress.mark_failed(label, reason);
                     continue;
                 }
-                // persist has no country code — nothing to
-                // patch; `changed` stays false and it is
-                // marked handled in the pass-through below.
             }
         }
 
@@ -869,16 +973,18 @@ fn run_country_change(
                 );
                 country_progress.mark_flashed(label);
             }
-        } else if detected.as_deref() == Some(target_code) {
+        } else if target_code.is_some_and(|target| detected.as_deref() == Some(target)) {
             ltbox_core::live!(
                 log,
                 "[Country] {}",
                 tr_args!(
                     "live_country_partition_already",
                     label = label,
-                    target = target_code
+                    target = target_code.unwrap_or_default()
                 )
             );
+            country_progress.mark_flashed(label);
+        } else if target_code.is_none() && flip_proinfo_channel && label == "proinfo" {
             country_progress.mark_flashed(label);
         } else if label == "persist" {
             // persist carries no country code — nothing to
@@ -944,6 +1050,14 @@ mod tests {
             &["oemowninfo"][..]
         );
         assert_eq!(country_partitions_for("TB323FU", None), &["oemowninfo"][..]);
+        assert_eq!(
+            country_partitions_for("TB376FC", None),
+            &["proinfo", "persist"][..]
+        );
+        assert_eq!(
+            country_partitions_for("TB390FU", None),
+            &["proinfo", "persist"][..]
+        );
         // Every other model uses devinfo + persist.
         assert_eq!(
             country_partitions_for("TB330FU", None),
@@ -958,6 +1072,45 @@ mod tests {
             country_partitions_for("", Some("qti/LAVIETab9QHD1/LAVIETab9QHD1:15/build_NEC")),
             &["oemowninfo"][..]
         );
+        assert_eq!(
+            country_partitions_for("", Some("Lenovo/TB390FU/TB390FU:15/build")),
+            &["proinfo", "persist"][..]
+        );
+    }
+
+    #[test]
+    fn supported_models_include_both_xiaoxin_pro13_tokens() {
+        assert!(super::SUPPORTED_MODELS.contains(&"TB376FC"));
+        assert!(super::SUPPORTED_MODELS.contains(&"TB390FU"));
+    }
+
+    #[test]
+    fn xiaoxin_channel_flip_requires_different_pair_tokens() {
+        use super::{supported_model_identity_match, xiaoxin_pro13_cross_model};
+        assert!(xiaoxin_pro13_cross_model(
+            "TB376FC",
+            Some("Lenovo/TB390FU/TB390FU:15/build")
+        ));
+        assert!(xiaoxin_pro13_cross_model(
+            "TB390FU",
+            Some("Lenovo/TB376FC_PRC/TB376FC:15/build")
+        ));
+        assert!(!xiaoxin_pro13_cross_model(
+            "TB376FC",
+            Some("Lenovo/TB376FC_PRC/TB376FC:15/build")
+        ));
+        assert!(!xiaoxin_pro13_cross_model(
+            "TB390FU",
+            Some("Lenovo/TB390FU/TB390FU:15/build")
+        ));
+        assert!(supported_model_identity_match(
+            "Lenovo/TB390FU/TB390FU:15/build",
+            "TB390FU"
+        ));
+        assert!(!supported_model_identity_match(
+            "Lenovo/TB390FU/TB390FU:15/build",
+            "TB376FC"
+        ));
     }
 
     #[test]

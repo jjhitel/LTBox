@@ -102,7 +102,8 @@ impl App {
         // TB323FU's vendor_boot/vbmeta sit on a different UFS LUN than the
         // Boot Recovery worker targets, so the flow can't run on it — disable
         // the card (alongside the non-Qualcomm platform gate).
-        let rescue_disabled = self.platform_supported == Some(false) || self.is_tb323fu();
+        let rescue_disabled =
+            self.platform_supported == Some(false) || self.is_tb323fu() || self.is_xiaoxin_pro13();
         // Gray the icon when disabled, matching the other wizards' disabled
         // option cards (region ROW / OtherRegion).
         let rescue_icon = if rescue_disabled {
@@ -135,6 +136,8 @@ impl App {
             // hint so the label sits at the same height.
             let rescue_req = if self.is_tb323fu() {
                 tr_args!("model_unsupported", model = "TB323FU")
+            } else if self.is_xiaoxin_pro13() {
+                tr_args!("model_unsupported", model = "TB376FC / TB390FU")
             } else {
                 self.t("sysupdate_rescue_req").to_string()
             };
