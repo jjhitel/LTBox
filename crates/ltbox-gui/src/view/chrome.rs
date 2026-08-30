@@ -106,6 +106,9 @@ impl App {
         if self.arb_index_popup_open {
             layers.push(self.arb_index_popup_view());
         }
+        if self.update_dialog_source.is_some() {
+            layers.push(self.update_dialog_view());
+        }
         if self.toast_msg.is_some() {
             layers.push(self.toast_view());
         }

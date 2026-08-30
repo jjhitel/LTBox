@@ -114,7 +114,13 @@ pub(crate) enum Message {
     InstallDrivers,
     InstallDriversDone(Result<Vec<String>, String>),
     UpdateCheckDone(Option<ltbox_core::github::StableRelease>),
-    OpenUpdateUrl,
+    /// Click the sidebar update pill. Direct installs open the release page;
+    /// package-managed installs open channel-specific upgrade instructions.
+    OpenUpdate,
+    UpdateDialogClose,
+    /// Open the available release in the host's default browser from the
+    /// package-manager instructions dialog.
+    OpenUpdateReleasePage,
     /// Startup GitHub-reachability probe result. Gates the driver
     /// install/update buttons (offline → disabled + "needs internet" tip).
     ConnectivityChecked(bool),

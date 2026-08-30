@@ -6,6 +6,85 @@ use iced::{Element, Length, Theme};
 use theme::with_alpha;
 
 impl App {
+    /// Package-manager update instructions opened from the sidebar pill.
+    /// The command is a controlled text input: it keeps normal selection and
+    /// Ctrl+C behavior while discarding edits, and the adjacent action uses
+    /// the app's shared clipboard + toast path.
+    pub(crate) fn update_dialog_view(&self) -> Element<'_, Message> {
+        let (Some(source), Some(release)) =
+            (self.update_dialog_source, self.update_available.as_ref())
+        else {
+            return container(text("")).into();
+        };
+        let upgrade = package_upgrade_command(source);
+        let title = text(self.t("update_dialog_title").to_string())
+            .size(theme::text_size::WIZARD_STEP_TITLE)
+            .font(theme::emphasis::bold());
+        let version = text(
+            // Tags carry a leading `v`; the string already says "version",
+            // so trim it rather than rendering "Version v3.3.0".
+            self.t("update_dialog_version")
+                .replace("{version}", release.tag.trim_start_matches('v')),
+        )
+        .size(theme::text_size::BODY_LARGE);
+        let body_key = if upgrade.available {
+            "update_dialog_package_body"
+        } else {
+            "update_dialog_other_body"
+        };
+        let body = text(self.t(body_key).to_string())
+            .size(theme::text_size::BODY_MEDIUM)
+            .style(muted_style)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+            .width(Length::Fill);
+
+        let command_area: Element<'_, Message> = if upgrade.available {
+            let command = iced::widget::text_input("", upgrade.command)
+                // Keep the field selectable without allowing the displayed
+                // package-manager command to be changed.
+                .on_input(|_| Message::Noop)
+                .padding([10, 12])
+                .size(theme::text_size::BODY_MEDIUM)
+                .style(m3_text_input_style);
+            let copy = m3_text_button(self.t("update_dialog_copy").to_string())
+                .on_press(Message::CopyToClipboard(upgrade.command.to_string()));
+            column![
+                text(self.t("update_dialog_command_label").to_string())
+                    .size(theme::text_size::LABEL_SMALL)
+                    .style(muted_style),
+                row![command, copy]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+            ]
+            .spacing(6)
+            .into()
+        } else {
+            column![].into()
+        };
+
+        let close =
+            m3_text_button(self.t("btn_close").to_string()).on_press(Message::UpdateDialogClose);
+        let release_page = m3_filled_button(self.t("update_dialog_release_page").to_string())
+            .on_press(Message::OpenUpdateReleasePage);
+        let actions = row![Space::new().width(Length::Fill), close, release_page]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
+
+        let content = column![
+            title,
+            version,
+            body,
+            command_area,
+            widget::rule::horizontal(1),
+            actions,
+        ]
+        .spacing(14)
+        .padding(24)
+        .width(520);
+
+        m3_dialog(content.into())
+    }
+
     /// Device-info popup: render the Lenovo PTSTPD `data` block as a
     /// 2-column key/value table. Branches on `DeviceInfoState` so the
     /// modal stays open through Loading / Error / Ready transitions

@@ -145,6 +145,36 @@ fn check_for_update() -> Option<ltbox_core::github::StableRelease> {
     }
 }
 
+/// Package-manager command shown by the update dialog.
+///
+/// Keeping this mapping independent of GUI state makes every install channel
+/// explicit and leaves unknown package managers without a guessed command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PackageUpgradeCommand {
+    command: &'static str,
+    available: bool,
+}
+
+const fn package_upgrade_command(
+    source: ltbox_core::install_source::InstallSource,
+) -> PackageUpgradeCommand {
+    use ltbox_core::install_source::InstallSource;
+
+    let command = match source {
+        InstallSource::Scoop => "scoop update ltbox",
+        InstallSource::WinGet => "winget upgrade miner7222.LTBox",
+        InstallSource::Homebrew => "brew upgrade --cask ltbox",
+        InstallSource::Deb => "sudo apt update && sudo apt upgrade ltbox",
+        InstallSource::Rpm => "sudo dnf upgrade ltbox",
+        InstallSource::OtherPackageManager | InstallSource::Direct => "",
+        _ => "",
+    };
+    PackageUpgradeCommand {
+        command,
+        available: !command.is_empty(),
+    }
+}
+
 fn main() -> iced::Result {
     // Linux/X11 renderer default. On some X11 + Mesa/driver combos wgpu
     // selects a Vulkan adapter whose X11 surface/device creation fails, so
@@ -1882,6 +1912,10 @@ struct App {
     /// or when the running build is already at-or-ahead of the latest
     /// stable. Populates the green sidebar "Update available" pill.
     update_available: Option<ltbox_core::github::StableRelease>,
+    /// Package-managed install source while the update instructions dialog is
+    /// open. Direct installs never set this because they keep opening the
+    /// release page until the self-updater replaces that branch.
+    update_dialog_source: Option<ltbox_core::install_source::InstallSource>,
     flash_parts: FlashPartsWizard,
     dump_parts: DumpPartsWizard,
     dump_phys: DumpPhysWizard,
@@ -2070,6 +2104,7 @@ impl Default for App {
             dual_usb_advisory_dismissed: persisted.dual_usb_advisory_dismissed_models.clone(),
             dual_usb_advisory_closed: Vec::new(),
             update_available: None,
+            update_dialog_source: None,
             flash_parts: FlashPartsWizard::default(),
             dump_parts: DumpPartsWizard::default(),
             dump_phys: DumpPhysWizard::default(),
@@ -3357,7 +3392,7 @@ impl App {
         let btn_padding = [10.0, pad_x];
         container(
             button(inner)
-                .on_press(Message::OpenUpdateUrl)
+                .on_press(Message::OpenUpdate)
                 .padding(btn_padding)
                 .style(|t: &Theme, status| {
                     let p = pal_of(t);
@@ -3494,6 +3529,31 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_upgrade_commands_cover_every_install_source() {
+        use ltbox_core::install_source::InstallSource;
+
+        for (source, expected) in [
+            (InstallSource::Scoop, Some("scoop update ltbox")),
+            (
+                InstallSource::WinGet,
+                Some("winget upgrade miner7222.LTBox"),
+            ),
+            (InstallSource::Homebrew, Some("brew upgrade --cask ltbox")),
+            (
+                InstallSource::Deb,
+                Some("sudo apt update && sudo apt upgrade ltbox"),
+            ),
+            (InstallSource::Rpm, Some("sudo dnf upgrade ltbox")),
+            (InstallSource::OtherPackageManager, None),
+            (InstallSource::Direct, None),
+        ] {
+            let actual = package_upgrade_command(source);
+            assert_eq!(actual.command, expected.unwrap_or_default());
+            assert_eq!(actual.available, expected.is_some());
+        }
+    }
 
     #[test]
     fn primary_phase_plans_use_refined_counts() {

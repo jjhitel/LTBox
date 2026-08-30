@@ -18,6 +18,18 @@ mod unroot;
 mod window;
 
 impl App {
+    fn open_available_release_page(&self) {
+        let Some(release) = self.update_available.as_ref() else {
+            return;
+        };
+        // `open` crate dispatches via `xdg-open` (Linux) / `start` (Windows) /
+        // `open` (macOS). Failure is logged but not surfaced, matching other
+        // external links in the app.
+        if let Err(error) = open::that_detached(&release.html_url) {
+            tracing::warn!("failed to open update URL: {error}");
+        }
+    }
+
     pub(crate) fn update(&mut self, msg: Message) -> Task<Message> {
         #[cfg(feature = "demo")]
         if demo::blocks_device_action(self, &msg) {
@@ -959,18 +971,24 @@ impl App {
                 // render identically: nothing in the sidebar.
                 self.update_available = result;
             }
-            Message::OpenUpdateUrl => {
-                if let Some(release) = self.update_available.as_ref() {
-                    // `open` crate dispatches via `xdg-open` (Linux) /
-                    // `start` (Windows) / `open` (macOS). Failure here is
-                    // logged but not surfaced — the user can copy the URL
-                    // out of the release notes if their default browser
-                    // is misconfigured.
-                    if let Err(e) = open::that_detached(&release.html_url) {
-                        tracing::warn!("failed to open update URL: {e}");
+            Message::OpenUpdate => {
+                let source = ltbox_core::install_source::install_source();
+                match source {
+                    // Phase 4 replaces only this direct-install arm with the
+                    // self-updater. Package-managed installs continue to use
+                    // the dialog branch below.
+                    ltbox_core::install_source::InstallSource::Direct => {
+                        self.open_available_release_page();
+                    }
+                    _ => {
+                        self.update_dialog_source = Some(source);
                     }
                 }
             }
+            Message::UpdateDialogClose => {
+                self.update_dialog_source = None;
+            }
+            Message::OpenUpdateReleasePage => self.open_available_release_page(),
             Message::InstallDrivers => {
                 if self.installing_drivers {
                     return Task::none();
