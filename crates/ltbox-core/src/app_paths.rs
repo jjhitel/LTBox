@@ -447,20 +447,15 @@ mod tests {
 
     #[test]
     fn platform_data_roots_keep_expected_shapes() {
-        for (platform_dir, expected) in [
-            (
-                PathBuf::from(r"C:\Users\user\AppData\Local"),
-                PathBuf::from(r"C:\Users\user\AppData\Local\ltbox"),
-            ),
-            (
-                PathBuf::from("/home/user/.local/share"),
-                PathBuf::from("/home/user/.local/share/ltbox"),
-            ),
-            (
-                PathBuf::from("/Users/user/Library/Application Support"),
-                PathBuf::from("/Users/user/Library/Application Support/ltbox"),
-            ),
+        // Build the expectation with `join` too: the separator is the host's,
+        // not the one belonging to the platform whose layout is being modelled,
+        // so spelling it out fails everywhere except Windows.
+        for platform_dir in [
+            PathBuf::from(r"C:\Users\user\AppData\Local"),
+            PathBuf::from("/home/user/.local/share"),
+            PathBuf::from("/Users/user/Library/Application Support"),
         ] {
+            let expected = platform_dir.join("ltbox");
             assert_eq!(data_root_from(Some(platform_dir)), expected);
         }
         assert_eq!(data_root_from(None), PathBuf::from(".").join("ltbox"));
