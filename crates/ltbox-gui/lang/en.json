@@ -662,6 +662,8 @@
   "live_root_completed": "Root flash complete — device booting into system",
   "live_root_resolved_prefix": "Resolved",
   "live_root_wait_adb_for_apk": "Waiting up to {seconds}s for ADB to install manager APK",
+  "live_startup_no_github": "Cannot reach GitHub - downloads and update checks may be unavailable.",
+  "live_startup_no_internet": "No internet connection - some LTBox features may be unavailable.",
   "live_status_found": "found",
   "live_status_not_found": "not found",
   "live_sysupdate_disabled": "System updates disabled",

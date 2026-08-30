@@ -132,6 +132,10 @@ pub(crate) enum Message {
     /// Startup GitHub-reachability probe result. Gates the driver
     /// install/update buttons (offline → disabled + "needs internet" tip).
     ConnectivityChecked(bool),
+    /// Startup internet + GitHub reachability probe. Advisory only: it
+    /// gates nothing, it just puts a "some features may be unavailable"
+    /// line in the log for users on networks that block GitHub.
+    StartupConnectivityProbed(ltbox_core::connectivity::ConnectivityReport),
     /// Startup Qualcomm-driver version check result. `Some` → installed
     /// driver is older than the latest release; drives the optional update
     /// banner. `None` → up to date / not installed / offline (no banner).

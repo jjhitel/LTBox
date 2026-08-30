@@ -662,6 +662,8 @@
   "live_root_completed": "Root завершён — устройство загружается",
   "live_root_resolved_prefix": "Разделы найдены:",
   "live_root_wait_adb_for_apk": "Ожидание ADB для установки APK менеджера (до {seconds} с)",
+  "live_startup_no_github": "Не удалось подключиться к GitHub - загрузки и проверка обновлений могут быть недоступны.",
+  "live_startup_no_internet": "Нет подключения к интернету - некоторые функции могут быть недоступны.",
   "live_status_found": "найдено",
   "live_status_not_found": "не найдено",
   "live_sysupdate_disabled": "Обновления системы отключены",

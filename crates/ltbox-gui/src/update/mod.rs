@@ -933,6 +933,15 @@ impl App {
             Message::ConnectivityChecked(online) => {
                 self.online = Some(online);
             }
+            Message::StartupConnectivityProbed(report) => {
+                // A dead link already implies GitHub is dead, so only the
+                // more specific of the two lines is worth logging.
+                if !report.internet {
+                    self.log_push(ltbox_core::i18n::tr("live_startup_no_internet"));
+                } else if !report.github {
+                    self.log_push(ltbox_core::i18n::tr("live_startup_no_github"));
+                }
+            }
             Message::DriverUpdateCheckDone(update) => {
                 // Respect a dismissal that may have landed between the
                 // startup spawn and this result arriving.

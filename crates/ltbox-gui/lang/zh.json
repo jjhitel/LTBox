@@ -662,6 +662,8 @@
   "live_root_completed": "Root 刷写完成 — 设备正在启动到系统",
   "live_root_resolved_prefix": "分区解析:",
   "live_root_wait_adb_for_apk": "等待 ADB 安装管理器 APK（最多 {seconds} 秒）",
+  "live_startup_no_github": "无法连接到 GitHub，下载和更新检查等部分功能可能无法使用。",
+  "live_startup_no_internet": "未连接到互联网，部分功能可能无法使用。",
   "live_status_found": "已找到",
   "live_status_not_found": "未找到",
   "live_sysupdate_disabled": "系统更新已禁用",

@@ -5,6 +5,7 @@
 //! [`LtboxError`]. Port of the non-UI parts of Python LTBox v2.x.
 
 pub mod app_paths;
+pub mod connectivity;
 pub mod crypto;
 pub mod downloader;
 pub mod error;

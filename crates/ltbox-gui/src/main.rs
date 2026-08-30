@@ -2196,6 +2196,21 @@ impl App {
             },
             Message::ConnectivityChecked,
         );
+        // Advisory startup probe, separate from the driver-button gate
+        // above: it splits "no link at all" from "link up, GitHub
+        // blocked" so the log can name which one the user is hitting.
+        // Nothing waits on it and nothing is gated by it.
+        let connectivity_notice = Task::perform(
+            async {
+                tokio::task::spawn_blocking(ltbox_core::connectivity::probe)
+                    .await
+                    .unwrap_or(ltbox_core::connectivity::ConnectivityReport {
+                        internet: true,
+                        github: true,
+                    })
+            },
+            Message::StartupConnectivityProbed,
+        );
         // Qualcomm driver version check. Skipped entirely (no network call)
         // when the user chose "don't show again" for driver updates. A
         // silent failure (offline / GitHub down / parse) yields `None`, so
@@ -2220,6 +2235,7 @@ impl App {
                 driver_check,
                 update_check,
                 connectivity,
+                connectivity_notice,
                 driver_update_check,
             ]),
         )

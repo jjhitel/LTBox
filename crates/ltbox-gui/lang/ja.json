@@ -662,6 +662,8 @@
   "live_root_completed": "ルートフラッシュが完了しました — デバイスがシステムに起動しています",
   "live_root_resolved_prefix": "解決済み",
   "live_root_wait_adb_for_apk": "ADBがマネージャーAPKをインストールするまで最大 {seconds} 秒待機中",
+  "live_startup_no_github": "GitHub に接続できないため、ダウンロードや更新確認など一部の機能を利用できない場合があります。",
+  "live_startup_no_internet": "インターネットに接続されていないため、一部の機能を利用できない場合があります。",
   "live_status_found": "見つかりました",
   "live_status_not_found": "見つかりません",
   "live_sysupdate_disabled": "システムアップデートが無効化されました",

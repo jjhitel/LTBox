@@ -662,6 +662,8 @@
   "live_root_completed": "루팅 플래싱 완료 — 시스템으로 부팅 중",
   "live_root_resolved_prefix": "파티션 해석 완료:",
   "live_root_wait_adb_for_apk": "ADB로 매니저 APK 설치 대기 (최대 {seconds}초)",
+  "live_startup_no_github": "GitHub에 연결할 수 없어 다운로드와 업데이트 확인 등 일부 기능을 사용하지 못할 수 있습니다.",
+  "live_startup_no_internet": "인터넷에 연결되어 있지 않아 일부 기능을 사용하지 못할 수 있습니다.",
   "live_status_found": "있음",
   "live_status_not_found": "없음",
   "live_sysupdate_disabled": "시스템 업데이트 비활성화됨",
