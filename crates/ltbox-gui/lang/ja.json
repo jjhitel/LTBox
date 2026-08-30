@@ -676,7 +676,7 @@
   "loader_default_ext_unsupported": "既定の EDL ローダーに指定されたファイルの拡張子は、接続中の端末ではサポートされていません。",
   "loader_desc_efisp_gbl": "qsahara_device_programmer.xml",
   "loader_desc_standard": "xbl_s_devprg_ns.melf",
-  "loader_desc_unknown": "xbl_s_devprg_ns.melf\nまたは qsahara_device_programmer.xml (Y700 Gen 5 / Infinite のみ)",
+  "loader_desc_unknown": "xbl_s_devprg_ns.melf\nまたは qsahara_device_programmer.xml (Snapdragon 8 Elite Gen 5 のみ)",
   "loader_model_mismatch_tooltip": "接続中の端末には別の EDL ローダーが必要です（TB323FU/TB324ZC: .xml/.x マニフェスト、その他のモデル: .melf）。",
   "log_apatch_extract_kernel": "カーネルを抽出中: {input} → {output}",
   "log_apatch_extracted_kpimg": "assets/kpimg を抽出しました → {path} ({bytes} バイト)",

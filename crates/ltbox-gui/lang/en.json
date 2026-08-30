@@ -676,7 +676,7 @@
   "loader_default_ext_unsupported": "The file set as the default EDL loader has an extension that isn't supported on the connected device.",
   "loader_desc_efisp_gbl": "qsahara_device_programmer.xml",
   "loader_desc_standard": "xbl_s_devprg_ns.melf",
-  "loader_desc_unknown": "xbl_s_devprg_ns.melf\nor qsahara_device_programmer.xml (Y700 Gen 5 / Infinite only)",
+  "loader_desc_unknown": "xbl_s_devprg_ns.melf\nor qsahara_device_programmer.xml (Snapdragon 8 Elite Gen 5 only)",
   "loader_model_mismatch_tooltip": "The connected device needs a different EDL loader (TB323FU/TB324ZC: .xml/.x manifest; every other model: .melf).",
   "log_apatch_extract_kernel": "Extracting kernel: {input} → {output}",
   "log_apatch_extracted_kpimg": "extracted assets/kpimg → {path} ({bytes} bytes)",

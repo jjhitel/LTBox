@@ -676,7 +676,7 @@
   "loader_default_ext_unsupported": "Расширение файла, заданного загрузчиком EDL по умолчанию, не поддерживается на подключённом устройстве.",
   "loader_desc_efisp_gbl": "qsahara_device_programmer.xml",
   "loader_desc_standard": "xbl_s_devprg_ns.melf",
-  "loader_desc_unknown": "xbl_s_devprg_ns.melf\nили qsahara_device_programmer.xml (только Y700 5-го поколения / Infinite)",
+  "loader_desc_unknown": "xbl_s_devprg_ns.melf\nили qsahara_device_programmer.xml (только Snapdragon 8 Elite Gen 5)",
   "loader_model_mismatch_tooltip": "Подключённому устройству нужен другой загрузчик EDL (TB323FU/TB324ZC: манифест .xml/.x; остальные модели: .melf).",
   "log_apatch_extract_kernel": "Извлечение ядра: {input} → {output}",
   "log_apatch_extracted_kpimg": "извлечён assets/kpimg → {path} ({bytes} байт)",

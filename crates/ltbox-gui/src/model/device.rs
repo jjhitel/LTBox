@@ -28,7 +28,7 @@ pub(crate) enum DeviceClass {
     /// `qsahara_device_programmer.xml` Sahara manifest rather than a
     /// single `.melf` loader.
     TB323FU,
-    /// TB324ZC — Lenovo Y700 Infinite. Uses the efisp/GBL exploit route and
+    /// TB324ZC — Lenovo Y700 5G. Uses the efisp/GBL exploit route and
     /// multi-image Sahara manifest, and is restricted to PRC firmware.
     TB324ZC,
     /// Any other supported model. No special-case gates apply.

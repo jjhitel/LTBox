@@ -9,7 +9,7 @@ pub const LAVIE_TAB_9QHD1_MODEL: &str = "LAVIETab9QHD1";
 /// Model token reported by Lenovo Y700 Gen 5 firmware.
 pub const TB323FU_MODEL: &str = "TB323FU";
 
-/// Model token reported by Lenovo Y700 Infinite firmware.
+/// Model token reported by Lenovo Y700 5G firmware.
 pub const TB324ZC_MODEL: &str = "TB324ZC";
 
 /// Model token reported by Xiaoxin Pro 13 PRC firmware.
