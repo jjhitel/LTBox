@@ -52,6 +52,24 @@ pub fn marker_path_for(executable_path: &Path) -> PathBuf {
     executable_path.with_file_name(INSTALL_SOURCE_MARKER_FILE)
 }
 
+/// Marker path inside a macOS `.app` bundle, when `executable_path` is one.
+///
+/// `Contents/MacOS` is a code directory: `codesign` treats every file there as
+/// a code object, so a plain marker beside the executable makes signing the
+/// bundle fail outright. The marker ships as a bundle resource instead.
+pub fn bundle_marker_path_for(executable_path: &Path) -> Option<PathBuf> {
+    let macos_dir = executable_path.parent()?;
+    if macos_dir.file_name()? != "MacOS" {
+        return None;
+    }
+    Some(
+        macos_dir
+            .parent()?
+            .join("Resources")
+            .join(INSTALL_SOURCE_MARKER_FILE),
+    )
+}
+
 /// Classify an install without consulting the process or filesystem.
 ///
 /// `env_override` has highest priority, followed by the executable-adjacent
@@ -97,7 +115,12 @@ pub fn install_source() -> InstallSource {
     let Ok(executable_path) = std::env::current_exe() else {
         return classify_install_source(Path::new(""), None, None, env_override.as_deref());
     };
-    let marker_contents = std::fs::read_to_string(marker_path_for(&executable_path)).ok();
+    let marker_contents = std::fs::read_to_string(marker_path_for(&executable_path))
+        .ok()
+        .or_else(|| {
+            bundle_marker_path_for(&executable_path)
+                .and_then(|path| std::fs::read_to_string(path).ok())
+        });
     #[cfg(unix)]
     let system_marker_contents = std::fs::read_to_string(SYSTEM_INSTALL_SOURCE_MARKER_PATH).ok();
     #[cfg(not(unix))]
@@ -355,5 +378,19 @@ mod tests {
             SYSTEM_INSTALL_SOURCE_MARKER_PATH,
             "/usr/share/ltbox/ltbox.install-source"
         );
+    }
+
+    #[test]
+    fn bundle_marker_lives_in_resources_not_the_code_directory() {
+        // `codesign` rejects a data file under `Contents/MacOS`, so the macOS
+        // marker is a bundle resource.
+        assert_eq!(
+            bundle_marker_path_for(Path::new("/Applications/LTBox.app/Contents/MacOS/ltbox")),
+            Some(PathBuf::from(
+                "/Applications/LTBox.app/Contents/Resources/ltbox.install-source"
+            ))
+        );
+        assert_eq!(bundle_marker_path_for(Path::new("/usr/bin/ltbox")), None);
+        assert_eq!(bundle_marker_path_for(Path::new("ltbox")), None);
     }
 }

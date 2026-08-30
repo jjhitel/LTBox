@@ -18,9 +18,11 @@ cask "ltbox" do
 
   # The release bundle is ad-hoc signed before it is archived. Add the
   # package-manager marker to the staged bundle, then refresh that ad-hoc
-  # signature while preserving the USB entitlement.
+  # signature while preserving the USB entitlement. The marker must be a
+  # resource: codesign treats anything under Contents/MacOS as a code object
+  # and refuses to sign a bundle containing an unsigned one.
   preflight do
-    (staged_path/"LTBox.app/Contents/MacOS/ltbox.install-source").write("homebrew")
+    (staged_path/"LTBox.app/Contents/Resources/ltbox.install-source").write("homebrew")
     system_command "/usr/bin/codesign",
                    args: [
                      "--force",
