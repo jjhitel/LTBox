@@ -10,6 +10,7 @@ pub mod downloader;
 pub mod error;
 pub mod github;
 pub mod i18n;
+pub mod install_source;
 pub mod lenovo_info;
 pub mod lenovo_ota;
 pub mod lenovo_qfil;
