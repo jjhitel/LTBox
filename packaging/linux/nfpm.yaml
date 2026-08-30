@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/schema.json
+name: ltbox
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${NFPM_VERSION}
+version_schema: semver
+release: 1
+section: utils
+priority: optional
+maintainer: miner7222 <16506343+miner7222@users.noreply.github.com>
+description: |-
+  Lenovo tablet firmware, root, and EDL toolkit.
+  LTBox provides guided region conversion, rooting, and Qualcomm EDL flashing.
+vendor: miner7222
+homepage: https://github.com/miner7222/LTBox
+license: GPL-3.0-or-later
+
+contents:
+  - src: ${NFPM_BINARY}
+    dst: /usr/bin/ltbox
+    file_info:
+      mode: 0755
+  - src: misc/udev/51-ltbox-qcom.rules
+    dst: /usr/lib/udev/rules.d/51-ltbox-qcom.rules
+    file_info:
+      mode: 0644
+  - src: ${NFPM_DESKTOP}
+    dst: /usr/share/applications/io.github.miner7222.LTBox.desktop
+    file_info:
+      mode: 0644
+  - src: crates/ltbox-gui/assets/icon_source.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/io.github.miner7222.LTBox.svg
+    file_info:
+      mode: 0644
+  - src: ${NFPM_MARKER}
+    dst: /usr/share/ltbox/ltbox.install-source
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /usr/share/doc/ltbox/README.md
+    packager: deb
+    file_info:
+      mode: 0644
+  - src: LICENSE
+    dst: /usr/share/doc/ltbox/copyright
+    packager: deb
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /usr/share/doc/ltbox/README.md
+    packager: rpm
+    file_info:
+      mode: 0644
+  - src: LICENSE
+    dst: /usr/share/licenses/ltbox/LICENSE
+    packager: rpm
+    file_info:
+      mode: 0644
+
+overrides:
+  deb:
+    depends:
+      - libc6
+      - libfontconfig1
+      - libudev1
+      - libusb-1.0-0
+      - libwayland-client0
+      - libxcb1
+      - libxcb-render0
+      - libxcb-shape0
+      - libxcb-xfixes0
+      - libxkbcommon0
+      - libxkbcommon-x11-0
+  rpm:
+    depends:
+      - fontconfig
+      - glibc
+      - libusb1
+      - libxcb
+      - libxkbcommon
+      - libxkbcommon-x11
+      - systemd-libs
+      - wayland-libs
+
+deb:
+  compression: gzip:9
+
+rpm:
+  compression: gzip:9
