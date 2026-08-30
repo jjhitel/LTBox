@@ -363,12 +363,12 @@ impl InstallTarget {
                     "the app bundle has no parent directory",
                 )
             })?;
-            return Ok(Self {
+            Ok(Self {
                 current: bundle,
                 install_dir,
                 relaunch: current_exe,
                 swap_kind: SwapKind::MoveAside,
-            });
+            })
         }
 
         #[cfg(not(target_os = "macos"))]
