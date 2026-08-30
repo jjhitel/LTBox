@@ -3,9 +3,20 @@ name: Publish package-manager artifacts
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package, e.g. v3.2.8
+        required: true
+        type: string
+      publish_manifests:
+        description: Also push the rendered manifests to the bucket and tap
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: publish-packages-${{ github.event.release.tag_name }}
+  group: publish-packages-${{ github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
 permissions:
@@ -36,12 +47,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: Download and verify published Linux binary
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
           RELEASE_ARCH: ${{ matrix.release_arch }}
         run: |
           set -euo pipefail
@@ -63,7 +74,7 @@ jobs:
 
       - name: Build deb and rpm from the release binary
         env:
-          RELEASE_VERSION: ${{ github.event.release.tag_name }}
+          RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.tag }}
           NFPM_ARCH: ${{ matrix.nfpm_arch }}
           DEB_ARCH: ${{ matrix.deb_arch }}
           RPM_ARCH: ${{ matrix.rpm_arch }}
@@ -109,10 +120,18 @@ jobs:
               > "ltbox-${version}-1.${RPM_ARCH}.rpm.sha256"
           )
 
+      - name: Upload Linux packages as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages-${{ matrix.release_arch }}
+          path: dist/*
+
       - name: Attach Linux packages to the published release
+        # A manual run inspects the artifact above instead of mutating a release.
+        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           gh release upload "${TAG}" dist/* \
@@ -127,12 +146,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: Download published checksum sidecars
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p release-sidecars
@@ -149,7 +168,7 @@ jobs:
 
       - name: Render and validate manifests from sidecars
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           python3 packaging/render_manifests.py \
@@ -161,10 +180,12 @@ jobs:
           ruby -c rendered/homebrew/Casks/ltbox.rb
 
       - name: Publish external manifests when repositories are ready
+        # Manual runs render and validate by default; pushing is opt-in.
+        if: github.event_name == 'release' || inputs.publish_manifests
         env:
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ github.event.release.tag_name }}
+          VERSION: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
 
