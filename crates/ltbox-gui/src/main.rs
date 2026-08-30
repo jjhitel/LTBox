@@ -27,6 +27,7 @@ mod operation_phase;
 mod pickers;
 mod platform_installers;
 mod root_manager;
+mod self_update;
 mod settings_store;
 mod stdout_tap;
 mod theme;
@@ -53,6 +54,7 @@ pub(crate) use root_manager::{
     install_root_manager_apk, stage_manager_apk_for_manual_install,
     wait_and_install_root_manager_apk,
 };
+pub(crate) use self_update::{DirectUpdateState, SelfUpdateFailure, SelfUpdateFailureKind};
 pub(crate) use translations::*;
 pub(crate) use view::components::*;
 pub(crate) use view::styles::*;
@@ -237,6 +239,9 @@ fn main() -> iced::Result {
     // tiny + dep-free (no `clap`) — there's exactly one flag and it
     // doesn't need argument parsing beyond presence detection.
     let args: Vec<String> = std::env::args().collect();
+    let post_update_relaunch = args
+        .iter()
+        .any(|argument| argument == self_update::POST_UPDATE_RELAUNCH_ARG);
     if args.iter().any(|a| a == "--install-udev") {
         install_udev_rules();
     }
@@ -257,15 +262,35 @@ fn main() -> iced::Result {
             .write(true)
             .open(&lock_path)
         {
-            Ok(f) => match f.try_lock_exclusive() {
-                Ok(()) => Some(f),
-                // Held by another LTBox — bail quietly.
-                Err(_) => return Ok(()),
-            },
-            // Can't create lockfile (sandboxed FS) — launch without a guard.
-            Err(_) => None,
+            Ok(f) => {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                loop {
+                    match f.try_lock_exclusive() {
+                        Ok(()) => break Some(f),
+                        // Only an updater-spawned process waits for the old
+                        // instance to release the lock. An ordinary second
+                        // launch keeps the existing quiet, immediate exit.
+                        Err(_) if post_update_relaunch && std::time::Instant::now() < deadline => {
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                        }
+                        Err(_) => return Ok(()),
+                    }
+                }
+            }
+            // Can't create the guard (sandboxed FS). A post-update child still
+            // pauses long enough for the spawning process to leave its runtime;
+            // ordinary launches preserve the prior unguarded behavior.
+            Err(_) => {
+                if post_update_relaunch {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+                None
+            }
         }
     };
+    if _instance_guard.is_some() {
+        self_update::cleanup_stale_update_backups();
+    }
 
     // libusb (via `adb_client` → `rusb`) probes for optional backends by
     // calling LoadLibrary on `%SystemRoot%\System32\libusbK.dll`, and it
@@ -396,6 +421,7 @@ fn main() -> iced::Result {
         })
         .theme(App::theme)
         .subscription(App::subscription)
+        .exit_on_close_request(false)
         .window(window_settings);
     for bytes in [
         include_bytes!("../fonts/noto/NotoSansKR-Regular.subset.otf") as &[u8],
@@ -1913,9 +1939,11 @@ struct App {
     /// stable. Populates the green sidebar "Update available" pill.
     update_available: Option<ltbox_core::github::StableRelease>,
     /// Package-managed install source while the update instructions dialog is
-    /// open. Direct installs never set this because they keep opening the
-    /// release page until the self-updater replaces that branch.
+    /// open, or `Direct` while the verified self-update dialog is open.
     update_dialog_source: Option<ltbox_core::install_source::InstallSource>,
+    /// Direct-download update lifecycle. Package-managed update dialogs never
+    /// read or mutate this state.
+    direct_update_state: DirectUpdateState,
     flash_parts: FlashPartsWizard,
     dump_parts: DumpPartsWizard,
     dump_phys: DumpPhysWizard,
@@ -2105,6 +2133,7 @@ impl Default for App {
             dual_usb_advisory_closed: Vec::new(),
             update_available: None,
             update_dialog_source: None,
+            direct_update_state: DirectUpdateState::Ready,
             flash_parts: FlashPartsWizard::default(),
             dump_parts: DumpPartsWizard::default(),
             dump_phys: DumpPhysWizard::default(),
@@ -3121,12 +3150,14 @@ impl App {
         // geometry survives a restart. `event::listen_with` filters at
         // the source so non-window events don't bubble back as
         // `Message::Noop`.
-        subs.push(iced::event::listen_with(|event, _, _| {
-            if let iced::Event::Window(iced::window::Event::Resized(size)) = event {
+        subs.push(iced::event::listen_with(|event, _, _| match event {
+            iced::Event::Window(iced::window::Event::Resized(size)) => {
                 Some(Message::WindowResized(size.width, size.height))
-            } else {
-                None
             }
+            iced::Event::Window(iced::window::Event::CloseRequested) => {
+                Some(Message::Window(WindowMsg::WindowClose))
+            }
+            _ => None,
         }));
         // Debounced window-size persistence tick: only fires while a
         // pending size update hasn't been flushed yet.

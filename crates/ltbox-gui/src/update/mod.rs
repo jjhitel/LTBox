@@ -974,11 +974,9 @@ impl App {
             Message::OpenUpdate => {
                 let source = ltbox_core::install_source::install_source();
                 match source {
-                    // Phase 4 replaces only this direct-install arm with the
-                    // self-updater. Package-managed installs continue to use
-                    // the dialog branch below.
                     ltbox_core::install_source::InstallSource::Direct => {
-                        self.open_available_release_page();
+                        self.direct_update_state = DirectUpdateState::Ready;
+                        self.update_dialog_source = Some(source);
                     }
                     _ => {
                         self.update_dialog_source = Some(source);
@@ -986,8 +984,53 @@ impl App {
                 }
             }
             Message::UpdateDialogClose => {
-                self.update_dialog_source = None;
+                if !self.direct_update_state.is_active() {
+                    self.update_dialog_source = None;
+                }
             }
+            Message::InstallSelfUpdate => {
+                if self.update_dialog_source
+                    != Some(ltbox_core::install_source::InstallSource::Direct)
+                    || self.direct_update_state.is_active()
+                {
+                    return Task::none();
+                }
+                let Some(release) = self.update_available.as_ref() else {
+                    return Task::none();
+                };
+                let tag = release.tag.clone();
+                self.direct_update_state = DirectUpdateState::Updating;
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            self_update::install_release_and_restart(tag)
+                        })
+                        .await
+                        .unwrap_or_else(|_| {
+                            Err(SelfUpdateFailure {
+                                kind: SelfUpdateFailureKind::Swap,
+                                detail: ltbox_core::i18n::tr("err_task_panicked"),
+                            })
+                        })
+                    },
+                    Message::SelfUpdateFinished,
+                );
+            }
+            Message::SelfUpdateFinished(result) => match result {
+                Ok(()) => {
+                    self.direct_update_state = DirectUpdateState::Restarting;
+                    return Task::perform(
+                        async {
+                            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                        },
+                        |_| Message::ExitAfterUpdate,
+                    );
+                }
+                Err(error) => {
+                    self.direct_update_state = DirectUpdateState::Failed(error);
+                }
+            },
+            Message::ExitAfterUpdate => return iced::exit(),
             Message::OpenUpdateReleasePage => self.open_available_release_page(),
             Message::InstallDrivers => {
                 if self.installing_drivers {
