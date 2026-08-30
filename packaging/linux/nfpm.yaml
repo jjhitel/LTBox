@@ -87,3 +87,6 @@ deb:
 
 rpm:
   compression: gzip:9
+  signature:
+    key_file: ${NFPM_RPM_SIGNING_KEY_FILE}
+    key_id: ${NFPM_RPM_SIGNING_KEY_ID}

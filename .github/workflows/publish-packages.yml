@@ -14,6 +14,11 @@ on:
         required: false
         default: false
         type: boolean
+      publish_linux_repository:
+        description: Also replace the hosted APT and YUM repository
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: publish-packages-${{ github.event.release.tag_name || inputs.tag }}
@@ -80,6 +85,8 @@ jobs:
           NFPM_ARCH: ${{ matrix.nfpm_arch }}
           DEB_ARCH: ${{ matrix.deb_arch }}
           RPM_ARCH: ${{ matrix.rpm_arch }}
+          REPO_GPG_PRIVATE_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          REPO_GPG_PASSPHRASE: ${{ secrets.REPO_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           version="${RELEASE_VERSION#v}"
@@ -98,15 +105,50 @@ jobs:
             --target "/work/dist/ltbox_${version}_${DEB_ARCH}.deb"
 
           printf 'rpm\n' > packaging-stage/ltbox.install-source
+          rpm_signing_key_file=""
+          rpm_signing_key_id=""
+          if [[ -n "${REPO_GPG_PRIVATE_KEY}" && -n "${REPO_GPG_PASSPHRASE}" ]]; then
+            signing_key="packaging-stage/repository-signing-key.asc"
+            printf '%s\n' "${REPO_GPG_PRIVATE_KEY}" > "${signing_key}"
+            chmod 0600 "${signing_key}"
+
+            signing_home="$(mktemp -d)"
+            chmod 0700 "${signing_home}"
+            GNUPGHOME="${signing_home}" gpg --batch --quiet --import "${signing_key}"
+            rpm_signing_key_id="$(
+              GNUPGHOME="${signing_home}" gpg --batch --with-colons --list-secret-keys |
+                awk -F: '
+                  ($1 == "sec" || $1 == "ssb") && tolower($12) ~ /s/ {
+                    print $5
+                    exit
+                  }
+                '
+            )"
+            rm -rf "${signing_home}"
+            if [[ -z "${rpm_signing_key_id}" ]]; then
+              echo "Repository private key has no signing-capable key." >&2
+              exit 1
+            fi
+            rpm_signing_key_file="/work/${signing_key}"
+          elif [[ -n "${REPO_GPG_PRIVATE_KEY}" || -n "${REPO_GPG_PASSPHRASE}" ]]; then
+            echo "::notice::Building an unsigned RPM because REPO_GPG_PRIVATE_KEY and REPO_GPG_PASSPHRASE are not both configured. Repository publication will be skipped."
+          else
+            echo "::notice::Building an unsigned RPM because repository signing secrets are not configured. Repository publication will be skipped."
+          fi
+
           docker run --rm \
             -e NFPM_ARCH="${NFPM_ARCH}" \
             -e NFPM_VERSION="${version}" \
+            -e NFPM_RPM_SIGNING_KEY_FILE="${rpm_signing_key_file}" \
+            -e NFPM_RPM_SIGNING_KEY_ID="${rpm_signing_key_id}" \
+            -e NFPM_RPM_PASSPHRASE="${REPO_GPG_PASSPHRASE}" \
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
             "ghcr.io/goreleaser/nfpm:v${{ env.NFPM_TOOL_VERSION }}" package \
             --config packaging/linux/nfpm.yaml \
             --packager rpm \
             --target "/work/dist/ltbox-${version}-1.${RPM_ARCH}.rpm"
+          rm -f packaging-stage/repository-signing-key.asc
 
           (
             cd dist
@@ -133,6 +175,154 @@ jobs:
           gh release upload "${TAG}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --clobber
+
+  publish-linux-repository:
+    name: Build and publish APT and YUM repositories
+    needs: package-linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check repository publishing prerequisites
+        id: repository
+        env:
+          REPO_GPG_PRIVATE_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          REPO_GPG_PASSPHRASE: ${{ secrets.REPO_GPG_PASSPHRASE }}
+          REPO_GITHUB_TOKEN: ${{ secrets.REPO_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${REPO_GPG_PRIVATE_KEY}" ]] || missing+=(REPO_GPG_PRIVATE_KEY)
+          [[ -n "${REPO_GPG_PASSPHRASE}" ]] || missing+=(REPO_GPG_PASSPHRASE)
+          [[ -n "${REPO_GITHUB_TOKEN}" ]] || missing+=(REPO_GITHUB_TOKEN)
+          if (( ${#missing[@]} > 0 )); then
+            echo "::notice::Skipping miner7222/ltbox-repo: Actions secret(s) ${missing[*]} are not configured."
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if ! repository_json="$(GH_TOKEN="${REPO_GITHUB_TOKEN}" gh api repos/miner7222/ltbox-repo 2>/dev/null)"; then
+            echo "::warning::Skipping miner7222/ltbox-repo: repository is unreachable or REPO_GITHUB_TOKEN cannot access it."
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          echo "default_branch=$(jq -r '.default_branch // "main"' <<<"${repository_json}")" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/checkout@v7
+        if: steps.repository.outputs.enabled == 'true'
+        with:
+          # Repository inputs come from the ref being run, not the release tag:
+          # a dry run against an older tag still needs this branch's scripts.
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Download signed Linux packages
+        if: steps.repository.outputs.enabled == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: linux-packages-*
+          path: repository-packages
+          merge-multiple: true
+
+      - name: Install repository metadata tools
+        if: steps.repository.outputs.enabled == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            apt-utils \
+            createrepo-c \
+            rpm
+
+      - name: Build signed repository tree
+        if: steps.repository.outputs.enabled == 'true'
+        env:
+          REPO_GPG_PRIVATE_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          REPO_GPG_PASSPHRASE: ${{ secrets.REPO_GPG_PASSPHRASE }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          private_key="${RUNNER_TEMP}/ltbox-repository-private.asc"
+          cleanup() {
+            rm -f "${private_key}"
+          }
+          trap cleanup EXIT
+          printf '%s\n' "${REPO_GPG_PRIVATE_KEY}" > "${private_key}"
+          chmod 0600 "${private_key}"
+          bash packaging/linux/build_repository.sh \
+            --tag "${TAG}" \
+            --packages-dir repository-packages \
+            --output-dir repository-site \
+            --private-key "${private_key}"
+
+      - name: Validate repository with stock clients
+        if: steps.repository.outputs.enabled == 'true'
+        run: bash packaging/linux/validate_repository.sh repository-site
+
+      - name: Upload repository dry-run artifact
+        if: steps.repository.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-repository-${{ github.event.release.tag_name || inputs.tag }}
+          path: repository-site/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Report repository dry run
+        if: >-
+          steps.repository.outputs.enabled == 'true' &&
+          github.event_name != 'release' &&
+          inputs.publish_linux_repository != true
+        run: echo "::notice::Signed APT and YUM repository dry run passed; no external repository was changed."
+
+      - name: Replace hosted repository with one orphan commit
+        if: >-
+          steps.repository.outputs.enabled == 'true' &&
+          (github.event_name == 'release' || inputs.publish_linux_repository)
+        env:
+          REPO_GITHUB_TOKEN: ${{ secrets.REPO_GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ steps.repository.outputs.default_branch }}
+          VERSION: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -u
+
+          publish_repository() {
+            local repository="miner7222/ltbox-repo"
+            local worktree="external-ltbox-repo"
+            rm -rf "${worktree}"
+
+            if ! GH_TOKEN="${REPO_GITHUB_TOKEN}" gh repo clone "${repository}" "${worktree}" -- --depth 1; then
+              echo "::warning::Skipping ${repository}: clone failed with REPO_GITHUB_TOKEN."
+              return 0
+            fi
+            if ! git -C "${worktree}" switch --orphan repository-current; then
+              echo "::warning::Skipping ${repository}: could not create the replacement orphan commit."
+              return 0
+            fi
+            if ! cp -a repository-site/. "${worktree}/"; then
+              echo "::warning::Skipping ${repository}: could not stage the rendered repository."
+              return 0
+            fi
+
+            git -C "${worktree}" config user.name "github-actions[bot]"
+            git -C "${worktree}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if ! git -C "${worktree}" add --all; then
+              echo "::warning::Skipping ${repository}: could not stage the rendered repository."
+              return 0
+            fi
+            if ! git -C "${worktree}" commit -m "chore: publish LTBox repository ${VERSION}"; then
+              echo "::warning::Skipping ${repository}: could not commit the rendered repository."
+              return 0
+            fi
+
+            GH_TOKEN="${REPO_GITHUB_TOKEN}" gh auth setup-git > /dev/null
+            if ! GH_TOKEN="${REPO_GITHUB_TOKEN}" git -C "${worktree}" push --force origin "HEAD:${DEFAULT_BRANCH}"; then
+              echo "::warning::Skipping ${repository}: REPO_GITHUB_TOKEN lacks force-push access or the branch rejects force pushes."
+              return 0
+            fi
+            echo "::notice::Published ${VERSION} APT and YUM repositories to ${repository}@${DEFAULT_BRANCH}."
+          }
+
+          publish_repository
 
   publish-manifests:
     name: Publish Scoop and Homebrew manifests
