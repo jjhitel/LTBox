@@ -461,6 +461,7 @@
   "konabess_warning_summary": "Found {count} advisory finding(s) in the device table.",
   "live_adb_checking_device": "Checking device...",
   "live_adb_device_connected": "Device connected",
+  "live_adb_kernel_branch": "Kernel GKI branch: {branch}",
   "live_adb_kernel_version": "Kernel version: {version}",
   "live_adb_no_device_info": "No device — proceeding without ADB info",
   "live_adb_no_kver": "Could not detect kernel version — LKM asset match may fail",

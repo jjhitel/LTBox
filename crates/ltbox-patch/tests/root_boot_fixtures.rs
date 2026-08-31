@@ -164,6 +164,7 @@ fn build_fixture_output(
         preinit_device,
         gki_kernel_zip: None,
         kernel_version: Some("6.1.0".into()),
+        kernel_gki_branch: None,
         gki_mode: false,
         kpm_paths: Vec::new(),
         superkey: String::new(),

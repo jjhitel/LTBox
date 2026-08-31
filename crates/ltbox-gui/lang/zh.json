@@ -461,6 +461,7 @@
   "konabess_warning_summary": "设备表中有 {count} 项需要注意。",
   "live_adb_checking_device": "正在检查设备...",
   "live_adb_device_connected": "设备已连接",
+  "live_adb_kernel_branch": "内核 GKI 分支：{branch}",
   "live_adb_kernel_version": "内核版本: {version}",
   "live_adb_no_device_info": "未找到设备 — 不使用 ADB 信息继续",
   "live_adb_no_kver": "无法检测内核版本 — LKM 资源匹配可能失败",

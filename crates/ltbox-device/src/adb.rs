@@ -389,6 +389,11 @@ impl AdbManager {
         }
     }
 
+    /// The kernel release token from `/proc/version`, whole — version *and*
+    /// the `-androidNN-...` GKI branch that follows it. Callers normalize it
+    /// down to `major.minor` themselves; the branch is what tells an LKM
+    /// consumer which GKI the module has to match, and 5.10 ships under two
+    /// different ones.
     pub fn get_kernel_version(&mut self) -> Result<Option<String>> {
         const PREFIX: &str = "Linux version ";
         match self.shell_inner("cat /proc/version") {
@@ -404,10 +409,7 @@ impl AdbManager {
                 let Some(rest) = v[start..].strip_prefix(PREFIX) else {
                     return Ok(None);
                 };
-                let ver: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_digit() || *c == '.')
-                    .collect();
+                let ver: String = rest.chars().take_while(|c| !c.is_whitespace()).collect();
                 if !ver.is_empty() {
                     Ok(Some(ver))
                 } else {

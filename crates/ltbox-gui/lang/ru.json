@@ -461,6 +461,7 @@
   "konabess_warning_summary": "В таблице устройства есть замечания ({count}), требующие внимания.",
   "live_adb_checking_device": "Проверка устройства...",
   "live_adb_device_connected": "Устройство подключено",
+  "live_adb_kernel_branch": "Ветка GKI ядра: {branch}",
   "live_adb_kernel_version": "Версия ядра: {version}",
   "live_adb_no_device_info": "Устройство не найдено — продолжаем без данных ADB",
   "live_adb_no_kver": "Не удалось определить версию ядра — подбор LKM может не сработать",

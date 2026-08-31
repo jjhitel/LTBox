@@ -461,6 +461,7 @@
   "konabess_warning_summary": "기기 테이블에서 확인이 필요한 항목이 {count}개 있습니다.",
   "live_adb_checking_device": "기기 확인 중...",
   "live_adb_device_connected": "기기 연결됨",
+  "live_adb_kernel_branch": "커널 GKI 브랜치: {branch}",
   "live_adb_kernel_version": "커널 버전: {version}",
   "live_adb_no_device_info": "기기 없음 — ADB 정보 없이 진행",
   "live_adb_no_kver": "커널 버전을 감지할 수 없음 — LKM 에셋 매칭 실패 가능",

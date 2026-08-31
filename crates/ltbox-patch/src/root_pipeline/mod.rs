@@ -26,8 +26,8 @@ pub mod skroot;
 // resolve unchanged for external callers (notably the GUI).
 pub use apatch::{download_apatch_payload, download_apatch_payload_nightly};
 pub use ksu::{
-    download_ksu_payload, download_ksu_payload_nightly, normalize_ksu_kernel_version,
-    stage_root_manager_apk,
+    download_ksu_payload, download_ksu_payload_nightly, ksu_gki_branch,
+    normalize_ksu_kernel_version, stage_root_manager_apk,
 };
 pub use magisk::{download_latest_magisk_apk, download_magisk_apk_nightly};
 
@@ -189,6 +189,10 @@ pub struct RootPipelineConfig {
     /// Device kernel version (`major.minor.patch` from `uname -r`) —
     /// used by KSU to pick the matching `.ko` release asset.
     pub kernel_version: Option<String>,
+    /// GKI branch read off the device's own kernel release (`android12`), when
+    /// ADB could supply one. `None` falls back to matching on the kernel
+    /// version alone — see [`ksu_gki_branch`].
+    pub kernel_gki_branch: Option<String>,
     /// GKI mode → patch `boot.img` via `gki::patch_boot` instead of the
     /// Magisk/KSU ramdisk path.
     pub gki_mode: bool,
@@ -392,6 +396,7 @@ pub fn stage_root_payload(cfg: &RootPipelineConfig, log: &mut Vec<String>) -> Re
                     download_ksu_payload(
                         cfg.provider,
                         cfg.kernel_version.as_deref(),
+                        cfg.kernel_gki_branch.as_deref(),
                         &cfg.work_dir,
                         log,
                     )?;
@@ -408,6 +413,7 @@ pub fn stage_root_payload(cfg: &RootPipelineConfig, log: &mut Vec<String>) -> Re
                     download_ksu_payload_nightly(
                         cfg.provider,
                         cfg.kernel_version.as_deref(),
+                        cfg.kernel_gki_branch.as_deref(),
                         cfg.nightly_run_id,
                         &cfg.work_dir,
                         log,

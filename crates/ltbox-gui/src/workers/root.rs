@@ -184,6 +184,8 @@ pub(crate) fn root_worker(
     // path doesn't waste 30 s waiting for a
     // shell that won't come.
     let mut kernel_version: Option<String> = gui_kernel_version.clone();
+    // Only ADB can supply this; a manually typed version carries no branch.
+    let mut kernel_gki_branch: Option<String> = None;
     let mut adb_ready_at_start = false;
     if !skip_adb && let Some(mut adb) = ltbox_device::adb::AdbManager::new_if_connected() {
         adb_ready_at_start = true;
@@ -200,6 +202,14 @@ pub(crate) fn root_worker(
                 );
                 if let Some(kv) = normalized {
                     kernel_version = Some(kv);
+                }
+                kernel_gki_branch = ltbox_patch::root_pipeline::ksu_gki_branch(&kv);
+                if let Some(branch) = &kernel_gki_branch {
+                    live!(
+                        log,
+                        "[ADB] {}",
+                        tr_args!("live_adb_kernel_branch", branch = branch)
+                    );
                 }
             } else {
                 live!(log, "[ADB] {}", ll.adb_no_kver);
@@ -222,6 +232,7 @@ pub(crate) fn root_worker(
         slot_suffix: slot_suffix.clone(),
         preinit_device: preinit_device.clone(),
         kernel_version: kernel_version.clone(),
+        kernel_gki_branch: kernel_gki_branch.clone(),
         gki_kernel_zip: if is_gki_route {
             file_path_buf.clone()
         } else {

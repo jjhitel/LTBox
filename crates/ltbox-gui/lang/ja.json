@@ -461,6 +461,7 @@
   "konabess_warning_summary": "端末のテーブルに確認が必要な項目が{count}件あります。",
   "live_adb_checking_device": "デバイスを確認中...",
   "live_adb_device_connected": "デバイスが接続されました",
+  "live_adb_kernel_branch": "カーネル GKI ブランチ: {branch}",
   "live_adb_kernel_version": "カーネルバージョン: {version}",
   "live_adb_no_device_info": "デバイスがありません — ADB情報なしで続行します",
   "live_adb_no_kver": "カーネルバージョンを検出できませんでした — LKMアセットの一致に失敗する可能性があります",

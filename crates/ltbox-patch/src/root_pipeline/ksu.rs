@@ -250,16 +250,51 @@ fn ksu_ko_kver_matches(lower_filename: &str, kver: &str) -> bool {
     lower_filename.contains(&needle)
 }
 
+/// The GKI branch embedded in a kernel release string — `android12` out of
+/// `5.10.198-android12-9-gabc1234`.
+///
+/// A kernel version alone does not identify a GKI: 5.10 ships as both
+/// `android12-5.10` and `android13-5.10`, and an LKM built for the wrong one
+/// loads and then leaves no root after a reboot, with no error to show for it
+/// (issue #93). `/proc/version` carries the branch, so read it rather than
+/// guessing from the version.
+pub fn ksu_gki_branch(kernel_release: &str) -> Option<String> {
+    let lower = kernel_release.to_ascii_lowercase();
+    let start = lower.find("android")?;
+    let digits: String = lower[start + "android".len()..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    (!digits.is_empty()).then(|| format!("android{digits}"))
+}
+
+/// Whether an asset's GKI branch disqualifies it for this device.
+///
+/// With the device branch known, the asset has to name that exact branch —
+/// nothing else can be right. Without it (manual kernel-version entry, or a
+/// `/proc/version` with no branch at all) fall back to the one pairing that is
+/// known-wrong on every tablet LTBox supports: their 5.10 kernels are all the
+/// Android 12 GKI, so an android13 module never belongs on one.
+fn branch_rejected(lower_filename: &str, kver: &str, device_branch: Option<&str>) -> bool {
+    match device_branch {
+        Some(branch) => !lower_filename.contains(branch),
+        None => kver == "5.10" && lower_filename.contains("android13"),
+    }
+}
+
 fn select_ksu_release_ko_asset(
     assets: &[(String, String)],
     kver: &str,
+    device_branch: Option<&str>,
 ) -> Option<(String, String)> {
     let want = kver.to_lowercase();
     assets
         .iter()
         .find(|(n, _)| {
             let lower = n.to_lowercase();
-            lower.ends_with("_kernelsu.ko") && ksu_ko_kver_matches(&lower, &want)
+            lower.ends_with("_kernelsu.ko")
+                && ksu_ko_kver_matches(&lower, &want)
+                && !branch_rejected(&lower, &want, device_branch)
         })
         .cloned()
 }
@@ -303,13 +338,20 @@ fn select_arch_safe_artifact(
         .cloned()
 }
 
-fn select_ksu_nightly_ko_artifact(artifact_names: &[String], kver: &str) -> Option<String> {
+fn select_ksu_nightly_ko_artifact(
+    artifact_names: &[String],
+    kver: &str,
+    device_branch: Option<&str>,
+) -> Option<String> {
     // Accept legacy `_kernelsu.ko` and current `-{kver}-lkm` naming.
     // Trailing `-`/EOS sentinel prevents `6.1` matching `6.10/6.11/6.12`.
     let want = kver.to_lowercase();
     let lkm_marker = format!("-{want}-lkm");
     select_arch_safe_artifact(artifact_names, |n| {
         let lower = n.to_lowercase();
+        if branch_rejected(&lower, &want, device_branch) {
+            return false;
+        }
         // Legacy: "*-{kver}_kernelsu.ko"
         if lower.contains("_kernelsu.ko") && ksu_ko_kver_matches(&lower, &want) {
             return true;
@@ -480,6 +522,7 @@ fn stable_lkm_sources_exhausted(
 pub fn download_ksu_payload(
     provider: RootProvider,
     kernel_version: Option<&str>,
+    device_branch: Option<&str>,
     staging_dir: &Path,
     log: &mut Vec<String>,
 ) -> Result<()> {
@@ -505,7 +548,7 @@ pub fn download_ksu_payload(
             )
         })?;
     fs::create_dir_all(staging_dir)?;
-    let release_ko = select_ksu_release_ko_asset(&assets, &kver);
+    let release_ko = select_ksu_release_ko_asset(&assets, &kver, device_branch);
     if let Some((ko_name, ko_url)) = release_ko.as_ref() {
         ltbox_core::live!(
             log,
@@ -540,8 +583,8 @@ pub fn download_ksu_payload(
         .collect();
 
     if release_ko.is_none() {
-        let ko_artifact =
-            select_ksu_nightly_ko_artifact(&artifact_names, &kver).ok_or_else(|| {
+        let ko_artifact = select_ksu_nightly_ko_artifact(&artifact_names, &kver, device_branch)
+            .ok_or_else(|| {
                 stable_lkm_sources_exhausted(
                     &tag,
                     &kver,
@@ -633,6 +676,7 @@ pub fn download_ksu_payload(
 pub fn download_ksu_payload_nightly(
     provider: RootProvider,
     kernel_version: Option<&str>,
+    device_branch: Option<&str>,
     manual_run_id: Option<u64>,
     staging_dir: &Path,
     log: &mut Vec<String>,
@@ -661,8 +705,9 @@ pub fn download_ksu_payload_nightly(
         })?;
 
     // -------- 1. Kernel `.ko` --------
-    let ko_artifact = select_ksu_nightly_ko_artifact(&artifact_names, &kver).ok_or_else(|| {
-        LtboxError::Patch(format!(
+    let ko_artifact = select_ksu_nightly_ko_artifact(&artifact_names, &kver, device_branch)
+        .ok_or_else(|| {
+            LtboxError::Patch(format!(
             "{repo} run {run_id}: no *_kernelsu.ko artifact matching kernel {kver} (artifacts={artifact_names:?})"
         ))
     })?;
@@ -732,9 +777,9 @@ mod tests {
     use super::{
         ArtifactDigestMismatch, ArtifactDigestStatus, RootProvider, compare_artifact_digest,
         download_ksu_manager_apk_nightly, download_ksu_manager_apk_stable, download_ksu_payload,
-        download_ksu_payload_nightly, ksu_ko_kver_matches, normalize_ksu_kernel_version,
-        select_ksu_nightly_ko_artifact, select_ksu_release_ko_asset, select_ksuinit_artifact,
-        select_skroot_manager_asset, stable_lkm_sources_exhausted,
+        download_ksu_payload_nightly, ksu_gki_branch, ksu_ko_kver_matches,
+        normalize_ksu_kernel_version, select_ksu_nightly_ko_artifact, select_ksu_release_ko_asset,
+        select_ksuinit_artifact, select_skroot_manager_asset, stable_lkm_sources_exhausted,
     };
 
     const SHA256_LOWER: &str = "df471282e461086739bebb088aa07c7226158ffc7a8f5495c86d2e10dba37e83";
@@ -845,9 +890,9 @@ mod tests {
             ),
         ];
 
-        let picked = select_ksu_release_ko_asset(&assets, "6.6").expect("6.6 asset");
+        let picked = select_ksu_release_ko_asset(&assets, "6.6", None).expect("6.6 asset");
         assert_eq!(picked.0, "android15-6.6_kernelsu.ko");
-        assert!(select_ksu_release_ko_asset(&assets, "6.1").is_none());
+        assert!(select_ksu_release_ko_asset(&assets, "6.1", None).is_none());
     }
 
     #[test]
@@ -858,10 +903,13 @@ mod tests {
         ];
 
         assert_eq!(
-            select_ksu_nightly_ko_artifact(&artifacts, "5.15"),
+            select_ksu_nightly_ko_artifact(&artifacts, "5.15", None),
             Some("android14-5.15_kernelsu.ko".to_string())
         );
-        assert_eq!(select_ksu_nightly_ko_artifact(&artifacts, "6.1"), None);
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "6.1", None),
+            None
+        );
     }
 
     #[test]
@@ -881,21 +929,105 @@ mod tests {
         ];
 
         assert_eq!(
-            select_ksu_nightly_ko_artifact(&artifacts, "6.6"),
+            select_ksu_nightly_ko_artifact(&artifacts, "6.6", None),
             Some("android15-6.6-lkm".to_string())
         );
         assert_eq!(
-            select_ksu_nightly_ko_artifact(&artifacts, "5.15"),
+            select_ksu_nightly_ko_artifact(&artifacts, "5.15", None),
             Some("android14-5.15-lkm".to_string())
         );
         // 6.1 must not steal 6.10 / 6.11 / 6.12 — kver match anchors
         // both sides via the surrounding `-` markers.
         assert_eq!(
-            select_ksu_nightly_ko_artifact(&artifacts, "6.1"),
+            select_ksu_nightly_ko_artifact(&artifacts, "6.1", None),
             Some("android14-6.1-lkm".to_string())
         );
         // No 4.x in this artifact set.
-        assert_eq!(select_ksu_nightly_ko_artifact(&artifacts, "4.14"), None);
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "4.14", None),
+            None
+        );
+    }
+
+    #[test]
+    fn the_gki_branch_is_read_out_of_the_kernel_release() {
+        assert_eq!(
+            ksu_gki_branch("5.10.198-android12-9-gabc1234"),
+            Some("android12".to_string())
+        );
+        assert_eq!(
+            ksu_gki_branch("6.6.30-android15-8-g0123456-ab12345678"),
+            Some("android15".to_string())
+        );
+        // Old kernels predate the GKI branch entirely.
+        assert_eq!(ksu_gki_branch("4.14.180"), None);
+        // A manually typed version carries nothing to read.
+        assert_eq!(ksu_gki_branch("5.10"), None);
+    }
+
+    #[test]
+    fn a_known_branch_picks_its_own_module_at_the_same_kernel_version() {
+        // The issue-93 shape: one kernel version, two branches published.
+        let artifacts = vec![
+            "android13-5.10-lkm".to_string(),
+            "android12-5.10-lkm".to_string(),
+        ];
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "5.10", Some("android12")),
+            Some("android12-5.10-lkm".to_string())
+        );
+        // And the other way round, so this is a match rather than a blocklist.
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "5.10", Some("android13")),
+            Some("android13-5.10-lkm".to_string())
+        );
+
+        let assets = vec![
+            (
+                "android13-5.10_kernelsu.ko".to_string(),
+                "https://example.invalid/13".to_string(),
+            ),
+            (
+                "android12-5.10_kernelsu.ko".to_string(),
+                "https://example.invalid/12".to_string(),
+            ),
+        ];
+        assert_eq!(
+            select_ksu_release_ko_asset(&assets, "5.10", Some("android12")).map(|(name, _)| name),
+            Some("android12-5.10_kernelsu.ko".to_string())
+        );
+    }
+
+    #[test]
+    fn a_repo_without_the_devices_branch_finds_nothing() {
+        // Failing loudly beats a module that loads and then drops root on the
+        // next boot, which is what the silent mismatch did.
+        let artifacts = vec!["android13-5.10-lkm".to_string()];
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "5.10", Some("android12")),
+            None
+        );
+    }
+
+    #[test]
+    fn an_unknown_branch_still_refuses_android13_on_5_10() {
+        // Manual kernel-version entry has no branch to match on. Every 5.10
+        // tablet LTBox supports is the Android 12 GKI, so this pairing stays
+        // barred even then.
+        let artifacts = vec![
+            "android13-5.10-lkm".to_string(),
+            "android12-5.10-lkm".to_string(),
+        ];
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "5.10", None),
+            Some("android12-5.10-lkm".to_string())
+        );
+        // The fallback is scoped to 5.10; android13 ships a 5.15 GKI too.
+        let artifacts = vec!["android13-5.15-lkm".to_string()];
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "5.15", None),
+            Some("android13-5.15-lkm".to_string())
+        );
     }
 
     #[test]
@@ -911,7 +1043,7 @@ mod tests {
         ];
 
         assert_eq!(
-            select_ksu_nightly_ko_artifact(&artifacts, "6.1"),
+            select_ksu_nightly_ko_artifact(&artifacts, "6.1", None),
             Some("aarch64-android14-6.1-lkm".to_string())
         );
         assert_eq!(
@@ -927,7 +1059,10 @@ mod tests {
             "ksuinit-amd64".to_string(),
         ];
 
-        assert_eq!(select_ksu_nightly_ko_artifact(&artifacts, "6.1"), None);
+        assert_eq!(
+            select_ksu_nightly_ko_artifact(&artifacts, "6.1", None),
+            None
+        );
         assert_eq!(select_ksuinit_artifact(&artifacts), None);
     }
 
@@ -1094,7 +1229,7 @@ mod tests {
             let label = format!("{repo} payload k{KVER}");
             let tmp = tempfile::tempdir().expect("tempdir");
             let mut log = Vec::new();
-            let result = download_ksu_payload(provider, Some(KVER), tmp.path(), &mut log);
+            let result = download_ksu_payload(provider, Some(KVER), None, tmp.path(), &mut log);
             let outcome = match result {
                 Ok(()) => {
                     let ko = tmp.path().join("kernelsu.ko");
@@ -1162,8 +1297,14 @@ mod tests {
             let label = format!("{repo} nightly payload k{KVER}");
             let tmp = tempfile::tempdir().expect("tempdir");
             let mut log = Vec::new();
-            let result =
-                download_ksu_payload_nightly(provider, Some(KVER), None, tmp.path(), &mut log);
+            let result = download_ksu_payload_nightly(
+                provider,
+                Some(KVER),
+                None,
+                None,
+                tmp.path(),
+                &mut log,
+            );
             let outcome = match result {
                 Ok(run_id) => {
                     let ko = tmp.path().join("kernelsu.ko");
