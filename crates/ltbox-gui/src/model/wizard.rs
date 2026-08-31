@@ -504,12 +504,6 @@ impl UnrootType {
             Self::APatchGki => "unroottype_apatch_gki_desc",
         }
     }
-    pub(crate) fn folder_desc_key(&self) -> &'static str {
-        match self {
-            Self::MagiskLkm => "unroottype_magisk_lkm_folderdesc",
-            Self::APatchGki => "unroottype_apatch_gki_folderdesc",
-        }
-    }
 }
 
 #[derive(Default)]

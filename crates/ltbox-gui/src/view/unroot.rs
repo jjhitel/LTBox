@@ -68,7 +68,7 @@ impl App {
                 let desc = self
                     .unroot
                     .unroot_type
-                    .map(|t| self.t(t.folder_desc_key()).to_string())
+                    .map(|t| self.unroot_folder_desc(t).to_string())
                     .unwrap_or_else(|| self.t("unroot_folder_placeholder").to_string());
                 (self.t("unroot_folder_title").to_string(), desc)
             }
@@ -204,7 +204,7 @@ impl App {
         let desc_owned = self
             .unroot
             .unroot_type
-            .map(|t| self.t(t.folder_desc_key()).to_string())
+            .map(|t| self.unroot_folder_desc(t).to_string())
             .unwrap_or_else(|| self.t("unroot_folder_placeholder").to_string());
         let status = if let Some(p) = &self.unroot.folder_path {
             p.clone()

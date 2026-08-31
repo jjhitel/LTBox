@@ -3302,6 +3302,41 @@ impl App {
     /// device. TB323FU (Y700 Gen 5) needs the `qsahara_device_programmer.xml`
     /// manifest, not the `.melf`; with no recognised model the picker hints
     /// both. Every loader picker routes its subtitle through this.
+    /// Which images the unroot folder picker should name.
+    ///
+    /// What a root backup holds is decided by the root run, not by the wizard
+    /// card the user picks here: the target follows the route and the model,
+    /// and vbmeta is only in the folder when the run had to rebuild it. Asking
+    /// the same two functions the root run asked keeps the picker from naming a
+    /// file that run never wrote — a chained `boot` target leaves no vbmeta.img
+    /// at all, and only the TB320FC family roots to `boot` outside the GKI
+    /// route.
+    fn unroot_folder_desc(&self, unroot_type: UnrootType) -> &str {
+        let target = ltbox_patch::root_pipeline::resolve_root_image_target(
+            ltbox_patch::root_pipeline::RootFamily::Magisk,
+            matches!(unroot_type, UnrootType::APatchGki),
+            &self.device_model,
+        );
+        // The testkey efisp/GBL route leaves vbmeta out of the backup even for
+        // a target vbmeta would normally hash, so it overrides the rebuild rule.
+        let with_vbmeta = !root_skips_avb_postprocess(&self.device_model)
+            && ltbox_patch::root_pipeline::root_run_rebuilds_vbmeta(target, &self.device_model);
+        match (target, with_vbmeta) {
+            (ltbox_patch::root_pipeline::RootImageTarget::Boot, true) => {
+                self.t("unroot_folderdesc_boot_vbmeta")
+            }
+            (ltbox_patch::root_pipeline::RootImageTarget::Boot, false) => {
+                self.t("unroot_folderdesc_boot")
+            }
+            (ltbox_patch::root_pipeline::RootImageTarget::InitBoot, true) => {
+                self.t("unroot_folderdesc_init_boot_vbmeta")
+            }
+            (ltbox_patch::root_pipeline::RootImageTarget::InitBoot, false) => {
+                self.t("unroot_folderdesc_init_boot")
+            }
+        }
+    }
+
     fn loader_picker_desc(&self) -> String {
         if self.is_tb323fu() {
             self.t("loader_desc_tb323fu").to_string()
