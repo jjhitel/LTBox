@@ -113,6 +113,7 @@ impl OperationPhaseKind {
                 "op_unroot_phase_3",
                 "op_unroot_phase_4",
                 "op_unroot_phase_5",
+                "op_unroot_phase_6",
             ],
             Self::SysUpdateDisable => &[
                 "op_sys_phase_adb",

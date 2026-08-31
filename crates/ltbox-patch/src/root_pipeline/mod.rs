@@ -644,11 +644,11 @@ pub fn build_patched_artifacts(
                         key,
                         None,
                     )?;
-                    let footer_descriptor = root_hash_descriptor(
+                    let footer_descriptor = avb::hash_descriptor(
                         &final_root_image,
                         cfg.root_image_target.partition_base(),
                     )?;
-                    let vbmeta_descriptor = root_hash_descriptor(
+                    let vbmeta_descriptor = avb::hash_descriptor(
                         &final_vbmeta,
                         cfg.root_image_target.partition_base(),
                     )?;
@@ -690,31 +690,6 @@ pub fn build_patched_artifacts(
         root_partition: format!("{}{suffix}", cfg.root_image_target.partition_base()),
         vbmeta_partition,
     })
-}
-
-fn root_hash_descriptor(
-    image: &std::path::Path,
-    partition_name: &str,
-) -> Result<avbtool_rs::info::DescriptorInfo> {
-    avbtool_rs::image::inspect_avb_image(image)
-        .map_err(|e| LtboxError::Avb(format!("inspect {}: {e}", image.display())))?
-        .descriptors
-        .into_iter()
-        .find(|descriptor| {
-            matches!(
-                descriptor,
-                avbtool_rs::info::DescriptorInfo::Hash {
-                    partition_name: name,
-                    ..
-                } if name == partition_name
-            )
-        })
-        .ok_or_else(|| {
-            LtboxError::Avb(format!(
-                "{} has no Hash descriptor for {partition_name}",
-                image.display()
-            ))
-        })
 }
 
 #[cfg(test)]

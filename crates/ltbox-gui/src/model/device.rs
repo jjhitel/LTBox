@@ -63,6 +63,17 @@ pub(crate) fn is_dual_usbc_model(model: &str) -> bool {
         .any(|m| model.eq_ignore_ascii_case(m))
 }
 
+/// Whether a root run on `model` skips AVB post-processing entirely. TB323FU
+/// signs its chain through the testkey efisp/GBL route instead, so the images a
+/// root run backs up carry no AVB metadata at all.
+///
+/// Unroot therefore cannot compare such a backup against the device and has to
+/// restore it verbatim. **Any model added to that route must be added here too**
+/// — otherwise unroot reads its backup as unverifiable and refuses to flash.
+pub(crate) fn root_skips_avb_postprocess(model: &str) -> bool {
+    DeviceClass::from_model(model) == DeviceClass::TB323FU
+}
+
 /// Every supported Lenovo tablet enforces AVB rollback protection EXCEPT the
 /// PRC-only TB322FC. Used to decide whether a missing fastboot
 /// `stored_rollback_index` means "no ARB, skip" (TB322FC) or "ARB present but

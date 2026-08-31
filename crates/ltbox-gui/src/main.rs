@@ -3606,7 +3606,7 @@ mod tests {
     fn primary_phase_plans_use_refined_counts() {
         assert_eq!(OperationPhaseKind::Flash.keys().len(), 9);
         assert_eq!(OperationPhaseKind::Root.keys().len(), 8);
-        assert_eq!(OperationPhaseKind::Unroot.keys().len(), 5);
+        assert_eq!(OperationPhaseKind::Unroot.keys().len(), 6);
     }
 
     #[test]
@@ -4069,6 +4069,7 @@ mod tests {
             "op_flash_phase_7",
             "op_unroot_phase_4",
             "op_unroot_phase_5",
+            "op_unroot_phase_6",
         ];
         for lang in [
             Language::En,

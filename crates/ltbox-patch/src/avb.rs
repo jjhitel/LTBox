@@ -185,6 +185,36 @@ pub fn chain_partition_descriptors(vbmeta_path: &Path) -> Result<Vec<ChainPartit
         .collect())
 }
 
+/// The Hash descriptor an image declares for `partition_name` — from a vbmeta
+/// image (where it is the digest vbmeta pins) or from a partition image's own
+/// footer. Comparing the two proves a rebuilt vbmeta actually adopted the
+/// image it was rebuilt from, instead of carrying a stale digest the
+/// bootloader would reject.
+pub fn hash_descriptor(
+    image: &Path,
+    partition_name: &str,
+) -> Result<avbtool_rs::info::DescriptorInfo> {
+    avbtool_rs::image::inspect_avb_image(image)
+        .map_err(|e| LtboxError::Avb(format!("inspect {}: {e}", image.display())))?
+        .descriptors
+        .into_iter()
+        .find(|descriptor| {
+            matches!(
+                descriptor,
+                avbtool_rs::info::DescriptorInfo::Hash {
+                    partition_name: name,
+                    ..
+                } if name == partition_name
+            )
+        })
+        .ok_or_else(|| {
+            LtboxError::Avb(format!(
+                "{} has no Hash descriptor for {partition_name}",
+                image.display()
+            ))
+        })
+}
+
 /// The AVB algorithm name for a signing-key spec (bundled name or PEM path),
 /// e.g. `testkey_rsa4096` -> `SHA256_RSA4096`, derived from the key's size. Used
 /// to keep a rebuild's algorithm consistent with a key override.

@@ -283,8 +283,9 @@ fn rollback_floors(boot: [Option<u64>; 2], vbs: [Option<u64>; 2]) -> Option<(u64
 }
 
 /// Dump a partition over EDL and parse its AVB info, cleaning up the temp file.
-/// `None` on any dump/parse failure.
-fn dump_avb_info(
+/// `None` on any dump/parse failure. Shared with `workers::unroot`, which
+/// compares the device image against the backup folder before writing.
+pub(super) fn dump_avb_info(
     session: &mut ltbox_device::edl::EdlSession,
     part: &str,
     lun: u8,
