@@ -58,6 +58,7 @@ impl App {
         {
             layers.push(self.error_banner(err));
         }
+        let dialog_layer_start = layers.len();
         if self.country_popup_open {
             layers.push(self.country_popup_view());
         }
@@ -109,9 +110,14 @@ impl App {
         if self.update_dialog_source.is_some() {
             layers.push(self.update_dialog_view());
         }
+        let toast_layer_count = usize::from(self.toast_msg.is_some());
         if self.toast_msg.is_some() {
             layers.push(self.toast_view());
         }
+        if self.startup_disclaimer_open {
+            layers.push(self.startup_disclaimer_dialog());
+        }
+        let any_dialog_open = layers.len() > dialog_layer_start + toast_layer_count;
 
         // Resize handles last so the edge/corner hit areas at the window
         // edges and corners sit above every popup/toast — the user can
@@ -123,10 +129,11 @@ impl App {
             layers.push(self.resize_handles());
         }
 
-        // The per-launch disclaimer is the final opaque layer so it also
-        // blocks the custom title bar and resize handles beneath it.
-        if self.startup_disclaimer_open {
-            layers.push(self.startup_disclaimer_dialog());
+        // Keep custom-chrome hit areas above every scrim. This layer is only
+        // as tall as the title bar, so the Stack passes events below it to the
+        // dialog or shell underneath.
+        if !crate::SYSTEM_WINDOW_CHROME && any_dialog_open {
+            layers.push(self.title_bar_overlay());
         }
 
         iced::widget::Stack::with_children(layers).into()
@@ -177,18 +184,37 @@ impl App {
     }
 
     pub(crate) fn title_bar(&self) -> Element<'_, Message> {
-        let title_content = container(
-            row![
-                iced::widget::image(TITLE_BAR_ICON_HANDLE.clone())
-                    .width(16)
-                    .height(16),
-                text("LTBox").size(12).style(muted_style),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([8, 12])
-        .width(Length::Fill);
+        self.title_bar_layer(false)
+    }
+
+    fn title_bar_overlay(&self) -> Element<'_, Message> {
+        container(self.title_bar_layer(true))
+            .padding(1)
+            .width(Length::Fill)
+            .into()
+    }
+
+    fn title_bar_layer(&self, hit_areas_only: bool) -> Element<'_, Message> {
+        let title_content: Element<'_, Message> = if hit_areas_only {
+            container(Space::new().height(16))
+                .padding([8, 12])
+                .width(Length::Fill)
+                .into()
+        } else {
+            container(
+                row![
+                    iced::widget::image(TITLE_BAR_ICON_HANDLE.clone())
+                        .width(16)
+                        .height(16),
+                    text("LTBox").size(12).style(muted_style),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([8, 12])
+            .width(Length::Fill)
+            .into()
+        };
 
         let drag_area = iced::widget::mouse_area(title_content)
             .on_press(Message::Window(WindowMsg::WindowDrag))
@@ -197,56 +223,58 @@ impl App {
         let btn_w = 46;
         let btn_h = 32;
 
-        let minimize_btn = button(
+        let minimize_content: Element<'_, Message> =
             container(lucide_icon(icon::win_minimize(), 12.0, |t: &Theme| {
                 pal_of(t).on_surface
             }))
             .width(btn_w)
             .height(btn_h)
             .center_x(btn_w)
-            .center_y(btn_h),
-        )
-        .on_press(Message::Window(WindowMsg::WindowMinimize))
-        .padding(0)
-        .style(|t: &Theme, status| {
-            // Palette-driven state layer. The old flat grey at 15% ignored
-            // the theme entirely and did not distinguish hover from press.
-            let p = pal_of(t);
-            button::Style {
-                background: theme::state_layer_bg(status, p.on_surface).map(Into::into),
-                text_color: p.on_surface,
-                ..Default::default()
-            }
-        });
+            .center_y(btn_h)
+            .into();
+        let minimize_btn = button(minimize_content)
+            .on_press(Message::Window(WindowMsg::WindowMinimize))
+            .padding(0)
+            .style(|t: &Theme, status| {
+                // Palette-driven state layer. The old flat grey at 15% ignored
+                // the theme entirely and did not distinguish hover from press.
+                let p = pal_of(t);
+                button::Style {
+                    background: theme::state_layer_bg(status, p.on_surface).map(Into::into),
+                    text_color: p.on_surface,
+                    ..Default::default()
+                }
+            });
 
         let maximize_icon = if self.window_maximized {
             icon::win_restore()
         } else {
             icon::win_maximize()
         };
-        let maximize_btn = button(
+        let maximize_content: Element<'_, Message> =
             container(lucide_icon(maximize_icon, 12.0, |t: &Theme| {
                 pal_of(t).on_surface
             }))
             .width(btn_w)
             .height(btn_h)
             .center_x(btn_w)
-            .center_y(btn_h),
-        )
-        .on_press(Message::Window(WindowMsg::WindowToggleMaximize))
-        .padding(0)
-        .style(|t: &Theme, status| {
-            // Palette-driven state layer. The old flat grey at 15% ignored
-            // the theme entirely and did not distinguish hover from press.
-            let p = pal_of(t);
-            button::Style {
-                background: theme::state_layer_bg(status, p.on_surface).map(Into::into),
-                text_color: p.on_surface,
-                ..Default::default()
-            }
-        });
+            .center_y(btn_h)
+            .into();
+        let maximize_btn = button(maximize_content)
+            .on_press(Message::Window(WindowMsg::WindowToggleMaximize))
+            .padding(0)
+            .style(|t: &Theme, status| {
+                // Palette-driven state layer. The old flat grey at 15% ignored
+                // the theme entirely and did not distinguish hover from press.
+                let p = pal_of(t);
+                button::Style {
+                    background: theme::state_layer_bg(status, p.on_surface).map(Into::into),
+                    text_color: p.on_surface,
+                    ..Default::default()
+                }
+            });
 
-        let close_btn = button(
+        let close_content: Element<'_, Message> =
             // No explicit glyph colour: the icon inherits the button's
             // `text_color`, so it flips to `on_error` the moment the red
             // wash lands instead of staying dark on red.
@@ -254,24 +282,25 @@ impl App {
                 .width(btn_w)
                 .height(btn_h)
                 .center_x(btn_w)
-                .center_y(btn_h),
-        )
-        .on_press(Message::Window(WindowMsg::WindowClose))
-        .padding(0)
-        .style(|t: &Theme, status| {
-            // Close keeps its distinct red wash, but on the `error` role
-            // rather than a hardcoded `rgb(0.9, 0.2, 0.2)` that stayed put
-            // across every theme seed and both modes.
-            let p = pal_of(t);
-            let hot = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            button::Style {
-                background: hot.then(|| {
-                    theme::mix_color(p.error, p.on_error, theme::state_alpha(status)).into()
-                }),
-                text_color: if hot { p.on_error } else { p.on_surface },
-                ..Default::default()
-            }
-        });
+                .center_y(btn_h)
+                .into();
+        let close_btn = button(close_content)
+            .on_press(Message::Window(WindowMsg::WindowClose))
+            .padding(0)
+            .style(|t: &Theme, status| {
+                // Close keeps its distinct red wash, but on the `error` role
+                // rather than a hardcoded `rgb(0.9, 0.2, 0.2)` that stayed put
+                // across every theme seed and both modes.
+                let p = pal_of(t);
+                let hot = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                button::Style {
+                    background: hot.then(|| {
+                        theme::mix_color(p.error, p.on_error, theme::state_alpha(status)).into()
+                    }),
+                    text_color: if hot { p.on_error } else { p.on_surface },
+                    ..Default::default()
+                }
+            });
 
         container(
             row![drag_area, minimize_btn, maximize_btn, close_btn,]
@@ -279,9 +308,15 @@ impl App {
                 .height(btn_h),
         )
         .width(Length::Fill)
-        .style(|t: &Theme| container::Style {
-            background: Some(pal_of(t).surface_container_low.into()),
-            ..Default::default()
+        .style(move |t: &Theme| {
+            if hit_areas_only {
+                container::Style::default()
+            } else {
+                container::Style {
+                    background: Some(pal_of(t).surface_container_low.into()),
+                    ..Default::default()
+                }
+            }
         })
         .into()
     }
