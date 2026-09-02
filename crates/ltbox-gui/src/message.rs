@@ -12,6 +12,9 @@ use crate::{
 pub(crate) enum Message {
     /// No-op for click-blocker mouse_area widgets.
     Noop,
+    StartupDisclaimerToggled(bool),
+    StartupDisclaimerConfirm,
+    StartupDisclaimerExit,
     Navigate(View),
     ResumeBusyOperation,
     /// Open an external URL (About panel links) in the host's default

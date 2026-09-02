@@ -1753,6 +1753,9 @@ struct App {
     theme_seed: ThemeSeed,
     settings: SettingsState,
     translations: Translations,
+    /// Per-launch disclaimer gate. It is deliberately absent from persisted settings.
+    startup_disclaimer_open: bool,
+    startup_disclaimer_checked: bool,
     root: RootWizard,
     flash: FlashWizard,
     sysupdate: SysUpdateWizard,
@@ -2052,6 +2055,8 @@ impl Default for App {
             theme_seed,
             settings: SettingsState { language: lang },
             translations,
+            startup_disclaimer_open: true,
+            startup_disclaimer_checked: false,
             root: RootWizard::default(),
             flash: FlashWizard::default(),
             sysupdate: SysUpdateWizard::default(),

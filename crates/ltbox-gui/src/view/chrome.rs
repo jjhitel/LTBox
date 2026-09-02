@@ -123,7 +123,57 @@ impl App {
             layers.push(self.resize_handles());
         }
 
+        // The per-launch disclaimer is the final opaque layer so it also
+        // blocks the custom title bar and resize handles beneath it.
+        if self.startup_disclaimer_open {
+            layers.push(self.startup_disclaimer_dialog());
+        }
+
         iced::widget::Stack::with_children(layers).into()
+    }
+
+    pub(crate) fn startup_disclaimer_dialog(&self) -> Element<'_, Message> {
+        let d = self.density();
+        let acknowledgement = widget::checkbox(self.startup_disclaimer_checked)
+            .label(self.t("startup_disclaimer_accept").to_string())
+            .on_toggle(Message::StartupDisclaimerToggled)
+            .size(d.size(20.0))
+            .spacing(d.space(12.0))
+            .text_size(d.text(theme::text_size::BODY_MEDIUM))
+            .style(m3_checkbox_style);
+
+        let mut continue_button =
+            m3_filled_button(self.t("startup_disclaimer_continue").to_string());
+        if self.startup_disclaimer_checked {
+            continue_button = continue_button.on_press(Message::StartupDisclaimerConfirm);
+        }
+
+        let content = column![
+            text(self.t("startup_disclaimer_title").to_string())
+                .size(d.text(theme::text_size::TITLE_LARGE))
+                .font(theme::emphasis::bold())
+                .style(on_surface_style),
+            text(self.t("startup_disclaimer_body").to_string())
+                .size(d.text(theme::text_size::BODY_MEDIUM))
+                .style(muted_style)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .width(Length::Fill),
+            acknowledgement,
+            widget::rule::horizontal(1),
+            row![
+                Space::new().width(Length::Fill),
+                m3_text_button(self.t("startup_disclaimer_exit").to_string())
+                    .on_press(Message::StartupDisclaimerExit),
+                continue_button,
+            ]
+            .spacing(d.space(10.0))
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(d.space(16.0))
+        .padding(d.space(24.0))
+        .width(Length::Fixed(d.width(520.0)));
+
+        m3_dialog(content.into())
     }
 
     pub(crate) fn title_bar(&self) -> Element<'_, Message> {

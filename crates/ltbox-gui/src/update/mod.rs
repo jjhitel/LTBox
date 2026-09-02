@@ -36,6 +36,17 @@ impl App {
             return Task::none();
         }
         match msg {
+            Message::StartupDisclaimerToggled(checked) => {
+                self.startup_disclaimer_checked = checked;
+            }
+            Message::StartupDisclaimerConfirm => {
+                if self.startup_disclaimer_checked {
+                    self.startup_disclaimer_open = false;
+                }
+            }
+            Message::StartupDisclaimerExit => {
+                return self.update_window(WindowMsg::WindowClose);
+            }
             // Window chrome (titlebar buttons, cursor-drag move/resize,
             // persisted geometry) delegated to a focused handler so the
             // monster match in `update` doesn't have to spell every

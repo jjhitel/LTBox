@@ -10,7 +10,7 @@
 
 ## ⚠️ Disclaimer
 
-**Educational purposes only.** Modifying firmware can brick your device, cause data loss, or void your warranty. The author assumes **no liability**. You are solely responsible. **Use at your own risk.**
+**Educational purposes only.** Modifying firmware can brick your device, cause data loss, or void your warranty. The developer assumes **no liability**. You are solely responsible. **Use at your own risk.**
 
 ---
 
