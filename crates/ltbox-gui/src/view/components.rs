@@ -287,6 +287,13 @@ pub(crate) fn large_top_app_bar<'a>(
     title: String,
     subtitle: Option<String>,
 ) -> Element<'a, Message> {
+    let padding = iced::Padding {
+        top: 18.0,
+        right: 24.0,
+        bottom: 22.0,
+        left: 24.0,
+    };
+    let content_min_height = WIZARD_TOP_APP_BAR_HEIGHT - padding.top - padding.bottom;
     let mut content = column![
         text(title)
             .size(theme::text_size::HEADLINE_MEDIUM)
@@ -311,20 +318,17 @@ pub(crate) fn large_top_app_bar<'a>(
 
     column![
         container(
-            container(content)
-                .width(Length::Fill)
-                .max_width(WIZARD_TOP_APP_BAR_MAX_WIDTH)
+            row![
+                Space::new().height(Length::Fixed(content_min_height)),
+                container(content)
+                    .width(Length::Fill)
+                    .max_width(WIZARD_TOP_APP_BAR_MAX_WIDTH),
+            ]
+            .align_y(iced::Alignment::End)
         )
         .width(Length::Fill)
-        .height(Length::Fixed(WIZARD_TOP_APP_BAR_HEIGHT))
-        .padding(iced::Padding {
-            top: 18.0,
-            right: 24.0,
-            bottom: 22.0,
-            left: 24.0,
-        })
+        .padding(padding)
         .align_x(iced::Alignment::Start)
-        .align_y(iced::Alignment::End)
         .style(|t: &Theme| panel_bg(t)),
         widget::rule::horizontal(1).style(shell_rule_style),
     ]
