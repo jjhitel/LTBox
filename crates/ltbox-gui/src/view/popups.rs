@@ -1127,7 +1127,7 @@ impl App {
         ]
         .spacing(10)
         .padding(20)
-        .width(320)
+        .width(400)
         .into();
         m3_dialog(popup_content)
     }
