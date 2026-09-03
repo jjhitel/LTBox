@@ -742,6 +742,22 @@ pub(crate) fn lucide_primary(
         .into()
 }
 
+/// Primary-coloured Lucide icon for a single-column wizard row. The row's
+/// cross-axis limit can be shorter than Iced's default 1.3x text line box at
+/// large icon sizes; use a one-em line box here so the glyph remains centred
+/// without changing the shared Lucide helpers used by other surfaces.
+pub(crate) fn lucide_list_primary(
+    icon: iced::widget::Text<'static, Theme, iced::Renderer>,
+    size: f32,
+) -> Element<'static, Message> {
+    icon.size(size)
+        .line_height(1.0)
+        .style(|t: &Theme| iced::widget::text::Style {
+            color: Some(pal_of(t).primary),
+        })
+        .into()
+}
+
 /// Error-coloured Lucide icon. Pairs with
 /// [`icon_option_card_sub_square_destructive_sized`] so a data-erasing
 /// option reads as destructive at the glyph, not just at the border.
@@ -770,6 +786,19 @@ pub(crate) fn lucide_disabled(
         .into()
 }
 
+/// Disabled-state counterpart to [`lucide_list_primary`].
+pub(crate) fn lucide_list_disabled(
+    icon: iced::widget::Text<'static, Theme, iced::Renderer>,
+    size: f32,
+) -> Element<'static, Message> {
+    icon.size(size)
+        .line_height(1.0)
+        .style(|t: &Theme| iced::widget::text::Style {
+            color: Some(with_alpha(pal_of(t).on_surface, 0.38)),
+        })
+        .into()
+}
+
 /// Lucide icon coloured by an arbitrary theme-driven closure. Used
 /// where colour depends on widget state (nav active / disabled,
 /// op success / failure, title-bar hover).
@@ -785,6 +814,81 @@ pub(crate) fn lucide_icon(
         .into()
 }
 
+pub(crate) fn wizard_list_option_card(
+    icon: Element<'static, Message>,
+    label: &str,
+    sub: &str,
+    selected: bool,
+    msg: Option<Message>,
+    metrics: ListRowMetrics,
+) -> Element<'static, Message> {
+    let enabled = msg.is_some();
+    let label_style_fn = if enabled {
+        on_surface_style
+    } else {
+        muted_style
+    };
+    let desc: Element<'static, Message> = if sub.is_empty() {
+        text(" ").size(metrics.desc_size).width(Length::Fill).into()
+    } else {
+        text(sub.to_string())
+            .size(metrics.desc_size)
+            .style(muted_style)
+            .width(Length::Fill)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+            .into()
+    };
+    let text_block = container(
+        column![
+            text(label.to_string())
+                .size(metrics.label_size)
+                .style(label_style_fn)
+                .width(Length::Fill),
+            desc,
+        ]
+        .spacing(metrics.text_gap)
+        .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .center_y(Length::Fill);
+    let body = row![icon_tile(icon), text_block]
+        .spacing(metrics.icon_gap)
+        .align_y(iced::Alignment::Center);
+
+    let inner = container(body)
+        .padding(metrics.padding)
+        .width(Length::Fill)
+        .height(Length::Fixed(metrics.height))
+        .center_y(Length::Fixed(metrics.height))
+        .style(move |t: &Theme| sel_card_style(t, selected && enabled));
+    let btn = button(inner)
+        .padding(0)
+        .width(Length::Fill)
+        .height(Length::Fixed(metrics.height));
+    match msg {
+        Some(m) => btn
+            .on_press(m)
+            .style(move |t: &Theme, status| sel_card_btn_style(t, status, selected))
+            .into(),
+        None => btn
+            .style(|t: &Theme, _status| {
+                let p = pal_of(t);
+                button::Style {
+                    background: Some(with_alpha(p.surface_container_low, 0.5).into()),
+                    text_color: with_alpha(p.on_surface, 0.38),
+                    border: iced::Border {
+                        color: with_alpha(p.outline_variant, 0.6),
+                        width: 1.0,
+                        radius: theme::shape::LG.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .into(),
+    }
+}
+
 pub(crate) fn icon_option_card_sub_square_sized(
     icon: Element<'static, Message>,
     label: &str,
@@ -792,17 +896,8 @@ pub(crate) fn icon_option_card_sub_square_sized(
     selected: bool,
     msg: Message,
     side: f32,
-    columns: usize,
 ) -> Element<'static, Message> {
-    option_card(
-        icon,
-        label,
-        sub,
-        selected,
-        Some(msg),
-        Some((side, columns)),
-        false,
-    )
+    option_card(icon, label, sub, selected, Some(msg), Some(side), false)
 }
 
 /// Square option card for a choice that destroys data. Renders on the
@@ -815,17 +910,8 @@ pub(crate) fn icon_option_card_sub_square_destructive_sized(
     selected: bool,
     msg: Message,
     side: f32,
-    columns: usize,
 ) -> Element<'static, Message> {
-    option_card(
-        icon,
-        label,
-        sub,
-        selected,
-        Some(msg),
-        Some((side, columns)),
-        true,
-    )
+    option_card(icon, label, sub, selected, Some(msg), Some(side), true)
 }
 
 pub(crate) fn icon_option_card_sub_square_disabled_sized(
@@ -833,15 +919,13 @@ pub(crate) fn icon_option_card_sub_square_disabled_sized(
     label: &str,
     sub: &str,
     side: f32,
-    columns: usize,
 ) -> Element<'static, Message> {
-    option_card(icon, label, sub, false, None, Some((side, columns)), false)
+    option_card(icon, label, sub, false, None, Some(side), false)
 }
 
 /// Shared body for the vertical icon → title → description option card.
-/// `msg = None` renders the disabled affordance; `square_size` swaps the
-/// full-width × fixed-height box for a fixed 1:1 square and carries its column
-/// count for growth scaling; `destructive`
+/// `msg = None` renders the disabled affordance; `square_side` swaps the
+/// full-width × fixed-height box for a fixed 1:1 square; `destructive`
 /// swaps the accent role from `primary` to `error`.
 fn option_card(
     icon: Element<'static, Message>,
@@ -849,13 +933,13 @@ fn option_card(
     sub: &str,
     selected: bool,
     msg: Option<Message>,
-    square_size: Option<(f32, usize)>,
+    square_side: Option<f32>,
     destructive: bool,
 ) -> Element<'static, Message> {
     let enabled = msg.is_some();
-    let square = square_size.is_some();
-    let (side, columns) = square_size.unwrap_or((WIZARD_CARD_SQUARE, 1));
-    let (title_size, desc_size) = square_card_text_sizes(side, columns);
+    let square = square_side.is_some();
+    let side = square_side.unwrap_or(WIZARD_CARD_SQUARE);
+    let (title_size, desc_size) = square_card_text_sizes(side);
     let label_style_fn = if enabled {
         on_surface_style
     } else {
@@ -896,14 +980,14 @@ fn option_card(
     // unbalanced because the centred sub-row adds ~9 px padding.
     let content = column![
         icon_tile(icon),
-        Space::new().height(14),
+        Space::new().height(WIZARD_CARD_ICON_TITLE_GAP),
         text(label.to_string())
             .size(title_size)
             .font(theme::emphasis::medium())
             .style(label_style_fn)
             .width(Length::Fill)
             .center(),
-        Space::new().height(4),
+        Space::new().height(WIZARD_CARD_TITLE_DESC_GAP),
         sub_row,
     ]
     .spacing(0)
@@ -919,7 +1003,7 @@ fn option_card(
     let card_h: f32 = if square { side } else { WIZARD_CARD_HEIGHT };
 
     let inner = container(content)
-        .padding([20, 16])
+        .padding([WIZARD_CARD_VERTICAL_PADDING, WIZARD_CARD_HORIZONTAL_PADDING])
         .width(card_w)
         .height(card_h)
         .center_x(card_w)
@@ -956,16 +1040,13 @@ fn option_card(
 }
 
 /// Title and description sizes for a card of `side`, on the same curve the card
-/// itself grows along. The column-dependent base must match the base used to
-/// compute `side`, so every minimum-window card starts at the unscaled sizes.
-fn square_card_text_sizes(side: f32, columns: usize) -> (f32, f32) {
-    let base_side = wizard_square_base_side(columns);
-    let progress = ((side - base_side) / (WIZARD_CARD_SQUARE_MAX - base_side)).clamp(0.0, 1.0);
+/// itself grows along.
+fn square_card_text_sizes(side: f32) -> (f32, f32) {
+    let progress = ((side - WIZARD_CARD_SQUARE) / (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE))
+        .clamp(0.0, 1.0);
     (
-        theme::text_size::TITLE_MEDIUM
-            + (WIZARD_CARD_TITLE_MAX - theme::text_size::TITLE_MEDIUM) * progress,
-        theme::text_size::BODY_SMALL
-            + (WIZARD_CARD_DESC_MAX - theme::text_size::BODY_SMALL) * progress,
+        WIZARD_CARD_TITLE_SIZE + (WIZARD_CARD_TITLE_MAX - WIZARD_CARD_TITLE_SIZE) * progress,
+        WIZARD_CARD_DESC_SIZE + (WIZARD_CARD_DESC_MAX - WIZARD_CARD_DESC_SIZE) * progress,
     )
 }
 
@@ -983,7 +1064,7 @@ impl RebootTarget {
             Self::Bootloader => icon::reboot_bootloader(),
             Self::Edl => icon::reboot_edl(),
         };
-        lucide_primary(glyph, size)
+        lucide_list_primary(glyph, size)
     }
 }
 
@@ -1136,28 +1217,12 @@ impl App {
 
 #[cfg(test)]
 mod typography_tests {
-    use super::{
-        WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, WIZARD_CARD_SQUARE_THREE_COLUMNS,
-        square_card_text_sizes,
-    };
+    use super::{WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, square_card_text_sizes};
 
     #[test]
     fn option_card_typography_tracks_square_growth_endpoints() {
-        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE, 1), (16.0, 12.0));
-        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE, 2), (16.0, 12.0));
-        assert_eq!(
-            square_card_text_sizes(WIZARD_CARD_SQUARE_THREE_COLUMNS, 3),
-            (16.0, 12.0)
-        );
-        assert_eq!(
-            square_card_text_sizes(WIZARD_CARD_SQUARE_MAX, 2),
-            (20.0, 14.0)
-        );
-        assert_eq!(
-            square_card_text_sizes(WIZARD_CARD_SQUARE_MAX, 3),
-            (20.0, 14.0)
-        );
-        assert_eq!(square_card_text_sizes(270.0, 2), (18.0, 13.0));
-        assert_eq!(square_card_text_sizes(250.0, 3), (18.0, 13.0));
+        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE), (16.0, 12.0));
+        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE_MAX), (20.0, 14.0));
+        assert_eq!(square_card_text_sizes(270.0), (18.0, 13.0));
     }
 }

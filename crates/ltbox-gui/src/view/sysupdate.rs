@@ -96,111 +96,67 @@ impl App {
 
     pub(crate) fn sysupdate_action_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let columns = 3;
-        let side = self.wizard_square_side(columns);
-        let off_icon = lucide_primary(icon::tile_update_off(), self.wizard_square_icon());
-        let on_icon = lucide_primary(icon::tile_update_on(), self.wizard_square_icon());
+        let icon_size = self.wizard_list_icon(WIZARD_LIST_ICON_SIZE);
+        let metrics = self.wizard_list_metrics(WIZARD_LIST_LABEL_SIZE, WIZARD_LIST_DESC_SIZE);
+        let off_icon = lucide_list_primary(icon::tile_update_off(), icon_size);
+        let on_icon = lucide_list_primary(icon::tile_update_on(), icon_size);
         // TB323FU's vendor_boot/vbmeta sit on a different UFS LUN than the
         // Boot Recovery worker targets, so the flow can't run on it — disable
-        // the card (alongside the non-Qualcomm platform gate).
+        // the row (alongside the non-Qualcomm platform gate).
         let rescue_disabled =
             self.platform_supported == Some(false) || self.is_tb323fu() || self.is_xiaoxin_pro13();
         // Gray the icon when disabled, matching the other wizards' disabled
-        // option cards (region ROW / OtherRegion).
+        // list rows.
         let rescue_icon = if rescue_disabled {
-            lucide_disabled(icon::tile_rescue(), self.wizard_square_icon())
+            lucide_list_disabled(icon::tile_rescue(), icon_size)
         } else {
-            lucide_primary(icon::tile_rescue(), self.wizard_square_icon())
+            lucide_list_primary(icon::tile_rescue(), icon_size)
         };
-        let mut cards = row![
-            icon_option_card_sub_square_sized(
+        let mut cards = column![
+            wizard_list_option_card(
                 off_icon,
                 self.t(SysUpdateAction::Disable.label_key()),
                 self.t(SysUpdateAction::Disable.desc_key()),
                 self.sysupdate.action == Some(SysUpdateAction::Disable),
-                Message::Sys(SysMsg::SysAction(SysUpdateAction::Disable)),
-                side,
-                columns,
+                Some(Message::Sys(SysMsg::SysAction(SysUpdateAction::Disable))),
+                metrics,
             ),
-            icon_option_card_sub_square_sized(
+            wizard_list_option_card(
                 on_icon,
                 self.t(SysUpdateAction::Enable.label_key()),
                 self.t(SysUpdateAction::Enable.desc_key()),
                 self.sysupdate.action == Some(SysUpdateAction::Enable),
-                Message::Sys(SysMsg::SysAction(SysUpdateAction::Enable)),
-                side,
-                columns,
+                Some(Message::Sys(SysMsg::SysAction(SysUpdateAction::Enable))),
+                metrics,
             ),
         ]
-        .spacing(d.space(12.0));
-        if rescue_disabled {
-            // Disabled rescue card — no on_press, grayed out; still mirrors
-            // the sub-row layout of the other tiles with the Qualcomm-required
-            // hint so the label sits at the same height.
-            let rescue_req = if self.is_tb323fu() {
+        .spacing(d.space(8.0))
+        .width(Length::Fill);
+        let rescue_sub = if rescue_disabled {
+            if self.is_tb323fu() {
                 tr_args!("model_unsupported", model = "TB323FU")
             } else if self.is_xiaoxin_pro13() {
                 tr_args!("model_unsupported", model = "TB376FC / TB390FU")
             } else {
                 self.t("sysupdate_rescue_req").to_string()
-            };
-            let content = column![
-                icon_tile(rescue_icon),
-                text(self.t("sysupdate_rescue").to_string())
-                    .size(d.text(13.0))
-                    .width(Length::Fill)
-                    .center()
-                    .style(muted_style),
-                text(rescue_req)
-                    .size(d.text(11.0))
-                    .width(Length::Fill)
-                    .center()
-                    .style(muted_style),
-            ]
-            .spacing(d.space(8.0))
-            .align_x(iced::Alignment::Center);
-            cards = cards.push(
-                button(
-                    container(content)
-                        .padding(d.padding(20.0, 16.0))
-                        .width(Length::Fixed(side))
-                        .height(side)
-                        .center_x(side)
-                        .center_y(side)
-                        .style(|t: &Theme| {
-                            theme::surface_card_style(
-                                t,
-                                theme::SurfaceLevel::Lowest,
-                                theme::shape::LG,
-                                0,
-                            )
-                        }),
-                )
-                .padding(0)
-                .width(Length::Fixed(side))
-                .style(|t: &Theme, _s| button::Style {
-                    background: None,
-                    text_color: pal_of(t).on_surface,
-                    ..Default::default()
-                }),
-            );
+            }
         } else {
-            cards = cards.push(icon_option_card_sub_square_sized(
-                rescue_icon,
-                self.t(SysUpdateAction::Rescue.label_key()),
-                self.t(SysUpdateAction::Rescue.desc_key()),
-                self.sysupdate.action == Some(SysUpdateAction::Rescue),
-                Message::Sys(SysMsg::SysAction(SysUpdateAction::Rescue)),
-                side,
-                columns,
-            ));
-        }
+            self.t(SysUpdateAction::Rescue.desc_key()).to_string()
+        };
+        cards = cards.push(wizard_list_option_card(
+            rescue_icon,
+            self.t(SysUpdateAction::Rescue.label_key()),
+            &rescue_sub,
+            self.sysupdate.action == Some(SysUpdateAction::Rescue),
+            (!rescue_disabled).then_some(Message::Sys(SysMsg::SysAction(SysUpdateAction::Rescue))),
+            metrics,
+        ));
         let col = column![cards,]
             .spacing(d.space(14.0))
-            .padding(d.space(28.0))
+            .padding(d.padding(20.0, WIZARD_STEP_HORIZONTAL_PADDING))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(columns))
+        centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH))
     }
 
     pub(crate) fn sysupdate_confirm_step(&self) -> Element<'_, Message> {

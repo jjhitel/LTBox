@@ -1,6 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use iced::advanced::graphics::text::{self as graphics_text, Paragraph as GraphicsParagraph};
+use iced::advanced::text::{Alignment, LineHeight, Paragraph as _, Shaping, Text, Wrapping};
+use iced::font::Weight;
+use iced::{Font, Pixels, Size, alignment};
+
+#[path = "../src/layout_constraints.rs"]
+mod layout_constraints;
+use layout_constraints::*;
+
 #[derive(Debug, Clone, Copy)]
 enum RustTokenKind<'a> {
     Ident(&'a str),
@@ -504,6 +513,544 @@ fn every_localized_character_is_in_the_bundled_subset_for_its_locale() {
          built with, so it renders through a fallback face:\n- {}\n\nRegenerate them:\n    cd \
          crates/ltbox-gui/fonts/noto && python3 -m venv .venv && .venv/bin/pip install fonttools \
          brotli && .venv/bin/python regenerate.py",
+        failures.join("\n- ")
+    );
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CopySource {
+    Key(&'static str),
+    Literal {
+        name: &'static str,
+        value: &'static str,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CardSlot {
+    titles: &'static [CopySource],
+    descriptions: &'static [CopySource],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ListRowCopy {
+    label: CopySource,
+    description: CopySource,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ListRowSlot {
+    rows: &'static [ListRowCopy],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PickListSlot {
+    options: &'static [CopySource],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HeaderSlot {
+    title: CopySource,
+    action: CopySource,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SlotKind {
+    Card(CardSlot),
+    ListRow(ListRowSlot),
+    PickList(PickListSlot),
+    Header(HeaderSlot),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ConstrainedSlot {
+    name: &'static str,
+    kind: SlotKind,
+}
+
+const fn key(key: &'static str) -> CopySource {
+    CopySource::Key(key)
+}
+
+const CARD_ONE_COLUMN_TITLES: &[CopySource] = &[key("verchoice_nightly")];
+const CARD_ONE_COLUMN_DESCRIPTIONS: &[CopySource] = &[key("verchoice_nightly_desc")];
+
+const CARD_TWO_COLUMN_TITLES: &[CopySource] = &[
+    key("region_prc"),
+    key("region_row"),
+    key("flashtarget_other"),
+    key("flashtarget_same"),
+    key("datamode_keep"),
+    key("datamode_wipe"),
+    key("provider_magisk"),
+    key("provider_magisk_forks"),
+    key("provider_apatch"),
+    key("provider_folkpatch"),
+    key("rootmode_lkm"),
+    key("rootmode_gki"),
+    key("skroot_flavor_lite"),
+    key("skroot_flavor_pro"),
+    key("verchoice_stable"),
+    key("verchoice_nightly"),
+    key("nightly_auto"),
+    key("nightly_manual"),
+    key("unroottype_magisk_lkm"),
+    key("unroottype_apatch_gki"),
+];
+
+const CARD_TWO_COLUMN_DESCRIPTIONS: &[CopySource] = &[
+    key("region_prc_name"),
+    key("region_row_name"),
+    key("flashtarget_other_desc"),
+    key("flashtarget_other_desc_prc"),
+    key("flashtarget_other_desc_row"),
+    key("flashtarget_same_desc"),
+    key("flashtarget_same_desc_prc"),
+    key("flashtarget_same_desc_row"),
+    key("datamode_keep_desc"),
+    key("datamode_wipe_desc"),
+    key("provider_magisk_desc"),
+    key("provider_magisk_forks_desc"),
+    key("provider_apatch_desc"),
+    key("provider_folkpatch_desc"),
+    key("rootmode_lkm_desc"),
+    key("rootmode_gki_desc"),
+    key("skroot_flavor_lite_desc"),
+    key("skroot_flavor_pro_desc"),
+    key("verchoice_stable_desc"),
+    key("verchoice_nightly_desc"),
+    key("nightly_auto_desc"),
+    key("nightly_manual_desc"),
+    key("unroottype_magisk_lkm_desc"),
+    key("unroottype_apatch_gki_desc"),
+];
+
+const SYSUPDATE_LIST_ROWS: &[ListRowCopy] = &[
+    ListRowCopy {
+        label: key("sysupdate_disable"),
+        description: key("sysupdate_disable_desc"),
+    },
+    ListRowCopy {
+        label: key("sysupdate_enable"),
+        description: key("sysupdate_enable_desc"),
+    },
+    ListRowCopy {
+        label: key("sysupdate_rescue"),
+        description: key("sysupdate_rescue_desc"),
+    },
+    ListRowCopy {
+        label: key("sysupdate_rescue"),
+        description: key("sysupdate_rescue_req"),
+    },
+];
+
+const LANGUAGE_OPTIONS: &[CopySource] = &[
+    CopySource::Literal {
+        name: "language_en",
+        value: "English",
+    },
+    CopySource::Literal {
+        name: "language_ko",
+        value: "한국어",
+    },
+    CopySource::Literal {
+        name: "language_zh",
+        value: "中文",
+    },
+    CopySource::Literal {
+        name: "language_ru",
+        value: "Русский",
+    },
+    CopySource::Literal {
+        name: "language_ja",
+        value: "日本語",
+    },
+];
+const THEME_OPTIONS: &[CopySource] = &[key("theme_system"), key("theme_light"), key("theme_dark")];
+const THEME_SEED_OPTIONS: &[CopySource] = &[
+    key("theme_seed_indigo"),
+    key("theme_seed_teal"),
+    key("theme_seed_rose"),
+];
+const DRIVER_OPTIONS: &[CopySource] = &[
+    key("settings_qcom_driver_mode_userspace"),
+    key("settings_qcom_driver_mode_kernel"),
+];
+
+// Keep each constrained widget as one row. Adding the next guard is a single
+// row plus its copy-key list; the measurement and diagnostics stay shared.
+const CONSTRAINED_SLOTS: &[ConstrainedSlot] = &[
+    ConstrainedSlot {
+        name: "wizard.option-card.1-column",
+        kind: SlotKind::Card(CardSlot {
+            titles: CARD_ONE_COLUMN_TITLES,
+            descriptions: CARD_ONE_COLUMN_DESCRIPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "wizard.option-card.2-column",
+        kind: SlotKind::Card(CardSlot {
+            titles: CARD_TWO_COLUMN_TITLES,
+            descriptions: CARD_TWO_COLUMN_DESCRIPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "system-update.action-list-row",
+        kind: SlotKind::ListRow(ListRowSlot {
+            rows: SYSUPDATE_LIST_ROWS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "settings.language-pick-list",
+        kind: SlotKind::PickList(PickListSlot {
+            options: LANGUAGE_OPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "settings.theme-pick-list",
+        kind: SlotKind::PickList(PickListSlot {
+            options: THEME_OPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "settings.theme-seed-pick-list",
+        kind: SlotKind::PickList(PickListSlot {
+            options: THEME_SEED_OPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "settings.qcom-driver-pick-list",
+        kind: SlotKind::PickList(PickListSlot {
+            options: DRIVER_OPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        // The disabled branch is a plain container today. Reserving the same
+        // arrow allowance as its enabled sibling keeps both fixed-width
+        // branches safe if it becomes a disabled pick list later.
+        name: "settings.qcom-driver-disabled-pick-list",
+        kind: SlotKind::PickList(PickListSlot {
+            options: DRIVER_OPTIONS,
+        }),
+    },
+    ConstrainedSlot {
+        name: "advanced.region-target-popup-header",
+        kind: SlotKind::Header(HeaderSlot {
+            title: key("popup_select_region_target"),
+            action: key("btn_cancel"),
+        }),
+    },
+];
+
+fn load_bundled_locale_fonts() {
+    static LOAD: std::sync::Once = std::sync::Once::new();
+    LOAD.call_once(|| {
+        let mut font_system = graphics_text::font_system()
+            .write()
+            .expect("write Iced font system");
+        for bytes in [
+            include_bytes!("../fonts/noto/NotoSansKR-Regular.subset.otf").as_slice(),
+            include_bytes!("../fonts/noto/NotoSansKR-Medium.subset.otf").as_slice(),
+            include_bytes!("../fonts/noto/NotoSansJP-Regular.subset.otf").as_slice(),
+            include_bytes!("../fonts/noto/NotoSansJP-Medium.subset.otf").as_slice(),
+            include_bytes!("../fonts/noto/NotoSansSC-Regular.subset.otf").as_slice(),
+            include_bytes!("../fonts/noto/NotoSansSC-Medium.subset.otf").as_slice(),
+        ] {
+            font_system.load_font(std::borrow::Cow::Borrowed(bytes));
+        }
+    });
+}
+
+fn locale_font(locale: &str, weight: Weight) -> Font {
+    let family = match locale {
+        "ja" => "Noto Sans JP",
+        "zh" => "Noto Sans SC",
+        _ => "Noto Sans KR",
+    };
+    Font {
+        weight,
+        ..Font::with_name(family)
+    }
+}
+
+fn measure_text(locale: &str, value: &str, size: f32, weight: Weight, width: Option<f32>) -> Size {
+    let paragraph = GraphicsParagraph::with_text(Text {
+        content: value,
+        bounds: Size::new(width.unwrap_or(100_000.0), 100_000.0),
+        size: Pixels(size),
+        line_height: LineHeight::default(),
+        font: locale_font(locale, weight),
+        align_x: Alignment::Default,
+        align_y: alignment::Vertical::Top,
+        shaping: Shaping::Advanced,
+        wrapping: if width.is_some() {
+            Wrapping::WordOrGlyph
+        } else {
+            Wrapping::None
+        },
+    });
+    paragraph.min_bounds()
+}
+
+fn localized_copy<'a>(
+    table: &'a BTreeMap<String, String>,
+    source: CopySource,
+) -> (&'static str, &'a str) {
+    match source {
+        CopySource::Key(key) => (
+            key,
+            table
+                .get(key)
+                .unwrap_or_else(|| panic!("constrained slot references missing locale key {key}")),
+        ),
+        CopySource::Literal { name, value } => (name, value),
+    }
+}
+
+fn overflow_message(
+    slot: &str,
+    key: &str,
+    locale: &str,
+    measured: String,
+    limit: String,
+) -> String {
+    format!(
+        "slot={slot} key={key} locale={locale} measured={measured} limit={limit}; shorten the copy or change the slot's budget"
+    )
+}
+
+#[test]
+fn bundled_locale_copy_fits_constrained_layout_slots() {
+    load_bundled_locale_fonts();
+    let locales = ["en", "ko", "zh", "ru", "ja"];
+    let mut failures = Vec::new();
+
+    for slot in CONSTRAINED_SLOTS {
+        for locale in locales {
+            let table = load_locale(locale);
+            match slot.kind {
+                SlotKind::Card(card) => {
+                    let side = WIZARD_CARD_SQUARE;
+                    let icon = WIZARD_CARD_ICON;
+                    let inner_width = side - 2.0 * WIZARD_CARD_HORIZONTAL_PADDING;
+                    let title_height_limit = side
+                        - 2.0 * WIZARD_CARD_VERTICAL_PADDING
+                        - LineHeight::default().to_absolute(Pixels(icon)).0
+                        - WIZARD_CARD_ICON_TITLE_GAP
+                        - WIZARD_CARD_TITLE_DESC_GAP
+                        - WIZARD_CARD_SQUARE_SUB_HEIGHT;
+                    let mut max_title = Size::ZERO;
+                    let mut max_description = Size::ZERO;
+
+                    for source in card.titles {
+                        let (key, value) = localized_copy(&table, *source);
+                        let measured = measure_text(
+                            locale,
+                            value,
+                            WIZARD_CARD_TITLE_SIZE,
+                            Weight::Medium,
+                            Some(inner_width),
+                        );
+                        if measured.height > max_title.height {
+                            max_title = measured;
+                        }
+                        if measured.width > inner_width + f32::EPSILON
+                            || measured.height > title_height_limit + f32::EPSILON
+                        {
+                            failures.push(overflow_message(
+                                slot.name,
+                                key,
+                                locale,
+                                format!("{:.1}x{:.1}px", measured.width, measured.height),
+                                format!("{inner_width:.1}x{title_height_limit:.1}px"),
+                            ));
+                        }
+                    }
+
+                    for source in card.descriptions {
+                        let (key, value) = localized_copy(&table, *source);
+                        let measured = measure_text(
+                            locale,
+                            value,
+                            WIZARD_CARD_DESC_SIZE,
+                            Weight::Normal,
+                            Some(inner_width),
+                        );
+                        if measured.height > max_description.height {
+                            max_description = measured;
+                        }
+                        if measured.width > inner_width + f32::EPSILON
+                            || measured.height > WIZARD_CARD_SQUARE_SUB_HEIGHT + f32::EPSILON
+                        {
+                            failures.push(overflow_message(
+                                slot.name,
+                                key,
+                                locale,
+                                format!("{:.1}x{:.1}px", measured.width, measured.height),
+                                format!("{inner_width:.1}x{:.1}px", WIZARD_CARD_SQUARE_SUB_HEIGHT),
+                            ));
+                        }
+                    }
+
+                    println!(
+                        "HEADROOM slot={} locale={} title={:.1}x{:.1}/{:.1}x{:.1}px description={:.1}x{:.1}/{:.1}x{:.1}px",
+                        slot.name,
+                        locale,
+                        max_title.width,
+                        max_title.height,
+                        inner_width,
+                        title_height_limit,
+                        max_description.width,
+                        max_description.height,
+                        inner_width,
+                        WIZARD_CARD_SQUARE_SUB_HEIGHT,
+                    );
+                }
+                SlotKind::ListRow(list_row) => {
+                    let row_width = WIZARD_LIST_MAX_WIDTH - 2.0 * WIZARD_STEP_HORIZONTAL_PADDING;
+                    let text_width_limit = row_width
+                        - 2.0 * WIZARD_LIST_HORIZONTAL_PADDING
+                        - WIZARD_LIST_ICON_SIZE
+                        - WIZARD_LIST_ICON_GAP;
+                    let text_height_limit =
+                        WIZARD_LIST_CARD_HEIGHT - 2.0 * WIZARD_LIST_VERTICAL_PADDING;
+                    let mut widest_label = 0.0_f32;
+                    let mut widest_description = 0.0_f32;
+                    let mut tallest_stack = 0.0_f32;
+
+                    for row in list_row.rows {
+                        let (label_key, label) = localized_copy(&table, row.label);
+                        let (description_key, description) =
+                            localized_copy(&table, row.description);
+                        let label_size = measure_text(
+                            locale,
+                            label,
+                            WIZARD_LIST_LABEL_SIZE,
+                            Weight::Normal,
+                            Some(text_width_limit),
+                        );
+                        let description_size = measure_text(
+                            locale,
+                            description,
+                            WIZARD_LIST_DESC_SIZE,
+                            Weight::Normal,
+                            Some(text_width_limit),
+                        );
+                        let stack_height =
+                            label_size.height + WIZARD_LIST_TEXT_GAP + description_size.height;
+                        widest_label = widest_label.max(label_size.width);
+                        widest_description = widest_description.max(description_size.width);
+                        tallest_stack = tallest_stack.max(stack_height);
+
+                        if label_size.width > text_width_limit + f32::EPSILON
+                            || description_size.width > text_width_limit + f32::EPSILON
+                            || stack_height > text_height_limit + f32::EPSILON
+                        {
+                            failures.push(overflow_message(
+                                slot.name,
+                                &format!("{label_key}+{description_key}"),
+                                locale,
+                                format!(
+                                    "label={:.1}x{:.1}px description={:.1}x{:.1}px stack={stack_height:.1}px",
+                                    label_size.width,
+                                    label_size.height,
+                                    description_size.width,
+                                    description_size.height,
+                                ),
+                                format!("{text_width_limit:.1}x{text_height_limit:.1}px"),
+                            ));
+                        }
+                    }
+
+                    println!(
+                        "HEADROOM slot={} locale={} label={:.1}px description={:.1}px width-limit={:.1}px stack={:.1}/{:.1}px row={:.1}x{:.1}px",
+                        slot.name,
+                        locale,
+                        widest_label,
+                        widest_description,
+                        text_width_limit,
+                        tallest_stack,
+                        text_height_limit,
+                        row_width,
+                        WIZARD_LIST_CARD_HEIGHT,
+                    );
+                }
+                SlotKind::PickList(pick_list) => {
+                    let reserved = SETTINGS_PICK_LIST_TEXT_SIZE
+                        + M3_FIELD_PADDING.left
+                        + M3_FIELD_PADDING.left
+                        + M3_FIELD_PADDING.right;
+                    let mut widest = 0.0_f32;
+                    for source in pick_list.options {
+                        let (key, value) = localized_copy(&table, *source);
+                        let text_width = measure_text(
+                            locale,
+                            value,
+                            SETTINGS_PICK_LIST_TEXT_SIZE,
+                            Weight::Normal,
+                            None,
+                        )
+                        .width;
+                        let measured = text_width + reserved;
+                        widest = widest.max(measured);
+                        if measured > SETTINGS_PICK_LIST_WIDTH + f32::EPSILON {
+                            failures.push(overflow_message(
+                                slot.name,
+                                key,
+                                locale,
+                                format!("{measured:.1}px"),
+                                format!("{SETTINGS_PICK_LIST_WIDTH:.1}px"),
+                            ));
+                        }
+                    }
+                    println!(
+                        "HEADROOM slot={} locale={} measured={:.1}px budget={:.1}px",
+                        slot.name, locale, widest, SETTINGS_PICK_LIST_WIDTH,
+                    );
+                }
+                SlotKind::Header(header) => {
+                    let (title_key, title) = localized_copy(&table, header.title);
+                    let (action_key, action) = localized_copy(&table, header.action);
+                    let title_width = measure_text(
+                        locale,
+                        title,
+                        REGION_TARGET_POPUP_TITLE_SIZE,
+                        Weight::Normal,
+                        None,
+                    )
+                    .width;
+                    let action_width = measure_text(
+                        locale,
+                        action,
+                        REGION_TARGET_POPUP_ACTION_SIZE,
+                        Weight::Normal,
+                        None,
+                    )
+                    .width
+                        + 2.0 * M3_BUTTON_H_PADDING;
+                    let measured = title_width + action_width;
+                    let limit = REGION_TARGET_POPUP_WIDTH - 2.0 * REGION_TARGET_POPUP_PADDING;
+                    if measured > limit + f32::EPSILON {
+                        failures.push(overflow_message(
+                            slot.name,
+                            &format!("{title_key}+{action_key}"),
+                            locale,
+                            format!("{measured:.1}px"),
+                            format!("{limit:.1}px"),
+                        ));
+                    }
+                    println!(
+                        "HEADROOM slot={} locale={} measured={:.1}px budget={:.1}px",
+                        slot.name, locale, measured, limit,
+                    );
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "bundled localized copy outgrew a constrained layout slot:\n- {}",
         failures.join("\n- ")
     );
 }

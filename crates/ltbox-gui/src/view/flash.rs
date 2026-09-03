@@ -72,7 +72,7 @@ impl App {
     pub(crate) fn flash_region_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let columns = 2;
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let prc_icon = lucide_primary(icon::region_prc(), self.wizard_square_icon());
         // TB322FC is a PRC-only SKU. Render ROW as a disabled card with
         // a grayed icon so the constraint is visible — silent skip
@@ -85,7 +85,6 @@ impl App {
                 self.t("region_row"),
                 &unsupported_tb322fc,
                 side,
-                columns,
             )
         } else {
             icon_option_card_sub_square_sized(
@@ -95,7 +94,6 @@ impl App {
                 self.flash.device_region == Some(DeviceRegion::Row),
                 Message::Flash(FlashMsg::FlashRegion(DeviceRegion::Row)),
                 side,
-                columns,
             )
         };
         // While the on-entry auto-detect runs, show a progress ring + label instead
@@ -130,7 +128,6 @@ impl App {
                     self.flash.device_region == Some(DeviceRegion::Prc),
                     Message::Flash(FlashMsg::FlashRegion(DeviceRegion::Prc)),
                     side,
-                    columns,
                 ),
                 row_card,
             ]
@@ -146,7 +143,7 @@ impl App {
     pub(crate) fn flash_target_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let columns = 2;
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let device = lucide_primary(icon::tile_device(), self.wizard_square_icon());
         // TB322FC ships only in PRC, so cross-region (OtherRegion) is
         // never a valid target. Disable the card with a grayed icon to
@@ -168,7 +165,6 @@ impl App {
                 self.t(FlashTarget::OtherRegion.label_key()),
                 &unsupported_tb322fc,
                 side,
-                columns,
             )
         } else {
             icon_option_card_sub_square_sized(
@@ -178,7 +174,6 @@ impl App {
                 self.flash.target == Some(FlashTarget::OtherRegion),
                 Message::Flash(FlashMsg::FlashTarget(FlashTarget::OtherRegion)),
                 side,
-                columns,
             )
         };
         let col = column![
@@ -191,7 +186,6 @@ impl App {
                     self.flash.target == Some(FlashTarget::SameRegion),
                     Message::Flash(FlashMsg::FlashTarget(FlashTarget::SameRegion)),
                     side,
-                    columns,
                 ),
             ]
             .spacing(d.space(12.0)),
@@ -206,7 +200,7 @@ impl App {
     pub(crate) fn flash_data_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let columns = 2;
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let shield = lucide_primary(icon::tile_shield(), self.wizard_square_icon());
         // Erasing `metadata` + `userdata` is the one irreversible choice
         // on this step, so it carries the error role rather than looking
@@ -221,7 +215,6 @@ impl App {
                     self.flash.data_mode == Some(DataMode::Keep),
                     Message::Flash(FlashMsg::FlashDataMode(DataMode::Keep)),
                     side,
-                    columns,
                 ),
                 icon_option_card_sub_square_destructive_sized(
                     wipe,
@@ -230,7 +223,6 @@ impl App {
                     self.flash.data_mode == Some(DataMode::Wipe),
                     Message::Flash(FlashMsg::FlashDataMode(DataMode::Wipe)),
                     side,
-                    columns,
                 ),
             ]
             .spacing(d.space(12.0)),

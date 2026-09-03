@@ -605,8 +605,6 @@ pub mod text_size {
 pub enum SurfaceLevel {
     /// `surface_container` — default card surface.
     Default,
-    /// `surface_container_lowest` — disabled rescue card / log panels.
-    Lowest,
     /// The brightest container for the current mode, which M3 reserves
     /// for "the most important content, tasks, or actions".
     ///
@@ -619,7 +617,6 @@ pub enum SurfaceLevel {
 impl SurfaceLevel {
     fn bg(self, p: &Palette, dark: bool) -> iced::Color {
         match self {
-            Self::Lowest => p.surface_container_lowest,
             Self::Default => p.surface_container,
             Self::Brightest => {
                 if dark {

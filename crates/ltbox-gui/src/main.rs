@@ -20,6 +20,7 @@ mod arb_overlay;
 #[cfg(feature = "demo")]
 mod demo;
 mod device_name;
+mod layout_constraints;
 mod loader;
 mod message;
 mod model;
@@ -43,6 +44,7 @@ mod workers;
 pub(crate) use arb::{detect_arb_run, format_unix_date_utc, format_unix_timestamp_utc};
 pub(crate) use arb_overlay::*;
 pub(crate) use device_name::*;
+pub(crate) use layout_constraints::*;
 pub(crate) use loader::*;
 pub(crate) use message::*;
 pub(crate) use model::country::*;

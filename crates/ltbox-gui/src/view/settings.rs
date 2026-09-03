@@ -5,8 +5,6 @@ use iced::widget::{self, Space, button, column, container, row, text};
 use iced::{Element, Length, Theme};
 use theme::{mix_color, with_alpha};
 
-const SETTINGS_PICK_LIST_WIDTH: f32 = 168.0;
-
 impl App {
     pub(crate) fn view_settings(&self) -> Element<'_, Message> {
         let s = &self.settings;
@@ -38,7 +36,7 @@ impl App {
             // doesn't tower over the "Language" label next to it. The
             // menu items inherit `text_size` for visual consistency
             // with the trigger.
-            .text_size(d.text(13.0))
+            .text_size(d.text(SETTINGS_PICK_LIST_TEXT_SIZE))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
@@ -74,7 +72,7 @@ impl App {
             },)
             // Match the row label's 13 px size. Same rationale as the
             // language pick list.
-            .text_size(d.text(13.0))
+            .text_size(d.text(SETTINGS_PICK_LIST_TEXT_SIZE))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
@@ -109,7 +107,7 @@ impl App {
                 };
                 Message::Settings(SettingsMsg::SetThemeSeed(seed))
             },)
-            .text_size(d.text(13.0))
+            .text_size(d.text(SETTINGS_PICK_LIST_TEXT_SIZE))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.
@@ -165,7 +163,7 @@ impl App {
             // unavailable rather than as a different kind of field.
             container(
                 text(current_driver_label)
-                    .size(d.text(13.0))
+                    .size(d.text(SETTINGS_PICK_LIST_TEXT_SIZE))
                     .style(|t: &Theme| iced::widget::text::Style {
                         color: Some(with_alpha(pal_of(t).on_surface, 0.38)),
                     }),
@@ -199,7 +197,7 @@ impl App {
                     Message::Settings(SettingsMsg::SetQcomDriverMode(mode))
                 },
             )
-            .text_size(d.text(13.0))
+            .text_size(d.text(SETTINGS_PICK_LIST_TEXT_SIZE))
             // Forwarded to the dropdown items too (iced builds the menu
             // with the pick_list's padding), lifting both the trigger and
             // each option off the ~27 px they defaulted to.

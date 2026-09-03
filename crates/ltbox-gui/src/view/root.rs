@@ -396,81 +396,6 @@ impl App {
         m3_dialog(content.into())
     }
 
-    fn root_list_option_card(
-        icon: Element<'static, Message>,
-        label: &str,
-        sub: &str,
-        selected: bool,
-        msg: Option<Message>,
-        metrics: ListRowMetrics,
-    ) -> Element<'static, Message> {
-        let enabled = msg.is_some();
-        let label_style_fn = if enabled {
-            on_surface_style
-        } else {
-            muted_style
-        };
-        let desc: Element<'static, Message> = if sub.is_empty() {
-            text(" ").size(metrics.desc_size).width(Length::Fill).into()
-        } else {
-            text(sub.to_string())
-                .size(metrics.desc_size)
-                .style(muted_style)
-                .width(Length::Fill)
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-                .into()
-        };
-        let text_block = container(
-            column![
-                text(label.to_string())
-                    .size(metrics.label_size)
-                    .style(label_style_fn)
-                    .width(Length::Fill),
-                desc,
-            ]
-            .spacing(metrics.text_gap)
-            .width(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_y(Length::Fill);
-        let body = row![icon_tile(icon), text_block]
-            .spacing(metrics.icon_gap)
-            .align_y(iced::Alignment::Center);
-
-        let inner = container(body)
-            .padding(metrics.padding)
-            .width(Length::Fill)
-            .height(Length::Fixed(metrics.height))
-            .center_y(Length::Fixed(metrics.height))
-            .style(move |t: &Theme| sel_card_style(t, selected && enabled));
-        let btn = button(inner)
-            .padding(0)
-            .width(Length::Fill)
-            .height(Length::Fixed(metrics.height));
-        match msg {
-            Some(m) => btn
-                .on_press(m)
-                .style(move |t: &Theme, status| sel_card_btn_style(t, status, selected))
-                .into(),
-            None => btn
-                .style(|t: &Theme, _status| {
-                    let p = pal_of(t);
-                    button::Style {
-                        background: Some(with_alpha(p.surface_container_low, 0.5).into()),
-                        text_color: with_alpha(p.on_surface, 0.38),
-                        border: iced::Border {
-                            color: with_alpha(p.outline_variant, 0.6),
-                            width: 1.0,
-                            radius: theme::shape::LG.into(),
-                        },
-                        ..Default::default()
-                    }
-                })
-                .into(),
-        }
-    }
-
     pub(crate) fn root_family_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let xiaoxin_pro13 = self.is_xiaoxin_pro13();
@@ -481,10 +406,10 @@ impl App {
             Family::APatch,
             Family::Skroot,
         ];
-        let icon_size = self.wizard_list_icon(44.0);
-        let metrics = self.wizard_list_metrics(16.0, 12.0);
+        let icon_size = self.wizard_list_icon(WIZARD_LIST_ICON_SIZE);
+        let metrics = self.wizard_list_metrics(WIZARD_LIST_LABEL_SIZE, WIZARD_LIST_DESC_SIZE);
         let mk = |f: Family| -> Element<'_, Message> {
-            let card = Self::root_list_option_card(
+            let card = wizard_list_option_card(
                 f.icon_sized(icon_size),
                 self.t(f.label_key()),
                 if xiaoxin_pro13 {
@@ -510,7 +435,7 @@ impl App {
 
         let col = column![cards,]
             .spacing(d.space(14.0))
-            .padding(d.padding(20.0, 28.0))
+            .padding(d.padding(20.0, WIZARD_STEP_HORIZONTAL_PADDING))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
         centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH))
@@ -522,12 +447,12 @@ impl App {
         let providers = family.providers();
 
         if providers.len() > 2 {
-            let icon_size = self.wizard_list_icon(44.0);
-            let metrics = self.wizard_list_metrics(16.0, 12.0);
+            let icon_size = self.wizard_list_icon(WIZARD_LIST_ICON_SIZE);
+            let metrics = self.wizard_list_metrics(WIZARD_LIST_LABEL_SIZE, WIZARD_LIST_DESC_SIZE);
             let mut cards = column![].spacing(d.space(8.0)).width(Length::Fill);
             for &p in providers {
                 let sub = p.desc_key().map(|k| self.t(k)).unwrap_or("");
-                let card = Self::root_list_option_card(
+                let card = wizard_list_option_card(
                     p.icon_sized(icon_size),
                     self.t(p.label_key()),
                     sub,
@@ -545,14 +470,14 @@ impl App {
 
             let col = column![cards,]
                 .spacing(d.space(14.0))
-                .padding(d.padding(20.0, 28.0))
+                .padding(d.padding(20.0, WIZARD_STEP_HORIZONTAL_PADDING))
                 .width(Length::Fill)
                 .align_x(iced::Alignment::Center);
             return centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH));
         }
 
         let columns = providers.len();
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let card = |p: Provider, selected: bool| -> Element<'_, Message> {
             let sub = p.desc_key().map(|k| self.t(k)).unwrap_or("");
             // Smaller brand logo (52 vs 72) so the 72px SVG doesn't
@@ -565,7 +490,6 @@ impl App {
                 selected,
                 Message::Root(RootMsg::RootProvider(p)),
                 side,
-                columns,
             )
         };
 
@@ -730,7 +654,7 @@ impl App {
     pub(crate) fn root_mode_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let columns = 2;
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let tb323fu = self.is_tb323fu();
         let unsupported_tb323fu = tr_args!("model_unsupported", model = "TB323FU");
         let lkm_card = icon_option_card_sub_square_sized(
@@ -740,7 +664,6 @@ impl App {
             self.root.mode == Some(RootMode::Lkm),
             Message::Root(RootMsg::RootMode(RootMode::Lkm)),
             side,
-            columns,
         );
         let lkm_card = recommended_overlay(d, lkm_card, self.t("root_recommended_tip").to_string());
         // TODO(root): LTBox currently only swaps the boot.img Image for
@@ -752,7 +675,6 @@ impl App {
                 self.t(RootMode::Gki.label_key()),
                 &unsupported_tb323fu,
                 side,
-                columns,
             )
         } else {
             icon_option_card_sub_square_sized(
@@ -762,7 +684,6 @@ impl App {
                 self.root.mode == Some(RootMode::Gki),
                 Message::Root(RootMsg::RootMode(RootMode::Gki)),
                 side,
-                columns,
             )
         };
         let col = column![row![lkm_card, gki_card,].spacing(d.space(12.0)),]
@@ -776,7 +697,7 @@ impl App {
     pub(crate) fn root_skroot_flavor_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let columns = 2;
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let lite = icon_option_card_sub_square_sized(
             SkrootFlavor::Lite.icon(self.wizard_square_icon()),
             self.t(SkrootFlavor::Lite.label_key()),
@@ -784,14 +705,12 @@ impl App {
             self.root.skroot_flavor == Some(SkrootFlavor::Lite),
             Message::Root(RootMsg::RootSkrootFlavor(SkrootFlavor::Lite)),
             side,
-            columns,
         );
         let pro = icon_option_card_sub_square_disabled_sized(
             SkrootFlavor::Pro.icon_disabled(self.wizard_square_icon()),
             self.t(SkrootFlavor::Pro.label_key()),
             self.t(SkrootFlavor::Pro.desc_key()),
             side,
-            columns,
         );
 
         let col = column![row![lite, pro].spacing(d.space(12.0)),]
@@ -809,7 +728,7 @@ impl App {
         } else {
             2
         };
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let mk = |choice: VerChoice| -> Element<'_, Message> {
             let card = icon_option_card_sub_square_sized(
                 choice.icon(self.wizard_square_icon()),
@@ -818,7 +737,6 @@ impl App {
                 self.root.version == Some(choice),
                 Message::Root(RootMsg::RootVersion(choice)),
                 side,
-                columns,
             );
             if choice == VerChoice::Stable {
                 recommended_overlay(d, card, self.t("root_recommended_tip").to_string())
@@ -847,7 +765,7 @@ impl App {
     pub(crate) fn root_nightly_source_step(&self) -> Element<'_, Message> {
         let d = self.density();
         let columns = 2;
-        let side = self.wizard_square_side(columns);
+        let side = self.wizard_square_side();
         let mk = |src: NightlySource| -> Element<'_, Message> {
             icon_option_card_sub_square_sized(
                 src.icon(self.wizard_square_icon()),
@@ -856,7 +774,6 @@ impl App {
                 self.root.nightly_source == Some(src),
                 Message::Root(RootMsg::RootNightlySource(src)),
                 side,
-                columns,
             )
         };
 

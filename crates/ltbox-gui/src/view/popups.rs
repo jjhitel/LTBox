@@ -1116,7 +1116,8 @@ impl App {
 
         let popup_content: Element<'_, Message> = column![
             row![
-                text(self.t("popup_select_region_target").to_string()).size(16),
+                text(self.t("popup_select_region_target").to_string())
+                    .size(REGION_TARGET_POPUP_TITLE_SIZE),
                 Space::new().width(Length::Fill),
                 m3_text_button(self.t("btn_cancel").to_string())
                     .on_press(Message::DismissRegionTargetPopup),
@@ -1126,8 +1127,8 @@ impl App {
             list,
         ]
         .spacing(10)
-        .padding(20)
-        .width(400)
+        .padding(REGION_TARGET_POPUP_PADDING)
+        .width(REGION_TARGET_POPUP_WIDTH)
         .into();
         m3_dialog(popup_content)
     }
@@ -1396,3 +1397,10 @@ impl App {
         .into()
     }
 }
+
+// The locale guard measures this popup's Cancel button at
+// `REGION_TARGET_POPUP_ACTION_SIZE`, but the button takes its size from its
+// type role. Pin the two together so the guard cannot measure a size the
+// button stopped using.
+const _: () =
+    assert!(REGION_TARGET_POPUP_ACTION_SIZE.to_bits() == theme::text_size::LABEL_LARGE.to_bits());

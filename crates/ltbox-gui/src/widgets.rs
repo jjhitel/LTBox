@@ -615,13 +615,6 @@ pub(crate) const M3_BUTTON_HEIGHT: f32 = 40.0;
 /// dropdown options came out around 27 px tall; this puts a 13 px option
 /// at ~41 px, in reach of the 48 dp M3 asks of a menu item without
 /// making the settings rows tower over their labels.
-pub(crate) const M3_FIELD_PADDING: iced::Padding = iced::Padding {
-    top: 12.0,
-    right: 16.0,
-    bottom: 12.0,
-    left: 16.0,
-};
-
 fn m3_button<'a>(
     label: String,
     style: fn(&Theme, button::Status) -> button::Style,
@@ -660,11 +653,6 @@ pub(crate) const DEVICE_CARD_PADDING: f32 = 24.0;
 /// Inner height of the dashboard device card at the minimum window. Pinned so
 /// the empty-state and populated cards are the same size.
 pub(crate) const DEVICE_CARD_HEIGHT: f32 = 160.0;
-
-/// Horizontal padding for a common button. M3 Expressive retired the
-/// 24 dp small-button padding in favour of 16 dp, which it notes matches
-/// the padding of the new size range.
-pub(crate) const M3_BUTTON_H_PADDING: f32 = 16.0;
 
 /// Icon-button size. M3 requires extra-small and small icon buttons to
 /// carry a pointer target of at least 48x48 even when the painted
@@ -1081,33 +1069,11 @@ pub(crate) const WIZARD_CARD_HEIGHT: f32 = 180.0;
 
 /// Side length for the square (1:1) option cards used by one- and two-column
 /// wizard steps.
-pub(crate) const WIZARD_CARD_SQUARE: f32 = 240.0;
-/// Base side for three-column wizard steps. Their usable minimum width is the
-/// density width minus the content frame's 24 px padding on each side, so the
-/// three cards cannot exceed roughly 209 px each once row gaps and padding are
-/// included.
-pub(crate) const WIZARD_CARD_SQUARE_THREE_COLUMNS: f32 = 200.0;
-pub(crate) const WIZARD_CARD_ICON: f32 = 57.6;
-pub(crate) const WIZARD_CARD_ICON_MAX: f32 = 86.4;
-/// Title and description sizes the square cards grow toward, on the same
-/// curve as the card itself.
-pub(crate) const WIZARD_CARD_TITLE_MAX: f32 = 20.0;
-pub(crate) const WIZARD_CARD_DESC_MAX: f32 = 14.0;
-/// Larger square-card side used once the window has enough horizontal room.
-pub(crate) const WIZARD_CARD_SQUARE_MAX: f32 = 300.0;
 /// Content width at which cards are still at their minimum size, and the one
 /// where they reach `WIZARD_CARD_SQUARE_MAX`. 756 is the content area of the
 /// 820 px minimum window.
 pub(crate) const WIZARD_CARD_GROW_FROM_CONTENT: f32 = 756.0;
 pub(crate) const WIZARD_CARD_GROW_TO_CONTENT: f32 = 1600.0;
-
-pub(crate) fn wizard_square_base_side(columns: usize) -> f32 {
-    if columns <= 2 {
-        WIZARD_CARD_SQUARE
-    } else {
-        WIZARD_CARD_SQUARE_THREE_COLUMNS
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ListRowMetrics {
@@ -1121,7 +1087,6 @@ pub(crate) struct ListRowMetrics {
     pub(crate) icon_gap: f32,
 }
 
-pub(crate) const WIZARD_LIST_CARD_HEIGHT: f32 = 72.0;
 /// Row height the single-column lists grow to, keeping the enlarged icon inside
 /// its padding.
 pub(crate) const WIZARD_LIST_CARD_HEIGHT_MAX: f32 = 96.0;
@@ -1140,7 +1105,6 @@ pub(crate) const IMAGE_GROWTH: f32 = 1.5;
 pub(crate) const SPACE_GROWTH: f32 = 1.4;
 pub(crate) const SIZE_GROWTH: f32 = 1.3;
 pub(crate) const WIDTH_GROWTH: f32 = 1.32;
-pub(crate) const WIZARD_LIST_MAX_WIDTH: f32 = 620.0;
 pub(crate) const WIZARD_CONFIRM_MAX_WIDTH: f32 = 660.0;
 pub(crate) const WIZARD_TOP_APP_BAR_HEIGHT: f32 = 132.0;
 pub(crate) const WIZARD_TOP_APP_BAR_MAX_WIDTH: f32 = 1040.0;
@@ -1157,8 +1121,6 @@ pub(crate) const SUB_ROW_HEIGHT: f32 = 32.0;
 /// Taller sub-row for the narrower square cards so longer localized
 /// descriptions wrap without clipping. The widest bundled string reaches
 /// three lines at `BODY_SMALL` inside the narrowest card, needing ~49 px.
-pub(crate) const WIZARD_CARD_SQUARE_SUB_HEIGHT: f32 = 60.0;
-
 pub(crate) const FLASH_PARTS_MARKER_CELL_WIDTH: f32 = 32.0;
 pub(crate) const FLASH_PARTS_MARKER_CELL_HEIGHT: f32 = 20.0;
 pub(crate) const FLASH_PARTS_MARKER_SIZE: f32 = 16.0;
@@ -1307,9 +1269,9 @@ impl App {
             height: self.wizard_list_row_height(),
             label_size,
             desc_size,
-            padding: d.padding(10.0, 16.0),
-            text_gap: d.space(3.0),
-            icon_gap: d.space(16.0),
+            padding: d.padding(WIZARD_LIST_VERTICAL_PADDING, WIZARD_LIST_HORIZONTAL_PADDING),
+            text_gap: d.space(WIZARD_LIST_TEXT_GAP),
+            icon_gap: d.space(WIZARD_LIST_ICON_GAP),
         }
     }
 
@@ -1333,13 +1295,13 @@ impl App {
         )
     }
 
-    pub(crate) fn wizard_square_side(&self, columns: usize) -> f32 {
+    pub(crate) fn wizard_square_side(&self) -> f32 {
         // Grow with the window rather than stepping once and then staying flat.
         // At the minimum window the cards are already sized to look right, and
         // past `WIZARD_CARD_GROW_TO_CONTENT` further growth would only pad the
         // icon and label they contain.
         self.density()
-            .between(wizard_square_base_side(columns), WIZARD_CARD_SQUARE_MAX)
+            .between(WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX)
     }
 
     pub(crate) fn wizard_square_icon(&self) -> f32 {
@@ -1351,7 +1313,7 @@ impl App {
         let columns = columns.max(1);
         let gaps = columns.saturating_sub(1) as f32 * 12.0;
         // The column that owns card rows uses 28 px horizontal padding.
-        columns as f32 * self.wizard_square_side(columns) + gaps + 56.0
+        columns as f32 * self.wizard_square_side() + gaps + 56.0
     }
 }
 
@@ -1436,10 +1398,9 @@ mod tests {
         App, Density, DevicePortrait, IMAGE_GROWTH, MaterialProgressSize,
         WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON,
         WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX,
-        WIZARD_CARD_SQUARE_THREE_COLUMNS, density_for_content_width, device_portrait,
-        extended_fab_primary_style, fab_elevation_level, fab_primary_style, fab_surface_style,
-        material_progress_arc, material_progress_gap_angle, material_progress_metrics,
-        wizard_nav_layout,
+        density_for_content_width, device_portrait, extended_fab_primary_style,
+        fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
+        material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
     };
     use iced::widget::button;
 
@@ -1456,22 +1417,14 @@ mod tests {
         // passes or fails depending on how the last user left the window.
         let mut minimum = App::default();
         minimum.window_size.0 = WIZARD_CARD_GROW_FROM_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
-        assert_eq!(minimum.wizard_square_side(1), WIZARD_CARD_SQUARE);
-        assert_eq!(minimum.wizard_square_side(2), WIZARD_CARD_SQUARE);
-        assert_eq!(
-            minimum.wizard_square_side(3),
-            WIZARD_CARD_SQUARE_THREE_COLUMNS
-        );
+        assert_eq!(minimum.wizard_square_side(), WIZARD_CARD_SQUARE);
         assert_eq!(minimum.wizard_square_icon(), WIZARD_CARD_ICON);
         assert_eq!(minimum.square_step_max_width(1), 296.0);
         assert_eq!(minimum.square_step_max_width(2), 548.0);
-        assert_eq!(minimum.square_step_max_width(3), 680.0);
 
         let mut maximized = App::default();
         maximized.window_size.0 = WIZARD_CARD_GROW_TO_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
-        assert_eq!(maximized.wizard_square_side(1), WIZARD_CARD_SQUARE_MAX);
-        assert_eq!(maximized.wizard_square_side(2), WIZARD_CARD_SQUARE_MAX);
-        assert_eq!(maximized.wizard_square_side(3), WIZARD_CARD_SQUARE_MAX);
+        assert_eq!(maximized.wizard_square_side(), WIZARD_CARD_SQUARE_MAX);
         assert_eq!(maximized.wizard_square_icon(), WIZARD_CARD_ICON_MAX);
     }
 
