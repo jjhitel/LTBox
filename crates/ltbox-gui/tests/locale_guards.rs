@@ -555,11 +555,17 @@ struct HeaderSlot {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct ActionRowSlot {
+    actions: &'static [CopySource],
+}
+
+#[derive(Debug, Clone, Copy)]
 enum SlotKind {
     Card(CardSlot),
     ListRow(ListRowSlot),
     PickList(PickListSlot),
     Header(HeaderSlot),
+    ActionRow(ActionRowSlot),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -676,6 +682,11 @@ const DRIVER_OPTIONS: &[CopySource] = &[
     key("settings_qcom_driver_mode_userspace"),
     key("settings_qcom_driver_mode_kernel"),
 ];
+const DIRECT_UPDATE_READY_ACTIONS: &[CopySource] = &[
+    key("btn_close"),
+    key("update_dialog_release_page"),
+    key("update_dialog_install"),
+];
 
 // Keep each constrained widget as one row. Adding the next guard is a single
 // row plus its copy-key list; the measurement and diagnostics stay shared.
@@ -738,6 +749,12 @@ const CONSTRAINED_SLOTS: &[ConstrainedSlot] = &[
         kind: SlotKind::Header(HeaderSlot {
             title: key("popup_select_region_target"),
             action: key("btn_cancel"),
+        }),
+    },
+    ConstrainedSlot {
+        name: "self-update.ready-action-row",
+        kind: SlotKind::ActionRow(ActionRowSlot {
+            actions: DIRECT_UPDATE_READY_ACTIONS,
         }),
     },
 ];
@@ -1034,6 +1051,41 @@ fn bundled_locale_copy_fits_constrained_layout_slots() {
                         failures.push(overflow_message(
                             slot.name,
                             &format!("{title_key}+{action_key}"),
+                            locale,
+                            format!("{measured:.1}px"),
+                            format!("{limit:.1}px"),
+                        ));
+                    }
+                    println!(
+                        "HEADROOM slot={} locale={} measured={:.1}px budget={:.1}px",
+                        slot.name, locale, measured, limit,
+                    );
+                }
+                SlotKind::ActionRow(action_row) => {
+                    // The production row has one leading fill spacer, so it
+                    // contributes one more inter-child gap than the buttons
+                    // alone would.
+                    let mut measured =
+                        DIRECT_UPDATE_DIALOG_ACTION_SPACING * action_row.actions.len() as f32;
+                    let mut keys = Vec::with_capacity(action_row.actions.len());
+                    for source in action_row.actions {
+                        let (key, value) = localized_copy(&table, *source);
+                        keys.push(key);
+                        measured += measure_text(
+                            locale,
+                            value,
+                            DIRECT_UPDATE_DIALOG_ACTION_SIZE,
+                            Weight::Normal,
+                            None,
+                        )
+                        .width
+                            + 2.0 * M3_BUTTON_H_PADDING;
+                    }
+                    let limit = DIRECT_UPDATE_DIALOG_WIDTH - 2.0 * DIRECT_UPDATE_DIALOG_PADDING;
+                    if measured > limit + f32::EPSILON {
+                        failures.push(overflow_message(
+                            slot.name,
+                            &keys.join("+"),
                             locale,
                             format!("{measured:.1}px"),
                             format!("{limit:.1}px"),

@@ -159,7 +159,7 @@ impl App {
         };
 
         let mut actions = row![Space::new().width(Length::Fill)]
-            .spacing(8)
+            .spacing(DIRECT_UPDATE_DIALOG_ACTION_SPACING)
             .align_y(iced::Alignment::Center);
         if matches!(
             &self.direct_update_state,
@@ -191,8 +191,8 @@ impl App {
             actions,
         ]
         .spacing(14)
-        .padding(24)
-        .width(520);
+        .padding(DIRECT_UPDATE_DIALOG_PADDING)
+        .width(DIRECT_UPDATE_DIALOG_WIDTH);
         m3_dialog(content.into())
     }
 
@@ -1398,9 +1398,10 @@ impl App {
     }
 }
 
-// The locale guard measures this popup's Cancel button at
-// `REGION_TARGET_POPUP_ACTION_SIZE`, but the button takes its size from its
-// type role. Pin the two together so the guard cannot measure a size the
-// button stopped using.
-const _: () =
+// The locale guard measures these popup buttons through shared layout
+// constants, but the buttons take their size from their type role. Pin them
+// together so the guard cannot measure a size the buttons stopped using.
+const _: () = {
+    assert!(DIRECT_UPDATE_DIALOG_ACTION_SIZE.to_bits() == theme::text_size::LABEL_LARGE.to_bits());
     assert!(REGION_TARGET_POPUP_ACTION_SIZE.to_bits() == theme::text_size::LABEL_LARGE.to_bits());
+};
