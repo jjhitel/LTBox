@@ -2880,6 +2880,10 @@ impl App {
     /// On a fetch failure / inconclusive SaleArea the handler falls back to the
     /// manual PRC/ROW cards, so this never blocks the wizard.
     fn begin_flash_region_auto(&mut self) -> Task<Message> {
+        #[cfg(feature = "demo")]
+        if demo::prepare_flash_region_on_entry(self) {
+            return Task::none();
+        }
         if self.is_tb322fc() {
             // PRC-only SKU: no lookup needed; skip straight to the target step.
             self.flash.device_region = Some(DeviceRegion::Prc);

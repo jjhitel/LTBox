@@ -5,7 +5,8 @@
 //! `other` and `step` is `region`, `target`, `data`, `country`, `folder`,
 //! `confirm`, or `flash`. It also accepts first-screen view scenes
 //! `view:root`, `view:unroot`, `view:sysupdate`, `view:konabess`,
-//! `view:reboot`, `view:advanced`, `view:settings`, and `view:about`.
+//! `view:reboot`, `view:advanced`, `view:settings`, and `view:about`, plus the
+//! static inspection scenes enumerated in [`VALID_SCENES`].
 
 use crate::*;
 
@@ -38,6 +39,18 @@ pub(crate) const VALID_SCENES: &[&str] = &[
     "view:advanced",
     "view:settings",
     "view:about",
+    "view:root-mode",
+    "view:root-skroot-flavor",
+    "view:root-provider",
+    "view:root-version",
+    "view:root-nightly-source",
+    "view:root-run-id",
+    "view:root-kernel-version",
+    "view:root-superkey",
+    "view:advanced-region-target",
+    "view:sysupdate-rescue-loader",
+    "view:sysupdate-rescue-region",
+    "view:sysupdate-rescue-confirm",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +60,28 @@ pub(crate) enum Scene {
     AdbConflict,
     Wizard { flow: Flow, step: WizardStep },
     View(View),
+    Root(RootScene),
+    AdvancedRegionTarget,
+    SysUpdateRescue(SysUpdateRescueScene),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RootScene {
+    Mode,
+    SkrootFlavor,
+    Provider,
+    Version,
+    NightlySource,
+    RunIdPopup,
+    KernelVersionPopup,
+    SuperkeyPopup,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SysUpdateRescueScene {
+    Loader,
+    RegionPopup,
+    Confirm,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +115,24 @@ impl Scene {
             "view:advanced" => Some(Self::View(View::Advanced)),
             "view:settings" => Some(Self::View(View::Settings)),
             "view:about" => Some(Self::View(View::About)),
+            "view:root-mode" => Some(Self::Root(RootScene::Mode)),
+            "view:root-skroot-flavor" => Some(Self::Root(RootScene::SkrootFlavor)),
+            "view:root-provider" => Some(Self::Root(RootScene::Provider)),
+            "view:root-version" => Some(Self::Root(RootScene::Version)),
+            "view:root-nightly-source" => Some(Self::Root(RootScene::NightlySource)),
+            "view:root-run-id" => Some(Self::Root(RootScene::RunIdPopup)),
+            "view:root-kernel-version" => Some(Self::Root(RootScene::KernelVersionPopup)),
+            "view:root-superkey" => Some(Self::Root(RootScene::SuperkeyPopup)),
+            "view:advanced-region-target" => Some(Self::AdvancedRegionTarget),
+            "view:sysupdate-rescue-loader" => {
+                Some(Self::SysUpdateRescue(SysUpdateRescueScene::Loader))
+            }
+            "view:sysupdate-rescue-region" => {
+                Some(Self::SysUpdateRescue(SysUpdateRescueScene::RegionPopup))
+            }
+            "view:sysupdate-rescue-confirm" => {
+                Some(Self::SysUpdateRescue(SysUpdateRescueScene::Confirm))
+            }
             _ => {
                 let (flow, step) = value.split_once(':')?;
                 let flow = match flow {
@@ -111,7 +164,12 @@ impl Scene {
                     ..DevicePollResult::default()
                 };
             }
-            Self::Dashboard | Self::Wizard { .. } | Self::View(_) => {}
+            Self::Dashboard
+            | Self::Wizard { .. }
+            | Self::View(_)
+            | Self::Root(_)
+            | Self::AdvancedRegionTarget
+            | Self::SysUpdateRescue(_) => {}
         }
 
         DevicePollResult {
@@ -151,11 +209,102 @@ pub(crate) fn initialize(app: &mut App) {
     app.online = Some(true);
     drop(app.update(Message::DevicePolled(scene.poll_result())));
 
-    if let Scene::Wizard { flow, step } = scene {
-        apply_wizard_scene(app, flow, step);
-    } else if let Scene::View(view) = scene {
-        app.current_view = view;
+    match scene {
+        Scene::Wizard { flow, step } => apply_wizard_scene(app, flow, step),
+        Scene::View(view) => app.current_view = view,
+        Scene::Root(root_scene) => apply_root_scene(app, root_scene),
+        Scene::AdvancedRegionTarget => apply_advanced_region_target_scene(app),
+        Scene::SysUpdateRescue(rescue_scene) => apply_sysupdate_rescue_scene(app, rescue_scene),
+        Scene::Dashboard | Scene::DriversMissing | Scene::AdbConflict => {}
     }
+}
+
+fn apply_root_scene(app: &mut App, scene: RootScene) {
+    app.current_view = View::Root;
+    app.root = match scene {
+        RootScene::Mode => RootWizard {
+            step: 1,
+            family: Some(Family::KernelSU),
+            mode: Some(RootMode::Lkm),
+            ..RootWizard::default()
+        },
+        RootScene::SkrootFlavor => RootWizard {
+            step: 1,
+            family: Some(Family::Skroot),
+            skroot_flavor: Some(SkrootFlavor::Lite),
+            ..RootWizard::default()
+        },
+        RootScene::Provider => RootWizard {
+            step: 2,
+            family: Some(Family::Magisk),
+            provider: Some(Provider::Magisk),
+            ..RootWizard::default()
+        },
+        RootScene::Version => RootWizard {
+            step: 3,
+            family: Some(Family::Magisk),
+            provider: Some(Provider::Magisk),
+            version: Some(VerChoice::Stable),
+            ..RootWizard::default()
+        },
+        RootScene::NightlySource | RootScene::RunIdPopup => RootWizard {
+            step: 4,
+            family: Some(Family::Magisk),
+            provider: Some(Provider::Magisk),
+            version: Some(VerChoice::Nightly),
+            nightly_source: Some(match scene {
+                RootScene::RunIdPopup => NightlySource::ManualInput,
+                _ => NightlySource::AutoDetect,
+            }),
+            run_id_popup_open: scene == RootScene::RunIdPopup,
+            ..RootWizard::default()
+        },
+        RootScene::KernelVersionPopup => RootWizard {
+            step: 6,
+            family: Some(Family::KernelSU),
+            mode: Some(RootMode::Lkm),
+            provider: Some(Provider::KernelSU),
+            version: Some(VerChoice::Stable),
+            folder_path: Some(FIRMWARE_FOLDER.to_string()),
+            kernel_version_popup_open: true,
+            ..RootWizard::default()
+        },
+        RootScene::SuperkeyPopup => RootWizard {
+            step: 8,
+            family: Some(Family::APatch),
+            provider: Some(Provider::APatch),
+            version: Some(VerChoice::Stable),
+            superkey_popup_open: true,
+            ..RootWizard::default()
+        },
+    };
+}
+
+fn apply_advanced_region_target_scene(app: &mut App) {
+    app.current_view = View::Advanced;
+    app.adv_wizard = AdvWizard {
+        action: Some(AdvAction::RegionConvert),
+        step: 1,
+        file_path: Some(FIRMWARE_FOLDER.to_string()),
+        region_target: Some(DeviceRegion::Row),
+        ..AdvWizard::default()
+    };
+    app.region_target_popup_open = true;
+}
+
+fn apply_sysupdate_rescue_scene(app: &mut App, scene: SysUpdateRescueScene) {
+    app.current_view = View::SystemUpdate;
+    app.sysupdate = SysUpdateWizard {
+        step: match scene {
+            SysUpdateRescueScene::Loader | SysUpdateRescueScene::RegionPopup => 1,
+            SysUpdateRescueScene::Confirm => 2,
+        },
+        action: Some(SysUpdateAction::Rescue),
+        rescue_folder: (scene != SysUpdateRescueScene::Loader).then(|| FIRMWARE_FOLDER.to_string()),
+        rescue_region: (scene != SysUpdateRescueScene::Loader).then_some(RescueRegion::Prc),
+        rescue_region_popup_open: scene == SysUpdateRescueScene::RegionPopup,
+        rescue_region_confirmed: scene == SysUpdateRescueScene::Confirm,
+    };
 }
 
 fn apply_wizard_scene(app: &mut App, flow: Flow, step: WizardStep) {
@@ -217,6 +366,17 @@ pub(crate) fn is_active(app: &App) -> bool {
     app.demo_scene.is_some()
 }
 
+pub(crate) fn prepare_flash_region_on_entry(app: &mut App) -> bool {
+    if app.demo_scene.is_none() {
+        return false;
+    }
+    if app.flash.device_region.is_none() {
+        app.flash.device_region = Some(DeviceRegion::Row);
+        app.flash.step = 1;
+    }
+    true
+}
+
 pub(crate) fn poll_result(app: &App) -> Option<DevicePollResult> {
     app.demo_scene.map(Scene::poll_result)
 }
@@ -270,6 +430,30 @@ mod tests {
     }
 
     #[test]
+    fn active_demo_scene_enters_flash_without_prompt_or_region_probe() {
+        let scene = Scene::Dashboard;
+        let mut app = App {
+            demo_scene: Some(scene),
+            ..App::default()
+        };
+        drop(app.update(Message::DevicePolled(scene.poll_result())));
+
+        assert!(app.device_serial.is_empty());
+        drop(app.begin_flash_region_auto());
+
+        assert_eq!(app.flash.device_region, Some(DeviceRegion::Row));
+        assert_eq!(app.flash.step, 1);
+        assert!(app.flash_serial_prompt.is_none());
+        assert!(app.flash_region_pending.is_none());
+
+        app.flash.device_region = Some(DeviceRegion::Prc);
+        app.flash.step = 4;
+        drop(app.begin_flash_region_auto());
+        assert_eq!(app.flash.device_region, Some(DeviceRegion::Prc));
+        assert_eq!(app.flash.step, 4);
+    }
+
+    #[test]
     fn view_scenes_open_their_first_screen_with_populated_identity() {
         let expected_views = [
             (Scene::parse("view:root").unwrap(), View::Root),
@@ -319,6 +503,117 @@ mod tests {
                 View::Reboot => assert!(app.reboot_confirm_target.is_none()),
                 View::Settings | View::About => {}
                 View::Dashboard | View::Flash => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn static_inspection_scenes_assign_the_required_view_model_state() {
+        let cases = [
+            ("view:root-mode", View::Root),
+            ("view:root-skroot-flavor", View::Root),
+            ("view:root-provider", View::Root),
+            ("view:root-version", View::Root),
+            ("view:root-nightly-source", View::Root),
+            ("view:root-run-id", View::Root),
+            ("view:root-kernel-version", View::Root),
+            ("view:root-superkey", View::Root),
+            ("view:advanced-region-target", View::Advanced),
+            ("view:sysupdate-rescue-loader", View::SystemUpdate),
+            ("view:sysupdate-rescue-region", View::SystemUpdate),
+            ("view:sysupdate-rescue-confirm", View::SystemUpdate),
+        ];
+
+        for (value, expected_view) in cases {
+            let scene = Scene::parse(value).unwrap();
+            let mut app = App::default();
+            match scene {
+                Scene::Root(root_scene) => apply_root_scene(&mut app, root_scene),
+                Scene::AdvancedRegionTarget => apply_advanced_region_target_scene(&mut app),
+                Scene::SysUpdateRescue(rescue_scene) => {
+                    apply_sysupdate_rescue_scene(&mut app, rescue_scene)
+                }
+                _ => unreachable!("unexpected scene {value}"),
+            }
+            assert_eq!(app.current_view, expected_view, "scene {value}");
+
+            match scene {
+                Scene::Root(RootScene::Mode) => {
+                    assert_eq!(app.root.step, 1);
+                    assert_eq!(app.root.family, Some(Family::KernelSU));
+                    assert_eq!(app.root.mode, Some(RootMode::Lkm));
+                }
+                Scene::Root(RootScene::SkrootFlavor) => {
+                    assert_eq!(app.root.step, 1);
+                    assert_eq!(app.root.family, Some(Family::Skroot));
+                    assert_eq!(app.root.skroot_flavor, Some(SkrootFlavor::Lite));
+                }
+                Scene::Root(RootScene::Provider) => {
+                    assert_eq!(app.root.step, 2);
+                    assert_eq!(app.root.family, Some(Family::Magisk));
+                    assert_eq!(app.root.provider, Some(Provider::Magisk));
+                }
+                Scene::Root(RootScene::Version) => {
+                    assert_eq!(app.root.step, 3);
+                    assert_eq!(app.root.version, Some(VerChoice::Stable));
+                }
+                Scene::Root(RootScene::NightlySource) => {
+                    assert_eq!(app.root.step, 4);
+                    assert_eq!(app.root.version, Some(VerChoice::Nightly));
+                    assert_eq!(app.root.nightly_source, Some(NightlySource::AutoDetect));
+                }
+                Scene::Root(RootScene::RunIdPopup) => {
+                    assert!(app.root.run_id_popup_open);
+                    assert_eq!(app.root.nightly_source, Some(NightlySource::ManualInput));
+                }
+                Scene::Root(RootScene::KernelVersionPopup) => {
+                    assert_eq!(app.root.step, 6);
+                    assert!(app.root.kernel_version_popup_open);
+                    assert_eq!(app.root.folder_path.as_deref(), Some(FIRMWARE_FOLDER));
+                }
+                Scene::Root(RootScene::SuperkeyPopup) => {
+                    assert_eq!(app.root.step, 8);
+                    assert_eq!(app.root.family, Some(Family::APatch));
+                    assert!(app.root.superkey_popup_open);
+                }
+                Scene::AdvancedRegionTarget => {
+                    assert_eq!(app.adv_wizard.action, Some(AdvAction::RegionConvert));
+                    assert_eq!(app.adv_wizard.step, 1);
+                    assert_eq!(app.adv_wizard.file_path.as_deref(), Some(FIRMWARE_FOLDER));
+                    assert_eq!(app.adv_wizard.region_target, Some(DeviceRegion::Row));
+                    assert!(app.region_target_popup_open);
+                }
+                Scene::SysUpdateRescue(rescue_scene) => {
+                    assert_eq!(app.sysupdate.action, Some(SysUpdateAction::Rescue));
+                    match rescue_scene {
+                        SysUpdateRescueScene::Loader => {
+                            assert_eq!(app.sysupdate.step, 1);
+                            assert!(app.sysupdate.rescue_folder.is_none());
+                            assert!(app.sysupdate.rescue_region.is_none());
+                            assert!(!app.sysupdate.rescue_region_popup_open);
+                        }
+                        SysUpdateRescueScene::RegionPopup => {
+                            assert_eq!(app.sysupdate.step, 1);
+                            assert_eq!(
+                                app.sysupdate.rescue_folder.as_deref(),
+                                Some(FIRMWARE_FOLDER)
+                            );
+                            assert_eq!(app.sysupdate.rescue_region, Some(RescueRegion::Prc));
+                            assert!(app.sysupdate.rescue_region_popup_open);
+                            assert!(!app.sysupdate.rescue_region_confirmed);
+                        }
+                        SysUpdateRescueScene::Confirm => {
+                            assert_eq!(app.sysupdate.step, 2);
+                            assert_eq!(
+                                app.sysupdate.rescue_folder.as_deref(),
+                                Some(FIRMWARE_FOLDER)
+                            );
+                            assert_eq!(app.sysupdate.rescue_region, Some(RescueRegion::Prc));
+                            assert!(app.sysupdate.rescue_region_confirmed);
+                        }
+                    }
+                }
+                _ => unreachable!("unexpected scene {value}"),
             }
         }
     }
