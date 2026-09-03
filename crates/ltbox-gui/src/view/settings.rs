@@ -5,6 +5,8 @@ use iced::widget::{self, Space, button, column, container, row, text};
 use iced::{Element, Length, Theme};
 use theme::{mix_color, with_alpha};
 
+const SETTINGS_PICK_LIST_WIDTH: f32 = 168.0;
+
 impl App {
     pub(crate) fn view_settings(&self) -> Element<'_, Message> {
         let s = &self.settings;
@@ -43,7 +45,7 @@ impl App {
             .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(Length::Fixed(d.width(160.0))),
+            .width(Length::Fixed(d.width(SETTINGS_PICK_LIST_WIDTH))),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -79,7 +81,7 @@ impl App {
             .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(Length::Fixed(d.width(160.0))),
+            .width(Length::Fixed(d.width(SETTINGS_PICK_LIST_WIDTH))),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -114,7 +116,7 @@ impl App {
             .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(Length::Fixed(d.width(160.0))),
+            .width(Length::Fixed(d.width(SETTINGS_PICK_LIST_WIDTH))),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -169,7 +171,7 @@ impl App {
                     }),
             )
             .padding(field_padding)
-            .width(Length::Fixed(d.width(160.0)))
+            .width(Length::Fixed(d.width(SETTINGS_PICK_LIST_WIDTH)))
             .style(|t: &Theme| {
                 let p = pal_of(t);
                 container::Style {
@@ -204,7 +206,7 @@ impl App {
             .padding(field_padding)
             .style(m3_pick_list_style)
             .menu_style(m3_pick_list_menu_style)
-            .width(Length::Fixed(d.width(160.0)))
+            .width(Length::Fixed(d.width(SETTINGS_PICK_LIST_WIDTH)))
             .into()
         };
         let driver_label = row![
