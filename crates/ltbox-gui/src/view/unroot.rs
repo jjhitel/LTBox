@@ -83,7 +83,8 @@ impl App {
 
     pub(crate) fn unroot_type_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let side = self.wizard_square_side();
+        let columns = 2;
+        let side = self.wizard_square_side(columns);
         let xiaoxin_pro13 = self.is_xiaoxin_pro13();
         let unsupported = tr_args!("model_unsupported", model = "TB376FC / TB390FU");
         // Unroot reuses the Lucide puzzle/layers glyphs that the root
@@ -97,6 +98,7 @@ impl App {
                 self.t(UnrootType::MagiskLkm.label_key()),
                 &unsupported,
                 side,
+                columns,
             )
         } else {
             icon_option_card_sub_square_sized(
@@ -106,6 +108,7 @@ impl App {
                 self.unroot.unroot_type == Some(UnrootType::MagiskLkm),
                 Message::Unroot(UnrootMsg::SetUnrootType(UnrootType::MagiskLkm)),
                 side,
+                columns,
             )
         };
         let gki_card = if xiaoxin_pro13 {
@@ -114,6 +117,7 @@ impl App {
                 self.t(UnrootType::APatchGki.label_key()),
                 &unsupported,
                 side,
+                columns,
             )
         } else {
             icon_option_card_sub_square_sized(
@@ -123,6 +127,7 @@ impl App {
                 self.unroot.unroot_type == Some(UnrootType::APatchGki),
                 Message::Unroot(UnrootMsg::SetUnrootType(UnrootType::APatchGki)),
                 side,
+                columns,
             )
         };
         let col = column![row![lkm_card, gki_card].spacing(d.space(12.0)),]
@@ -130,7 +135,7 @@ impl App {
             .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(2))
+        centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn unroot_loader_step(&self) -> Element<'_, Message> {

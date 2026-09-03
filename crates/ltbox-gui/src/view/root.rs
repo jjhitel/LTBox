@@ -551,7 +551,8 @@ impl App {
             return centered_step(col, self.wizard_list_max_width(WIZARD_LIST_MAX_WIDTH));
         }
 
-        let side = self.wizard_square_side();
+        let columns = providers.len();
+        let side = self.wizard_square_side(columns);
         let card = |p: Provider, selected: bool| -> Element<'_, Message> {
             let sub = p.desc_key().map(|k| self.t(k)).unwrap_or("");
             // Smaller brand logo (52 vs 72) so the 72px SVG doesn't
@@ -564,6 +565,7 @@ impl App {
                 selected,
                 Message::Root(RootMsg::RootProvider(p)),
                 side,
+                columns,
             )
         };
 
@@ -579,7 +581,7 @@ impl App {
             .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(providers.len()))
+        centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn root_file_step(&self, subtitle: &str) -> Element<'_, Message> {
@@ -727,7 +729,8 @@ impl App {
 
     pub(crate) fn root_mode_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let side = self.wizard_square_side();
+        let columns = 2;
+        let side = self.wizard_square_side(columns);
         let tb323fu = self.is_tb323fu();
         let unsupported_tb323fu = tr_args!("model_unsupported", model = "TB323FU");
         let lkm_card = icon_option_card_sub_square_sized(
@@ -737,6 +740,7 @@ impl App {
             self.root.mode == Some(RootMode::Lkm),
             Message::Root(RootMsg::RootMode(RootMode::Lkm)),
             side,
+            columns,
         );
         let lkm_card = recommended_overlay(d, lkm_card, self.t("root_recommended_tip").to_string());
         // TODO(root): LTBox currently only swaps the boot.img Image for
@@ -748,6 +752,7 @@ impl App {
                 self.t(RootMode::Gki.label_key()),
                 &unsupported_tb323fu,
                 side,
+                columns,
             )
         } else {
             icon_option_card_sub_square_sized(
@@ -757,6 +762,7 @@ impl App {
                 self.root.mode == Some(RootMode::Gki),
                 Message::Root(RootMsg::RootMode(RootMode::Gki)),
                 side,
+                columns,
             )
         };
         let col = column![row![lkm_card, gki_card,].spacing(d.space(12.0)),]
@@ -764,12 +770,13 @@ impl App {
             .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(2))
+        centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn root_skroot_flavor_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let side = self.wizard_square_side();
+        let columns = 2;
+        let side = self.wizard_square_side(columns);
         let lite = icon_option_card_sub_square_sized(
             SkrootFlavor::Lite.icon(self.wizard_square_icon()),
             self.t(SkrootFlavor::Lite.label_key()),
@@ -777,12 +784,14 @@ impl App {
             self.root.skroot_flavor == Some(SkrootFlavor::Lite),
             Message::Root(RootMsg::RootSkrootFlavor(SkrootFlavor::Lite)),
             side,
+            columns,
         );
         let pro = icon_option_card_sub_square_disabled_sized(
             SkrootFlavor::Pro.icon_disabled(self.wizard_square_icon()),
             self.t(SkrootFlavor::Pro.label_key()),
             self.t(SkrootFlavor::Pro.desc_key()),
             side,
+            columns,
         );
 
         let col = column![row![lite, pro].spacing(d.space(12.0)),]
@@ -790,12 +799,17 @@ impl App {
             .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(2))
+        centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn root_version_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let side = self.wizard_square_side();
+        let columns = if self.root.provider == Some(Provider::ReSukiSU) {
+            1
+        } else {
+            2
+        };
+        let side = self.wizard_square_side(columns);
         let mk = |choice: VerChoice| -> Element<'_, Message> {
             let card = icon_option_card_sub_square_sized(
                 choice.icon(self.wizard_square_icon()),
@@ -804,6 +818,7 @@ impl App {
                 self.root.version == Some(choice),
                 Message::Root(RootMsg::RootVersion(choice)),
                 side,
+                columns,
             );
             if choice == VerChoice::Stable {
                 recommended_overlay(d, card, self.t("root_recommended_tip").to_string())
@@ -826,17 +841,13 @@ impl App {
             .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        let columns = if self.root.provider == Some(Provider::ReSukiSU) {
-            1
-        } else {
-            2
-        };
         centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn root_nightly_source_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let side = self.wizard_square_side();
+        let columns = 2;
+        let side = self.wizard_square_side(columns);
         let mk = |src: NightlySource| -> Element<'_, Message> {
             icon_option_card_sub_square_sized(
                 src.icon(self.wizard_square_icon()),
@@ -845,6 +856,7 @@ impl App {
                 self.root.nightly_source == Some(src),
                 Message::Root(RootMsg::RootNightlySource(src)),
                 side,
+                columns,
             )
         };
 
@@ -891,7 +903,7 @@ impl App {
         .padding(d.space(28.0))
         .width(Length::Fill)
         .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(2))
+        centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn root_confirm_step(&self) -> Element<'_, Message> {

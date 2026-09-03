@@ -788,8 +788,17 @@ pub(crate) fn icon_option_card_sub_square_sized(
     selected: bool,
     msg: Message,
     side: f32,
+    columns: usize,
 ) -> Element<'static, Message> {
-    option_card(icon, label, sub, selected, Some(msg), Some(side), false)
+    option_card(
+        icon,
+        label,
+        sub,
+        selected,
+        Some(msg),
+        Some((side, columns)),
+        false,
+    )
 }
 
 /// Square option card for a choice that destroys data. Renders on the
@@ -802,8 +811,17 @@ pub(crate) fn icon_option_card_sub_square_destructive_sized(
     selected: bool,
     msg: Message,
     side: f32,
+    columns: usize,
 ) -> Element<'static, Message> {
-    option_card(icon, label, sub, selected, Some(msg), Some(side), true)
+    option_card(
+        icon,
+        label,
+        sub,
+        selected,
+        Some(msg),
+        Some((side, columns)),
+        true,
+    )
 }
 
 pub(crate) fn icon_option_card_sub_square_disabled_sized(
@@ -811,13 +829,15 @@ pub(crate) fn icon_option_card_sub_square_disabled_sized(
     label: &str,
     sub: &str,
     side: f32,
+    columns: usize,
 ) -> Element<'static, Message> {
-    option_card(icon, label, sub, false, None, Some(side), false)
+    option_card(icon, label, sub, false, None, Some((side, columns)), false)
 }
 
 /// Shared body for the vertical icon → title → description option card.
-/// `msg = None` renders the disabled affordance; `square_side` swaps the
-/// full-width × fixed-height box for a fixed 1:1 square; `destructive`
+/// `msg = None` renders the disabled affordance; `square_size` swaps the
+/// full-width × fixed-height box for a fixed 1:1 square and carries its column
+/// count for growth scaling; `destructive`
 /// swaps the accent role from `primary` to `error`.
 fn option_card(
     icon: Element<'static, Message>,
@@ -825,13 +845,13 @@ fn option_card(
     sub: &str,
     selected: bool,
     msg: Option<Message>,
-    square_side: Option<f32>,
+    square_size: Option<(f32, usize)>,
     destructive: bool,
 ) -> Element<'static, Message> {
     let enabled = msg.is_some();
-    let square = square_side.is_some();
-    let side = square_side.unwrap_or(WIZARD_CARD_SQUARE);
-    let (title_size, desc_size) = square_card_text_sizes(side);
+    let square = square_size.is_some();
+    let (side, columns) = square_size.unwrap_or((WIZARD_CARD_SQUARE, 1));
+    let (title_size, desc_size) = square_card_text_sizes(side, columns);
     let label_style_fn = if enabled {
         on_surface_style
     } else {
@@ -857,8 +877,7 @@ fn option_card(
             .into()
     };
     // Square cards are narrower (fixed side), so longer localized
-    // descriptions wrap to more lines. The 200px-tall square has vertical
-    // slack below the icon + label, so give it a taller sub-row to absorb
+    // descriptions wrap to more lines. Give them a taller sub-row to absorb
     // ~4 lines instead of clipping; the standard card keeps its 2-line row.
     let sub_h = if square {
         WIZARD_CARD_SQUARE_SUB_HEIGHT
@@ -933,11 +952,11 @@ fn option_card(
 }
 
 /// Title and description sizes for a card of `side`, on the same curve the card
-/// itself grows along. A non-square card passes the minimum side, so it sits at
-/// progress 0 and keeps the unscaled sizes.
-fn square_card_text_sizes(side: f32) -> (f32, f32) {
-    let progress = ((side - WIZARD_CARD_SQUARE) / (WIZARD_CARD_SQUARE_MAX - WIZARD_CARD_SQUARE))
-        .clamp(0.0, 1.0);
+/// itself grows along. The column-dependent base must match the base used to
+/// compute `side`, so every minimum-window card starts at the unscaled sizes.
+fn square_card_text_sizes(side: f32, columns: usize) -> (f32, f32) {
+    let base_side = wizard_square_base_side(columns);
+    let progress = ((side - base_side) / (WIZARD_CARD_SQUARE_MAX - base_side)).clamp(0.0, 1.0);
     (
         theme::text_size::TITLE_MEDIUM
             + (WIZARD_CARD_TITLE_MAX - theme::text_size::TITLE_MEDIUM) * progress,
@@ -1113,14 +1132,28 @@ impl App {
 
 #[cfg(test)]
 mod typography_tests {
-    use super::{WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, square_card_text_sizes};
+    use super::{
+        WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX, WIZARD_CARD_SQUARE_THREE_COLUMNS,
+        square_card_text_sizes,
+    };
 
     #[test]
     fn option_card_typography_tracks_square_growth_endpoints() {
-        // Non-square cards pass the minimum side and must not scale.
-        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE), (16.0, 12.0));
-        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE_MAX), (20.0, 14.0));
-        let (title, desc) = square_card_text_sizes(250.0);
-        assert!((16.0..20.0).contains(&title) && (12.0..14.0).contains(&desc));
+        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE, 1), (16.0, 12.0));
+        assert_eq!(square_card_text_sizes(WIZARD_CARD_SQUARE, 2), (16.0, 12.0));
+        assert_eq!(
+            square_card_text_sizes(WIZARD_CARD_SQUARE_THREE_COLUMNS, 3),
+            (16.0, 12.0)
+        );
+        assert_eq!(
+            square_card_text_sizes(WIZARD_CARD_SQUARE_MAX, 2),
+            (20.0, 14.0)
+        );
+        assert_eq!(
+            square_card_text_sizes(WIZARD_CARD_SQUARE_MAX, 3),
+            (20.0, 14.0)
+        );
+        assert_eq!(square_card_text_sizes(270.0, 2), (18.0, 13.0));
+        assert_eq!(square_card_text_sizes(250.0, 3), (18.0, 13.0));
     }
 }

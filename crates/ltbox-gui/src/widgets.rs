@@ -1079,9 +1079,14 @@ pub(crate) fn device_portrait(model: &str) -> DevicePortrait {
 
 pub(crate) const WIZARD_CARD_HEIGHT: f32 = 180.0;
 
-/// Side length for the square (1:1) option cards used by single-row wizard
-/// steps. Sized so a 3-up row still fits within the minimum window width.
-pub(crate) const WIZARD_CARD_SQUARE: f32 = 200.0;
+/// Side length for the square (1:1) option cards used by one- and two-column
+/// wizard steps.
+pub(crate) const WIZARD_CARD_SQUARE: f32 = 240.0;
+/// Base side for three-column wizard steps. Their usable minimum width is the
+/// density width minus the content frame's 24 px padding on each side, so the
+/// three cards cannot exceed roughly 209 px each once row gaps and padding are
+/// included.
+pub(crate) const WIZARD_CARD_SQUARE_THREE_COLUMNS: f32 = 200.0;
 pub(crate) const WIZARD_CARD_ICON: f32 = 57.6;
 pub(crate) const WIZARD_CARD_ICON_MAX: f32 = 86.4;
 /// Title and description sizes the square cards grow toward, on the same
@@ -1095,6 +1100,15 @@ pub(crate) const WIZARD_CARD_SQUARE_MAX: f32 = 300.0;
 /// 820 px minimum window.
 pub(crate) const WIZARD_CARD_GROW_FROM_CONTENT: f32 = 756.0;
 pub(crate) const WIZARD_CARD_GROW_TO_CONTENT: f32 = 1600.0;
+
+pub(crate) fn wizard_square_base_side(columns: usize) -> f32 {
+    if columns <= 2 {
+        WIZARD_CARD_SQUARE
+    } else {
+        WIZARD_CARD_SQUARE_THREE_COLUMNS
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ListRowMetrics {
     pub(crate) height: f32,
@@ -1319,13 +1333,13 @@ impl App {
         )
     }
 
-    pub(crate) fn wizard_square_side(&self) -> f32 {
+    pub(crate) fn wizard_square_side(&self, columns: usize) -> f32 {
         // Grow with the window rather than stepping once and then staying flat.
         // At the minimum window the cards are already sized to look right, and
         // past `WIZARD_CARD_GROW_TO_CONTENT` further growth would only pad the
         // icon and label they contain.
         self.density()
-            .between(WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX)
+            .between(wizard_square_base_side(columns), WIZARD_CARD_SQUARE_MAX)
     }
 
     pub(crate) fn wizard_square_icon(&self) -> f32 {
@@ -1334,10 +1348,10 @@ impl App {
     }
 
     pub(crate) fn square_step_max_width(&self, columns: usize) -> f32 {
-        let columns = columns.max(1) as f32;
-        let gaps = (columns - 1.0) * 12.0;
+        let columns = columns.max(1);
+        let gaps = columns.saturating_sub(1) as f32 * 12.0;
         // The column that owns card rows uses 28 px horizontal padding.
-        columns * self.wizard_square_side() + gaps + 56.0
+        columns as f32 * self.wizard_square_side(columns) + gaps + 56.0
     }
 }
 
@@ -1422,9 +1436,10 @@ mod tests {
         App, Density, DevicePortrait, IMAGE_GROWTH, MaterialProgressSize,
         WIZARD_CARD_GROW_FROM_CONTENT, WIZARD_CARD_GROW_TO_CONTENT, WIZARD_CARD_ICON,
         WIZARD_CARD_ICON_MAX, WIZARD_CARD_SQUARE, WIZARD_CARD_SQUARE_MAX,
-        density_for_content_width, device_portrait, extended_fab_primary_style,
-        fab_elevation_level, fab_primary_style, fab_surface_style, material_progress_arc,
-        material_progress_gap_angle, material_progress_metrics, wizard_nav_layout,
+        WIZARD_CARD_SQUARE_THREE_COLUMNS, density_for_content_width, device_portrait,
+        extended_fab_primary_style, fab_elevation_level, fab_primary_style, fab_surface_style,
+        material_progress_arc, material_progress_gap_angle, material_progress_metrics,
+        wizard_nav_layout,
     };
     use iced::widget::button;
 
@@ -1441,12 +1456,22 @@ mod tests {
         // passes or fails depending on how the last user left the window.
         let mut minimum = App::default();
         minimum.window_size.0 = WIZARD_CARD_GROW_FROM_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
-        assert_eq!(minimum.wizard_square_side(), WIZARD_CARD_SQUARE);
+        assert_eq!(minimum.wizard_square_side(1), WIZARD_CARD_SQUARE);
+        assert_eq!(minimum.wizard_square_side(2), WIZARD_CARD_SQUARE);
+        assert_eq!(
+            minimum.wizard_square_side(3),
+            WIZARD_CARD_SQUARE_THREE_COLUMNS
+        );
         assert_eq!(minimum.wizard_square_icon(), WIZARD_CARD_ICON);
+        assert_eq!(minimum.square_step_max_width(1), 296.0);
+        assert_eq!(minimum.square_step_max_width(2), 548.0);
+        assert_eq!(minimum.square_step_max_width(3), 680.0);
 
         let mut maximized = App::default();
         maximized.window_size.0 = WIZARD_CARD_GROW_TO_CONTENT + crate::SIDEBAR_RAIL_WIDTH;
-        assert_eq!(maximized.wizard_square_side(), WIZARD_CARD_SQUARE_MAX);
+        assert_eq!(maximized.wizard_square_side(1), WIZARD_CARD_SQUARE_MAX);
+        assert_eq!(maximized.wizard_square_side(2), WIZARD_CARD_SQUARE_MAX);
+        assert_eq!(maximized.wizard_square_side(3), WIZARD_CARD_SQUARE_MAX);
         assert_eq!(maximized.wizard_square_icon(), WIZARD_CARD_ICON_MAX);
     }
 

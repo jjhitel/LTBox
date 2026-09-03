@@ -96,7 +96,8 @@ impl App {
 
     pub(crate) fn sysupdate_action_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let side = self.wizard_square_side();
+        let columns = 3;
+        let side = self.wizard_square_side(columns);
         let off_icon = lucide_primary(icon::tile_update_off(), self.wizard_square_icon());
         let on_icon = lucide_primary(icon::tile_update_on(), self.wizard_square_icon());
         // TB323FU's vendor_boot/vbmeta sit on a different UFS LUN than the
@@ -119,6 +120,7 @@ impl App {
                 self.sysupdate.action == Some(SysUpdateAction::Disable),
                 Message::Sys(SysMsg::SysAction(SysUpdateAction::Disable)),
                 side,
+                columns,
             ),
             icon_option_card_sub_square_sized(
                 on_icon,
@@ -127,6 +129,7 @@ impl App {
                 self.sysupdate.action == Some(SysUpdateAction::Enable),
                 Message::Sys(SysMsg::SysAction(SysUpdateAction::Enable)),
                 side,
+                columns,
             ),
         ]
         .spacing(d.space(12.0));
@@ -189,6 +192,7 @@ impl App {
                 self.sysupdate.action == Some(SysUpdateAction::Rescue),
                 Message::Sys(SysMsg::SysAction(SysUpdateAction::Rescue)),
                 side,
+                columns,
             ));
         }
         let col = column![cards,]
@@ -196,7 +200,7 @@ impl App {
             .padding(d.space(28.0))
             .width(Length::Fill)
             .align_x(iced::Alignment::Center);
-        centered_step(col, self.square_step_max_width(3))
+        centered_step(col, self.square_step_max_width(columns))
     }
 
     pub(crate) fn sysupdate_confirm_step(&self) -> Element<'_, Message> {
