@@ -6,6 +6,112 @@ use iced::{Element, Length, Theme};
 use theme::with_alpha;
 
 impl App {
+    /// Illustrated guide for the data-capable port on dual-USB-C tablets.
+    pub(crate) fn dual_usb_help_dialog(&self) -> Element<'_, Message> {
+        let model = self.dual_usb_help_model.clone();
+        let portrait: Element<'_, Message> = match device_portrait(&self.dual_usb_help_model) {
+            DevicePortrait::Png(handle) => widget::image(handle)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .content_fit(iced::ContentFit::ScaleDown)
+                .into(),
+            DevicePortrait::Svg(handle) => widget::svg(handle)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .content_fit(iced::ContentFit::ScaleDown)
+                .into(),
+        };
+        let portrait = container(portrait)
+            .width(Length::Fixed(380.0))
+            .height(Length::Fixed(190.0))
+            .center_x(Length::Fill)
+            .center_y(Length::Fill);
+
+        let side_port_x = container(icon::win_close().size(22))
+            .width(40)
+            .height(40)
+            .center_x(40)
+            .center_y(40)
+            .style(|_: &Theme| container::Style {
+                background: Some(iced::Color::from_rgb8(186, 26, 26).into()),
+                text_color: Some(iced::Color::WHITE),
+                border: iced::Border {
+                    radius: theme::shape::FULL.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        let side_port_overlay = container(side_port_x)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(8)
+            .align_x(iced::Alignment::End)
+            .align_y(iced::Alignment::Center);
+        let portrait_guide = widget::stack![portrait, side_port_overlay]
+            .width(Length::Fixed(380.0))
+            .height(Length::Fixed(190.0));
+
+        let palette = self.pal();
+        let rgb = |color: iced::Color| {
+            format!(
+                "#{:02X}{:02X}{:02X}",
+                (color.r * 255.0).round() as u8,
+                (color.g * 255.0).round() as u8,
+                (color.b * 255.0).round() as u8,
+            )
+        };
+        let cable_svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 96" fill="none">
+<rect x="19" y="3" width="22" height="20" rx="2" stroke="{}" stroke-width="3"/>
+<rect x="12" y="23" width="36" height="47" rx="3" fill="{}" stroke="{}" stroke-width="3"/>
+<rect x="18" y="70" width="24" height="20" rx="3" fill="{}"/>
+</svg>"#,
+            rgb(palette.on_surface),
+            rgb(palette.primary),
+            rgb(palette.on_surface),
+            rgb(palette.on_surface),
+        );
+        let cable = widget::svg(widget::svg::Handle::from_memory(cable_svg.into_bytes()))
+            .width(Length::Fixed(60.0))
+            .height(Length::Fixed(96.0));
+        let travel = 0.5 - 0.5 * (std::f32::consts::TAU * self.dual_usb_cable_phase).cos();
+        let cable_offset = 2.0 + 14.0 * travel;
+        let cable_motion = column![Space::new().height(cable_offset), cable]
+            .width(Length::Fixed(60.0))
+            .height(Length::Fixed(112.0))
+            .align_x(iced::Alignment::Center);
+
+        let dont_show = m3_text_button(self.t("driver_dont_show_again").to_string())
+            .on_press(Message::DismissDualUsbAdvisory(model.clone()));
+        let close = m3_text_button(self.t("btn_close").to_string())
+            .on_press(Message::CloseDualUsbAdvisory(model));
+        let actions = row![dont_show, Space::new().width(Length::Fill), close];
+        let content = column![
+            text(self.t("dual_usb_help_title").to_string())
+                .size(theme::text_size::WIZARD_STEP_TITLE)
+                .font(theme::emphasis::bold()),
+            widget::rule::horizontal(1),
+            container(portrait_guide)
+                .width(Length::Fill)
+                .center_x(Length::Fill),
+            container(cable_motion)
+                .width(Length::Fill)
+                .center_x(Length::Fill),
+            text(self.t("dual_usb_help_body").to_string())
+                .size(theme::text_size::BODY_MEDIUM)
+                .style(muted_style)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .width(Length::Fill),
+            widget::rule::horizontal(1),
+            actions,
+        ]
+        .spacing(14)
+        .padding(24)
+        .width(Length::Fixed(460.0));
+
+        m3_dialog(content.into())
+    }
+
     /// Scrollable inventory of components bundled or linked into LTBox, plus
     /// credits for independently reimplemented interoperable formats.
     pub(crate) fn about_licenses_dialog(&self) -> Element<'_, Message> {

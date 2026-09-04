@@ -152,12 +152,6 @@ impl App {
             content = content.push(banner);
         }
 
-        // Dual-USB-C port advisory — independent of the driver banners, so a
-        // matching model still gets the port hint even when drivers are fine.
-        if let Some(model) = self.dual_usb_advisory_model() {
-            content = content.push(self.dual_usb_advisory_banner(model));
-        }
-
         let mut device_col = column![].spacing(0).width(Length::Fill);
         device_col = device_col.push(
             text(self.t("dash_device").to_string())

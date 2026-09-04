@@ -116,6 +116,9 @@ impl App {
         if self.about_licenses_open {
             layers.push(self.about_licenses_dialog());
         }
+        if self.dual_usb_help_open {
+            layers.push(self.dual_usb_help_dialog());
+        }
         let toast_layer_count = usize::from(self.toast_msg.is_some());
         if self.toast_msg.is_some() {
             layers.push(self.toast_view());
@@ -1063,52 +1066,6 @@ impl App {
         .width(Length::Fill);
 
         let content = row![body, update_action, dismiss_btn]
-            .spacing(8)
-            .width(Length::Fill)
-            .align_y(iced::Alignment::Center);
-
-        self.warning_banner(content)
-    }
-
-    /// Dual-USB-C port advisory for TB320FC / TB321FU / TB322FC / TB323FU —
-    /// only the long-edge port carries USB data, so warn the user to use it.
-    /// Amber, with "Don't show again" (persist per model) + "Close" (this
-    /// session). `model` is threaded into both button messages so the
-    /// dismissal/close targets the model currently shown.
-    pub(crate) fn dual_usb_advisory_banner(&self, model: &str) -> Element<'_, Message> {
-        let model = model.to_string();
-        let dont_show = button(
-            text(self.t("driver_dont_show_again").to_string())
-                .size(theme::text_size::LABEL_LARGE)
-                .wrapping(iced::widget::text::Wrapping::None),
-        )
-        .padding([10, 18])
-        .height(40)
-        .style(banner_text_btn_style)
-        .on_press(Message::DismissDualUsbAdvisory(model.clone()));
-        let close = button(
-            text(self.t("btn_close").to_string())
-                .size(theme::text_size::LABEL_LARGE)
-                .wrapping(iced::widget::text::Wrapping::None),
-        )
-        .padding([10, 18])
-        .height(40)
-        .style(banner_filled_btn_style)
-        .on_press(Message::CloseDualUsbAdvisory(model));
-
-        let body = column![
-            text(self.t("dual_usb_advisory_title").to_string())
-                .size(theme::text_size::TITLE_MEDIUM)
-                .font(theme::emphasis::medium())
-                .style(warning_container_text_style),
-            text(self.t("dual_usb_advisory_desc").to_string())
-                .size(theme::text_size::BODY_SMALL)
-                .style(warning_container_text_style),
-        ]
-        .spacing(4)
-        .width(Length::Fill);
-
-        let content = row![body, dont_show, close]
             .spacing(8)
             .width(Length::Fill)
             .align_y(iced::Alignment::Center);

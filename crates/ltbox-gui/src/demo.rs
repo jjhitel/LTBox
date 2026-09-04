@@ -1,9 +1,9 @@
 //! Launch-time screenshot scenes for the opt-in `demo` feature.
 //!
-//! `LTBOX_DEMO` accepts dashboard scenes `dashboard`, `drivers-missing`, and
-//! `adb-conflict`, plus wizard scenes `<flow>:<step>` where `flow` is `same` or
-//! `other` and `step` is `region`, `target`, `data`, `country`, `folder`,
-//! `confirm`, or `flash`. It also accepts first-screen view scenes
+//! `LTBOX_DEMO` accepts dashboard scenes `dashboard`, `drivers-missing`,
+//! `adb-conflict`, and `dual-usb-advisory`, plus wizard scenes `<flow>:<step>`
+//! where `flow` is `same` or `other` and `step` is `region`, `target`, `data`,
+//! `country`, `folder`, `confirm`, or `flash`. It also accepts first-screen view scenes
 //! `view:root`, `view:unroot`, `view:sysupdate`, `view:konabess`,
 //! `view:reboot`, `view:advanced`, `view:settings`, and `view:about`, plus the
 //! static inspection scenes enumerated in [`VALID_SCENES`].
@@ -17,6 +17,7 @@ pub(crate) const VALID_SCENES: &[&str] = &[
     "dashboard",
     "drivers-missing",
     "adb-conflict",
+    "dual-usb-advisory",
     "same:region",
     "same:target",
     "same:data",
@@ -58,6 +59,7 @@ pub(crate) enum Scene {
     Dashboard,
     DriversMissing,
     AdbConflict,
+    DualUsbAdvisory,
     Wizard { flow: Flow, step: WizardStep },
     View(View),
     Root(RootScene),
@@ -107,6 +109,7 @@ impl Scene {
             "dashboard" => Some(Self::Dashboard),
             "drivers-missing" => Some(Self::DriversMissing),
             "adb-conflict" => Some(Self::AdbConflict),
+            "dual-usb-advisory" => Some(Self::DualUsbAdvisory),
             "view:root" => Some(Self::View(View::Root)),
             "view:unroot" => Some(Self::View(View::Unroot)),
             "view:sysupdate" => Some(Self::View(View::SystemUpdate)),
@@ -164,6 +167,21 @@ impl Scene {
                     ..DevicePollResult::default()
                 };
             }
+            Self::DualUsbAdvisory => {
+                return DevicePollResult {
+                    status: ConnectionStatus::Adb,
+                    model: "TB323FU".to_string(),
+                    slot: "_a".to_string(),
+                    firmware: "ZUXOS_1.0.0".to_string(),
+                    firmware_full: "ZUXOS_1.0.0".to_string(),
+                    arb: "arb_yes".to_string(),
+                    ram: "12 GB".to_string(),
+                    storage: "256 GB".to_string(),
+                    market_name: "Legion Y700".to_string(),
+                    platform_supported: Some(true),
+                    ..DevicePollResult::default()
+                };
+            }
             Self::Dashboard
             | Self::Wizard { .. }
             | Self::View(_)
@@ -207,6 +225,12 @@ pub(crate) fn initialize(app: &mut App) {
         _ => ltbox_device::driver::DriverStatus::Present,
     });
     app.online = Some(true);
+
+    if scene == Scene::DualUsbAdvisory {
+        apply_dual_usb_advisory_scene(app);
+        return;
+    }
+
     drop(app.update(Message::DevicePolled(scene.poll_result())));
 
     match scene {
@@ -215,8 +239,16 @@ pub(crate) fn initialize(app: &mut App) {
         Scene::Root(root_scene) => apply_root_scene(app, root_scene),
         Scene::AdvancedRegionTarget => apply_advanced_region_target_scene(app),
         Scene::SysUpdateRescue(rescue_scene) => apply_sysupdate_rescue_scene(app, rescue_scene),
-        Scene::Dashboard | Scene::DriversMissing | Scene::AdbConflict => {}
+        Scene::DualUsbAdvisory | Scene::Dashboard | Scene::DriversMissing | Scene::AdbConflict => {}
     }
+}
+
+fn apply_dual_usb_advisory_scene(app: &mut App) {
+    app.current_view = View::Dashboard;
+    app.startup_disclaimer_open = false;
+    app.dual_usb_advisory_dismissed.clear();
+    app.dual_usb_advisory_closed.clear();
+    drop(app.update(Message::DevicePolled(Scene::DualUsbAdvisory.poll_result())));
 }
 
 fn apply_root_scene(app: &mut App, scene: RootScene) {
@@ -427,6 +459,22 @@ mod tests {
             device_portrait(&result.model),
             DevicePortrait::Png(_)
         ));
+    }
+
+    #[test]
+    fn dual_usb_advisory_scene_opens_the_tb323fu_guide_from_its_device_poll() {
+        let mut app = App {
+            dual_usb_advisory_dismissed: vec!["TB323FU".to_string()],
+            dual_usb_advisory_closed: vec!["TB323FU".to_string()],
+            ..App::default()
+        };
+
+        apply_dual_usb_advisory_scene(&mut app);
+
+        assert_eq!(app.device_model, "TB323FU");
+        assert_eq!(app.dual_usb_advisory_model(), Some("TB323FU"));
+        assert!(app.dual_usb_help_open);
+        assert!(!app.startup_disclaimer_open);
     }
 
     #[test]

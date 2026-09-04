@@ -42,6 +42,11 @@ impl App {
             Message::StartupDisclaimerConfirm => {
                 if self.startup_disclaimer_checked {
                     self.startup_disclaimer_open = false;
+                    if let Some(model) = self.dual_usb_advisory_model().map(str::to_owned) {
+                        self.dual_usb_help_model = model;
+                        self.dual_usb_help_open = true;
+                        self.dual_usb_cable_phase = 0.0;
+                    }
                 }
             }
             Message::StartupDisclaimerExit => {
@@ -564,6 +569,8 @@ impl App {
                 );
             }
             Message::DevicePolled(r) => {
+                let previous_dual_usb_advisory_model =
+                    self.dual_usb_advisory_model().map(str::to_owned);
                 let prev_serial = self.device_serial.clone();
                 let prev_status = self.connection;
                 self.connection = r.status;
@@ -628,6 +635,16 @@ impl App {
                 // but the connection changed.
                 if self.device_serial != prev_serial || self.connection != prev_status {
                     self.flash_region_pending = None;
+                }
+
+                let dual_usb_advisory_model = self.dual_usb_advisory_model().map(str::to_owned);
+                if !self.startup_disclaimer_open
+                    && dual_usb_advisory_model != previous_dual_usb_advisory_model
+                    && let Some(model) = dual_usb_advisory_model
+                {
+                    self.dual_usb_help_model = model;
+                    self.dual_usb_help_open = true;
+                    self.dual_usb_cable_phase = 0.0;
                 }
             }
             Message::DeviceInfoOpen => {
@@ -983,6 +1000,8 @@ impl App {
                     self.dual_usb_advisory_dismissed.push(model);
                     self.persist_settings();
                 }
+                self.dual_usb_help_open = false;
+                self.dual_usb_cable_phase = 0.0;
             }
             Message::CloseDualUsbAdvisory(model) => {
                 if !self
@@ -991,6 +1010,16 @@ impl App {
                     .any(|m| m.eq_ignore_ascii_case(&model))
                 {
                     self.dual_usb_advisory_closed.push(model);
+                }
+                self.dual_usb_help_open = false;
+                self.dual_usb_cable_phase = 0.0;
+            }
+            Message::DualUsbCableAnimTick => {
+                if self.dual_usb_help_open {
+                    const FRAME_SECONDS: f32 = 0.016;
+                    const CYCLE_SECONDS: f32 = 1.8;
+                    self.dual_usb_cable_phase =
+                        (self.dual_usb_cable_phase + FRAME_SECONDS / CYCLE_SECONDS) % 1.0;
                 }
             }
             Message::UpdateCheckDone(result) => {

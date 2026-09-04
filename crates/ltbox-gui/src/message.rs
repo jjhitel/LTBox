@@ -152,12 +152,14 @@ pub(crate) enum Message {
     /// "Close" on the post-install restart recommendation — hide it for
     /// this session only (returns after another successful driver install).
     CloseDriverRestartRecommended,
-    /// "Don't show again" on the dual-USB-C port advisory for the given
-    /// model — persist it so that model never shows the advisory again.
+    /// "Don't show again" on the dual-USB-C port guide for the given
+    /// model — persist it so that model never shows the guide again.
     DismissDualUsbAdvisory(String),
-    /// "Close" on the dual-USB-C port advisory for the given model — hide it
+    /// "Close" on the dual-USB-C port guide for the given model — hide it
     /// for this session only (returns on the next launch).
     CloseDualUsbAdvisory(String),
+    /// 16 ms tick for the cable motion; subscribed only while the guide is open.
+    DualUsbCableAnimTick,
     DrainStdoutTap,
     LogEditorAction(iced::widget::text_editor::Action),
     ImageInfoLogEditorAction(iced::widget::text_editor::Action),

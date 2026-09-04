@@ -1936,12 +1936,19 @@ struct App {
     /// Persisted "don't show again" for the driver-update prompt. Skips the
     /// update check + banner; never affects the missing-driver banner.
     qcom_driver_update_dismissed: bool,
-    /// Models whose dual-USB-C port advisory the user permanently dismissed
+    /// Models whose dual-USB-C port guide the user permanently dismissed
     /// ("don't show again"); loaded from + saved to settings.
     dual_usb_advisory_dismissed: Vec<String>,
-    /// Models whose advisory was closed this session only ("close"). Not
-    /// persisted, so the advisory returns on the next launch.
+    /// Models whose guide was closed this session only ("close"). Not
+    /// persisted, so the guide returns on the next launch.
     dual_usb_advisory_closed: Vec<String>,
+    /// Whether the illustrated dual-USB-C port guide is open.
+    dual_usb_help_open: bool,
+    /// Model the open dual-USB-C port guide describes. Session-only so the
+    /// guide keeps its subject while the live device disconnects or changes.
+    dual_usb_help_model: String,
+    /// Normalized 0..1 phase for the guide's 1.8 s cable animation loop.
+    dual_usb_cable_phase: f32,
     /// Newest stable (`prerelease == false && draft == false`) release on
     /// `miner7222/LTBox` whose semver is strictly greater than the
     /// running build's. `None` either before the background probe lands
@@ -2145,6 +2152,9 @@ impl Default for App {
             qcom_driver_update_dismissed: persisted.qcom_driver_update_dismissed,
             dual_usb_advisory_dismissed: persisted.dual_usb_advisory_dismissed_models.clone(),
             dual_usb_advisory_closed: Vec::new(),
+            dual_usb_help_open: false,
+            dual_usb_help_model: String::new(),
+            dual_usb_cable_phase: 0.0,
             update_available: None,
             update_dialog_source: None,
             direct_update_state: DirectUpdateState::Ready,
@@ -3083,8 +3093,8 @@ impl App {
         });
     }
 
-    /// The connected dual-USB-C model whose port advisory should currently
-    /// show, or `None`. Shows when the model is one of [`DUAL_USBC_MODELS`]
+    /// The connected dual-USB-C model whose port guide is currently eligible
+    /// to open, or `None`. Eligible when the model is one of [`DUAL_USBC_MODELS`]
     /// and the user has neither permanently dismissed ("don't show again")
     /// nor session-closed ("close") it.
     fn dual_usb_advisory_model(&self) -> Option<&str> {
@@ -3181,6 +3191,14 @@ impl App {
             subs.push(
                 iced::time::every(std::time::Duration::from_millis(16))
                     .map(|_| Message::SidebarAnimTick),
+            );
+        }
+        // The cable guide is the only consumer of this animation tick. Stop
+        // the subscription with the popup so idle GPU wakeups do not continue.
+        if self.dual_usb_help_open {
+            subs.push(
+                iced::time::every(std::time::Duration::from_millis(16))
+                    .map(|_| Message::DualUsbCableAnimTick),
             );
         }
         // Listen for window resize events so the user's preferred
@@ -3633,6 +3651,14 @@ impl App {
 mod tests {
     use super::*;
 
+    fn device_poll(model: &str) -> DevicePollResult {
+        DevicePollResult {
+            status: ConnectionStatus::Adb,
+            model: model.to_string(),
+            ..DevicePollResult::default()
+        }
+    }
+
     #[test]
     fn package_upgrade_commands_cover_every_install_source() {
         use ltbox_core::install_source::InstallSource;
@@ -3759,6 +3785,143 @@ mod tests {
 
         let _ = app.update(Message::AboutLicensesClose);
         assert!(!app.about_licenses_open);
+    }
+
+    #[test]
+    fn dual_usb_guide_auto_opens_on_first_eligible_poll() {
+        let mut app = App {
+            startup_disclaimer_open: false,
+            dual_usb_advisory_dismissed: Vec::new(),
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+        assert!(!app.dual_usb_help_open);
+        assert!(app.dual_usb_help_model.is_empty());
+        assert_eq!(app.dual_usb_cable_phase, 0.0);
+
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        assert!(app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+
+        let _ = app.update(Message::DualUsbCableAnimTick);
+        assert!(app.dual_usb_cable_phase > 0.0);
+    }
+
+    #[test]
+    fn dual_usb_guide_waits_for_startup_disclaimer_to_close() {
+        let mut app = App {
+            startup_disclaimer_open: true,
+            startup_disclaimer_checked: false,
+            dual_usb_advisory_dismissed: Vec::new(),
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        assert!(!app.dual_usb_help_open);
+        assert!(app.dual_usb_help_model.is_empty());
+
+        let _ = app.update(Message::StartupDisclaimerToggled(true));
+        let _ = app.update(Message::StartupDisclaimerConfirm);
+        assert!(!app.startup_disclaimer_open);
+        assert!(app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+    }
+
+    #[test]
+    fn dual_usb_guide_stays_open_across_unplug_and_same_model_replug() {
+        let mut app = App {
+            startup_disclaimer_open: false,
+            dual_usb_advisory_dismissed: Vec::new(),
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        assert!(app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+
+        let _ = app.update(Message::DevicePolled(DevicePollResult::default()));
+        assert!(app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        assert!(app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+    }
+
+    #[test]
+    fn dual_usb_guide_does_not_reopen_after_session_close_and_replug() {
+        let mut app = App {
+            startup_disclaimer_open: false,
+            dual_usb_advisory_dismissed: Vec::new(),
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        let _ = app.update(Message::DualUsbCableAnimTick);
+        let _ = app.update(Message::CloseDualUsbAdvisory("TB323FU".to_string()));
+
+        assert!(!app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+        assert_eq!(app.dual_usb_cable_phase, 0.0);
+        assert_eq!(app.dual_usb_advisory_closed, ["TB323FU"]);
+
+        let _ = app.update(Message::DevicePolled(DevicePollResult::default()));
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        assert!(!app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+    }
+
+    #[test]
+    fn dual_usb_dont_show_again_roundtrips_and_suppresses_a_fresh_app() {
+        let mut app = App {
+            startup_disclaimer_open: false,
+            dual_usb_advisory_dismissed: Vec::new(),
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        let _ = app.update(Message::DismissDualUsbAdvisory("TB323FU".to_string()));
+        assert!(!app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB323FU");
+
+        let saved = settings_store::PersistedSettings {
+            dual_usb_advisory_dismissed_models: app.dual_usb_advisory_dismissed.clone(),
+            ..settings_store::PersistedSettings::default()
+        };
+        let json = serde_json::to_string(&saved).unwrap();
+        let restored: settings_store::PersistedSettings = serde_json::from_str(&json).unwrap();
+        let mut fresh_app = App {
+            startup_disclaimer_open: false,
+            dual_usb_advisory_dismissed: restored.dual_usb_advisory_dismissed_models,
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+
+        let _ = fresh_app.update(Message::DevicePolled(device_poll("TB323FU")));
+        assert!(!fresh_app.dual_usb_help_open);
+        assert!(fresh_app.dual_usb_help_model.is_empty());
+        assert_eq!(fresh_app.dual_usb_advisory_model(), None);
+    }
+
+    #[test]
+    fn second_dual_usb_model_still_auto_opens_after_first_model_is_closed() {
+        let mut app = App {
+            startup_disclaimer_open: false,
+            dual_usb_advisory_dismissed: Vec::new(),
+            dual_usb_advisory_closed: Vec::new(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::DevicePolled(device_poll("TB323FU")));
+        let _ = app.update(Message::CloseDualUsbAdvisory("TB323FU".to_string()));
+        let _ = app.update(Message::DevicePolled(device_poll("TB322FC")));
+
+        assert!(app.dual_usb_help_open);
+        assert_eq!(app.dual_usb_help_model, "TB322FC");
+        assert_eq!(app.dual_usb_advisory_model(), Some("TB322FC"));
     }
 
     #[test]
