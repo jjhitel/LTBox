@@ -935,6 +935,20 @@ pub(crate) fn flash_worker(
                     // is on firmware that closed the test-key hole.
                     return Err(ltbox_core::i18n::tr("err_device_key_fixed"));
                 }
+                // Manual indexes would have to be written into the images, and
+                // rewriting one invalidates its LenovoRSA signature that this
+                // device is the only thing that will accept. The mode cannot be
+                // honoured, so stop instead of silently flashing stock indexes.
+                if rb_mode == ltbox_patch::rollback::RollbackMode::Manual {
+                    if edl_start {
+                        let _ = session.reset_to_edl(&mut log);
+                    } else {
+                        let _ = session.reset(&mut log);
+                    }
+                    return Err(ltbox_core::i18n::tr(
+                        "err_flash_rollback_manual_device_key_fixed",
+                    ));
+                }
                 ltbox_core::live!(
                     log,
                     "[AVB] {}",

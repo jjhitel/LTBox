@@ -228,6 +228,7 @@
   "err_flash_parts_erase_failed": "擦除分区 {label} 失败：{error}",
   "err_flash_parts_part_failed": "刷写分区 {label} 失败：{error}",
   "err_flash_phys_write_failed": "写入 LUN {lun} 失败：{error}",
+  "err_flash_rollback_manual_device_key_fixed": "刷写：手动回滚索引需要重新签名镜像，而固定密钥设备不接受 — 写入前中止",
   "err_flash_set_bootable_lun_failed": "设置可启动 LUN 失败：{error}",
   "err_flash_tb322fc_prc_only": "刷写：TB322FC 仅限国行 — 不支持跨区域或非 CN 国家设置，已中止",
   "err_flash_vbmeta_key_unknown": "刷写：固件 vbmeta_system 的签名密钥未知（既非 AOSP 测试密钥也非 LenovoRSA 密钥）— 写入前中止",

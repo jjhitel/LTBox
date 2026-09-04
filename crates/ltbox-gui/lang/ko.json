@@ -228,6 +228,7 @@
   "err_flash_parts_erase_failed": "{label} 파티션을 지우지 못했습니다: {error}",
   "err_flash_parts_part_failed": "{label} 파티션 플래싱에 실패했습니다: {error}",
   "err_flash_phys_write_failed": "LUN {lun} 쓰기에 실패했습니다: {error}",
+  "err_flash_rollback_manual_device_key_fixed": "플래싱: 수동 롤백 인덱스는 이미지 재서명이 필요하지만 고정 키 기기는 이를 받지 않음 — 쓰기 전 중단",
   "err_flash_set_bootable_lun_failed": "부팅 LUN 설정 실패: {error}",
   "err_flash_tb322fc_prc_only": "플래싱: TB322FC는 중국 전용 — 타 지역 변환이나 비-CN 국가 설정 불가, 중단",
   "err_flash_vbmeta_key_unknown": "플래싱: 펌웨어 vbmeta_system 서명 키를 알 수 없음(AOSP 테스트 키도 LenovoRSA 키도 아님) — 쓰기 전 중단",

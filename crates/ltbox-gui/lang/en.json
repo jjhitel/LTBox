@@ -228,6 +228,7 @@
   "err_flash_parts_erase_failed": "Failed to erase partition {label}: {error}",
   "err_flash_parts_part_failed": "Failed to flash partition {label}: {error}",
   "err_flash_phys_write_failed": "Failed to write LUN {lun}: {error}",
+  "err_flash_rollback_manual_device_key_fixed": "Flash: manual rollback indexes need re-signed images, which a fixed-key device rejects - aborting before any write",
   "err_flash_set_bootable_lun_failed": "Failed to set bootable LUN: {error}",
   "err_flash_tb322fc_prc_only": "Flash: TB322FC is PRC-only - cross-region or non-CN country settings are not allowed; aborting",
   "err_flash_vbmeta_key_unknown": "Flash: firmware vbmeta_system is signed with an unknown key (neither AOSP test-key nor LenovoRSA-key) - aborting before any write",

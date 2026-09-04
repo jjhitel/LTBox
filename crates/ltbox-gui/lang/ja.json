@@ -228,6 +228,7 @@
   "err_flash_parts_erase_failed": "パーティション {label} の消去に失敗しました: {error}",
   "err_flash_parts_part_failed": "パーティション {label} のフラッシュに失敗しました: {error}",
   "err_flash_phys_write_failed": "LUN {lun} の書き込みに失敗しました: {error}",
+  "err_flash_rollback_manual_device_key_fixed": "フラッシュ: 手動ロールバックインデックスはイメージの再署名が必要ですが、固定キーの端末は受け付けません — 書き込み前に中止",
   "err_flash_set_bootable_lun_failed": "起動可能 LUN の設定に失敗しました: {error}",
   "err_flash_tb322fc_prc_only": "フラッシュ: TB322FC は中国専用 — 他リージョンへの変換や CN 以外の国設定は不可、中止します",
   "err_flash_vbmeta_key_unknown": "フラッシュ: ファームウェアの vbmeta_system が不明な鍵で署名されています（AOSP テスト鍵でも LenovoRSA 鍵でもない）— 書き込み前に中止します",

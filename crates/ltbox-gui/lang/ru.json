@@ -228,6 +228,7 @@
   "err_flash_parts_erase_failed": "Не удалось стереть раздел {label}: {error}",
   "err_flash_parts_part_failed": "Не удалось прошить раздел {label}: {error}",
   "err_flash_phys_write_failed": "Не удалось записать LUN {lun}: {error}",
+  "err_flash_rollback_manual_device_key_fixed": "Прошивка: ручные индексы отката требуют переподписи образов, которую устройство с фиксированным ключом не примет — остановка до записи",
   "err_flash_set_bootable_lun_failed": "Не удалось установить загрузочный LUN: {error}",
   "err_flash_tb322fc_prc_only": "Прошивка: TB322FC только для Китая — конвертация в другой регион или не-CN страна недопустимы; прерывание",
   "err_flash_vbmeta_key_unknown": "Прошивка: vbmeta_system прошивки подписана неизвестным ключом (ни тестовым ключом AOSP, ни ключом LenovoRSA) — прерывание до записи",
