@@ -219,7 +219,7 @@ impl App {
                 self.country_popup_open = false;
                 if self.adv_needs_country {
                     self.adv_needs_country = false;
-                } else if self.flash.step == 3
+                } else if self.flash.current_step() == FlashStep::Folder
                     && matches!(self.wf_config.country_action, CountryAction::Unset)
                 {
                     // Flash wizard — back to Data so user can switch wipe off.

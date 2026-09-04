@@ -1280,6 +1280,64 @@ impl App {
         m3_dialog(popup_content)
     }
 
+    pub(crate) fn flash_firmware_identity_popup(&self) -> Element<'_, Message> {
+        let dialog = self
+            .flash
+            .firmware_identity_dialog
+            .as_ref()
+            .expect("firmware identity dialog must be open");
+        let ready = matches!(dialog, FirmwareIdentityDialog::Ready);
+        let title_key = if ready {
+            "flash_firmware_identity_title"
+        } else {
+            "flash_firmware_identity_error_title"
+        };
+
+        let details: Element<'_, Message> = match dialog {
+            FirmwareIdentityDialog::Ready => {
+                let identity = self.flash.firmware_identity.as_ref();
+                let key_class = identity
+                    .map(|value| value.key_class)
+                    .unwrap_or(ltbox_patch::key_map::KeyClass::Unknown);
+                let verdict_key = match key_class {
+                    ltbox_patch::key_map::KeyClass::Testkey => "flash_key_testkey",
+                    ltbox_patch::key_map::KeyClass::Lenovo => "flash_key_lenovo",
+                    ltbox_patch::key_map::KeyClass::Unknown => "flash_key_unknown",
+                };
+                let model = identity
+                    .and_then(|value| value.model_token.as_deref())
+                    .unwrap_or_else(|| self.t("flash_firmware_model_unknown"));
+                column![
+                    info_kv_center(self.t("flash_firmware_identity_key"), self.t(verdict_key),),
+                    info_kv_center(self.t("flash_firmware_identity_model"), model),
+                ]
+                .spacing(8)
+                .into()
+            }
+            FirmwareIdentityDialog::Failed(error) => text(error.clone())
+                .size(13)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .into(),
+        };
+
+        let action_label = if ready { "btn_next" } else { "btn_close" };
+        let popup_content: Element<'_, Message> = column![
+            text(self.t(title_key).to_string()).size(16),
+            widget::rule::horizontal(1),
+            details,
+            row![
+                Space::new().width(Length::Fill),
+                m3_filled_button(self.t(action_label).to_string())
+                    .on_press(Message::Flash(FlashMsg::FlashFirmwareIdentityDialogAction,)),
+            ],
+        ]
+        .spacing(12)
+        .padding(20)
+        .width(360)
+        .into();
+        m3_dialog(popup_content)
+    }
+
     pub(crate) fn rescue_region_popup_view(&self) -> Element<'_, Message> {
         let mk_option = |region: RescueRegion, desc_key: &'static str| {
             let label = self.t(region.label_key()).to_string();

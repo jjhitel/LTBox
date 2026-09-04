@@ -48,6 +48,9 @@ tar = { version = "0.4", default-features = false }
 # Zstd (decompress ported-ROM `*.img.zst` payloads, e.g. `super.img.zst`).
 # Already linked transitively via kptools, so this adds no new C build surface.
 zstd = "0.13"
+# LZMA-alone decoding for compressed ABL LinuxLoader images. This is already
+# present transitively through kptools/magiskboot.
+lzma-rust2 = "0.16.5"
 
 # UTF-8-guaranteed paths. `camino::Utf8PathBuf` is a drop-in `PathBuf`
 # replacement that rejects non-UTF-8 byte sequences at construction time,
