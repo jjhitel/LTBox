@@ -149,6 +149,9 @@ pub(crate) enum Message {
     /// "Don't show again" on the driver-update banner — persist the
     /// dismissal and drop the banner for the rest of the session.
     DismissDriverUpdate,
+    /// "Close" on the post-install restart recommendation — hide it for
+    /// this session only (returns after another successful driver install).
+    CloseDriverRestartRecommended,
     /// "Don't show again" on the dual-USB-C port advisory for the given
     /// model — persist it so that model never shows the advisory again.
     DismissDualUsbAdvisory(String),

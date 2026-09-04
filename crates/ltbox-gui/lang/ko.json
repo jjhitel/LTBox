@@ -171,6 +171,8 @@
   "driver_missing_desc": "버튼을 누르면 선택한 퀄컴 USB 드라이버를 받아 설치합니다.",
   "driver_missing_title": "퀄컴 USB 드라이버 누락",
   "driver_needs_internet_tip": "다운로드하려면 인터넷 연결이 필요합니다.",
+  "driver_restart_recommended_desc": "퀄컴 드라이버를 설치했습니다. 올바르게 적용되도록 컴퓨터를 다시 시작하세요.",
+  "driver_restart_recommended_title": "컴퓨터 다시 시작 권장",
   "driver_udev_install_btn": "udev 규칙 설치",
   "driver_udev_missing_desc": "LTBox가 USB로 장치에 접근하려면 udev 규칙이 필요합니다. 설치하여 계속하세요.",
   "driver_udev_missing_title": "USB 장치 접근이 설정되지 않음",

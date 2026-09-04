@@ -971,6 +971,9 @@ impl App {
                 self.driver_update = None;
                 self.persist_settings();
             }
+            Message::CloseDriverRestartRecommended => {
+                self.driver_restart_recommended = false;
+            }
             Message::DismissDualUsbAdvisory(model) => {
                 if !self
                     .dual_usb_advisory_dismissed
@@ -1113,6 +1116,7 @@ impl App {
                         // banner. The presence re-check below clears the
                         // missing banner.
                         self.driver_update = None;
+                        self.driver_restart_recommended = true;
                         return Task::perform(
                             async {
                                 tokio::task::spawn_blocking(

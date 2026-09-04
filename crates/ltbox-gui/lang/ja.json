@@ -171,6 +171,8 @@
   "driver_missing_desc": "ボタンをクリックして、選択したQualcomm USBドライバーをダウンロードし、インストールします。",
   "driver_missing_title": "Qualcomm USBドライバーが見つかりません",
   "driver_needs_internet_tip": "ダウンロードにはインターネット接続が必要です。",
+  "driver_restart_recommended_desc": "Qualcommドライバーをインストールしました。正しく読み込まれるようにコンピューターを再起動してください。",
+  "driver_restart_recommended_title": "再起動を推奨します",
   "driver_udev_install_btn": "udev ルールをインストール",
   "driver_udev_missing_desc": "USB 経由でデバイスにアクセスするには udev ルールが必要です。インストールして続行してください。",
   "driver_udev_missing_title": "USB デバイスアクセスが未設定",

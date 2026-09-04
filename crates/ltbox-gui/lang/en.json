@@ -171,6 +171,8 @@
   "driver_missing_desc": "Click the button to download and install the selected Qualcomm USB driver.",
   "driver_missing_title": "Qualcomm USB drivers are missing",
   "driver_needs_internet_tip": "Requires an internet connection to download.",
+  "driver_restart_recommended_desc": "The Qualcomm driver was installed. Restart your computer to make sure it loads correctly.",
+  "driver_restart_recommended_title": "Restart recommended",
   "driver_udev_install_btn": "Install udev rules",
   "driver_udev_missing_desc": "LTBox needs udev rules to reach the device over USB. Install them to continue.",
   "driver_udev_missing_title": "USB device access not set up",

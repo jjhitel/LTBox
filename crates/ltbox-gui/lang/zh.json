@@ -171,6 +171,8 @@
   "driver_missing_desc": "点击按钮可下载并安装所选的 Qualcomm USB 驱动。",
   "driver_missing_title": "缺少 Qualcomm USB 驱动",
   "driver_needs_internet_tip": "下载需要互联网连接。",
+  "driver_restart_recommended_desc": "高通驱动程序已安装。请重启电脑，确保驱动程序正确加载。",
+  "driver_restart_recommended_title": "建议重启电脑",
   "driver_udev_install_btn": "安装 udev 规则",
   "driver_udev_missing_desc": "LTBox 需要 udev 规则才能通过 USB 访问设备。请安装以继续。",
   "driver_udev_missing_title": "USB 设备访问未设置",

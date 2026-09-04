@@ -826,12 +826,11 @@ impl App {
         .into()
     }
 
-    /// The active driver banner for the current `driver_status` /
-    /// `driver_update`, or `None` when drivers are fine. The missing-driver
-    /// warning and the optional update prompt are mutually exclusive (a missing
-    /// driver has no version to compare). Shared by the dashboard and Settings
-    /// so switching driver mode surfaces the install/update prompt in both
-    /// places, not only after navigating back to the dashboard.
+    /// The active driver banner for the current driver state, or `None` when
+    /// drivers are fine. A missing-driver warning takes priority over the
+    /// post-install restart reminder, which in turn takes priority over an
+    /// available update. Shared by the dashboard and Settings so switching
+    /// driver mode surfaces the relevant prompt in both places.
     pub(crate) fn driver_install_banner(&self) -> Option<Element<'_, Message>> {
         use ltbox_device::driver::DriverStatus;
         if matches!(
@@ -846,11 +845,46 @@ impl App {
             )
         ) {
             Some(self.driver_warning_banner())
+        } else if self.driver_restart_recommended {
+            Some(self.driver_restart_recommended_banner())
         } else if self.driver_update.is_some() {
             Some(self.driver_update_banner())
         } else {
             None
         }
+    }
+
+    /// Session-only reminder shown after a successful Qualcomm driver install
+    /// or update. Closing it does not persist across app sessions.
+    pub(crate) fn driver_restart_recommended_banner(&self) -> Element<'_, Message> {
+        let close = button(
+            text(self.t("btn_close").to_string())
+                .size(theme::text_size::LABEL_LARGE)
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .padding([10, 18])
+        .height(40)
+        .style(banner_filled_btn_style)
+        .on_press(Message::CloseDriverRestartRecommended);
+
+        let body = column![
+            text(self.t("driver_restart_recommended_title").to_string())
+                .size(theme::text_size::TITLE_MEDIUM)
+                .font(theme::emphasis::medium())
+                .style(warning_container_text_style),
+            text(self.t("driver_restart_recommended_desc").to_string())
+                .size(theme::text_size::BODY_SMALL)
+                .style(warning_container_text_style),
+        ]
+        .spacing(4)
+        .width(Length::Fill);
+
+        let content = row![body, close]
+            .spacing(8)
+            .width(Length::Fill)
+            .align_y(iced::Alignment::Center);
+
+        self.warning_banner(content)
     }
 
     pub(crate) fn driver_warning_banner(&self) -> Element<'_, Message> {

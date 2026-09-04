@@ -1921,6 +1921,9 @@ struct App {
     picker_target: PickerTarget,
     driver_status: Option<ltbox_device::driver::DriverStatus>,
     installing_drivers: bool,
+    /// Session-only post-install reminder. Set after a successful Qualcomm
+    /// driver install/update and cleared when the user closes its banner.
+    driver_restart_recommended: bool,
     /// `Some` when the installed Qualcomm driver is older than the latest
     /// release — drives the optional amber "update available" banner. Held
     /// `None` when up to date, not installed, offline, or the user chose
@@ -2136,6 +2139,7 @@ impl Default for App {
             picker_target: PickerTarget::None,
             driver_status: None,
             installing_drivers: false,
+            driver_restart_recommended: false,
             driver_update: None,
             online: None,
             qcom_driver_update_dismissed: persisted.qcom_driver_update_dismissed,
@@ -3755,6 +3759,18 @@ mod tests {
 
         let _ = app.update(Message::AboutLicensesClose);
         assert!(!app.about_licenses_open);
+    }
+
+    #[test]
+    fn driver_restart_recommendation_tracks_success_and_close() {
+        let mut app = App::default();
+        assert!(!app.driver_restart_recommended);
+
+        let _ = app.update(Message::InstallDriversDone(Ok(Vec::new())));
+        assert!(app.driver_restart_recommended);
+
+        let _ = app.update(Message::CloseDriverRestartRecommended);
+        assert!(!app.driver_restart_recommended);
     }
 
     #[test]

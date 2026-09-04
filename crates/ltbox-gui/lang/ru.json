@@ -171,6 +171,8 @@
   "driver_missing_desc": "Нажмите кнопку, чтобы скачать и установить выбранный драйвер Qualcomm USB.",
   "driver_missing_title": "Отсутствуют драйверы Qualcomm USB",
   "driver_needs_internet_tip": "Для загрузки требуется подключение к интернету.",
+  "driver_restart_recommended_desc": "Драйвер Qualcomm установлен. Чтобы драйвер загрузился правильно, перезагрузите компьютер.",
+  "driver_restart_recommended_title": "Рекомендуется перезагрузка",
   "driver_udev_install_btn": "Установить правила udev",
   "driver_udev_missing_desc": "Для доступа к устройству по USB нужны правила udev. Установите их, чтобы продолжить.",
   "driver_udev_missing_title": "Доступ к USB-устройству не настроен",
