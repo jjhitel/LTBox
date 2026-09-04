@@ -71,6 +71,9 @@ impl App {
         if let Some(field) = self.confirm_edit_field {
             layers.push(self.flash_confirm_edit_popup(field));
         }
+        if self.flash.firmware_identity_dialog.is_some() {
+            layers.push(self.flash_firmware_identity_popup());
+        }
         if self.manual_rollback_editor.is_some() {
             layers.push(self.manual_rollback_popup_view());
         }

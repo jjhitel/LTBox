@@ -3,9 +3,10 @@
 
 use crate::{
     AdvAction, ConfirmField, DataMode, DevicePollResult, DeviceRegion, DumpPartsScanResult, Family,
-    FlashPartsScanResult, FlashTarget, GpuCellKey, Language, ManualRollbackEditor, NightlySource,
-    PartsSortColumn, PickerTarget, Provider, RebootTarget, RescueRegion, RollbackSetting, RootMode,
-    SkrootFlavor, SysUpdateAction, ThemeChoice, ThemeSeed, UnrootType, VerChoice, View,
+    FirmwareIdentity, FlashPartsScanResult, FlashTarget, GpuCellKey, Language,
+    ManualRollbackEditor, NightlySource, PartsSortColumn, PickerTarget, Provider, RebootTarget,
+    RescueRegion, RollbackSetting, RootMode, SkrootFlavor, SysUpdateAction, ThemeChoice, ThemeSeed,
+    UnrootType, VerChoice, View,
 };
 
 #[derive(Debug, Clone)]
@@ -222,9 +223,15 @@ pub(crate) enum FlashMsg {
     FlashNext,
     FlashBack,
     FlashSelectFolder,
+    FlashFirmwareIdentityInspected(String, Result<FirmwareIdentity, String>),
+    FlashFirmwareIdentityDialogAction,
     /// Pick a standalone EDL loader when the firmware folder ships none.
     FlashSelectLoader,
     FlashLoaderChosen(Option<String>),
+    FlashSelectBootloader,
+    FlashBootloaderChosen(Option<String>),
+    FlashBootloaderAnalysed(String, ltbox_patch::key_map::KeyClass),
+    FlashClearBootloader,
     /// Confirm-step "hidden dropdown": open the option editor for a row.
     FlashConfirmOpen(ConfirmField),
     /// Dismiss the confirm-step option editor without a change.

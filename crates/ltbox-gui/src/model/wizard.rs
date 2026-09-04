@@ -617,6 +617,102 @@ pub(crate) enum ConfirmField {
     Country,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FlashStep {
+    Region,
+    Target,
+    Data,
+    Folder,
+    Bootloader,
+    Confirm,
+    Flash,
+}
+
+impl FlashStep {
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            Self::Region => "flash_step_region",
+            Self::Target => "flash_step_target",
+            Self::Data => "flash_step_data",
+            Self::Folder => "flash_step_folder",
+            Self::Bootloader => "flash_step_bootloader",
+            Self::Confirm => "flash_step_confirm",
+            Self::Flash => "flash_step_flash",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FirmwareIdentity {
+    pub(crate) key_class: ltbox_patch::key_map::KeyClass,
+    pub(crate) fingerprint: Option<String>,
+    pub(crate) model_token: Option<String>,
+}
+
+impl FirmwareIdentity {
+    pub(crate) fn from_avb_info(info: &ltbox_patch::avb::AvbImageInfo) -> Self {
+        let fingerprint = ltbox_patch::avb::build_fingerprint(info);
+        let model_token = fingerprint.as_deref().and_then(fingerprint_model_token);
+        Self {
+            key_class: ltbox_patch::key_map::classify_pubkey(info.public_key_sha1.as_deref()),
+            fingerprint,
+            model_token,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FirmwareIdentityDialog {
+    Ready,
+    Failed(String),
+}
+
+fn fingerprint_model_token(fingerprint: &str) -> Option<String> {
+    fingerprint
+        .split('/')
+        .nth(1)
+        .and_then(|product| product.split('_').next())
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_owned)
+}
+
+pub(crate) fn firmware_needs_bootloader_step(
+    key_class: ltbox_patch::key_map::KeyClass,
+    fingerprint: Option<&str>,
+) -> bool {
+    key_class == ltbox_patch::key_map::KeyClass::Lenovo
+        && ![
+            "TB323FU",
+            ltbox_core::model::TB376FC_MODEL,
+            ltbox_core::model::TB390FU_MODEL,
+        ]
+        .into_iter()
+        .any(|model| {
+            fingerprint
+                .is_some_and(|value| ltbox_core::model::fingerprint_model_match(value, model))
+        })
+}
+
+pub(crate) const FLASH_STEPS: &[FlashStep] = &[
+    FlashStep::Region,
+    FlashStep::Target,
+    FlashStep::Data,
+    FlashStep::Folder,
+    FlashStep::Confirm,
+    FlashStep::Flash,
+];
+
+const FLASH_STEPS_WITH_BOOTLOADER: &[FlashStep] = &[
+    FlashStep::Region,
+    FlashStep::Target,
+    FlashStep::Data,
+    FlashStep::Folder,
+    FlashStep::Bootloader,
+    FlashStep::Confirm,
+    FlashStep::Flash,
+];
+
 #[derive(Default)]
 pub(crate) struct FlashWizard {
     pub(crate) step: usize,
@@ -636,6 +732,12 @@ pub(crate) struct FlashWizard {
     /// Reason the last picked loader was rejected (e.g. a standalone `.melf` on
     /// TB323FU), shown in the folder step.
     pub(crate) loader_error: Option<String>,
+    pub(crate) firmware_identity: Option<FirmwareIdentity>,
+    pub(crate) firmware_identity_pending: bool,
+    pub(crate) firmware_identity_dialog: Option<FirmwareIdentityDialog>,
+    pub(crate) user_abl_path: Option<String>,
+    pub(crate) user_abl_key_class: Option<ltbox_patch::key_map::KeyClass>,
+    pub(crate) user_abl_analyzing: bool,
 }
 
 impl FlashWizard {
@@ -649,16 +751,51 @@ impl FlashWizard {
         };
         self.firmware_rollback_indices = Some((read("boot.img"), read("vbmeta_system.img")));
     }
-}
 
-pub(crate) const FLASH_STEPS: &[&str] = &[
-    "flash_step_region",
-    "flash_step_target",
-    "flash_step_data",
-    "flash_step_folder",
-    "flash_step_confirm",
-    "flash_step_flash",
-];
+    pub(crate) fn visible_steps(&self) -> &'static [FlashStep] {
+        if self.firmware_identity.as_ref().is_some_and(|identity| {
+            firmware_needs_bootloader_step(identity.key_class, identity.fingerprint.as_deref())
+        }) {
+            FLASH_STEPS_WITH_BOOTLOADER
+        } else {
+            FLASH_STEPS
+        }
+    }
+
+    pub(crate) fn current_step(&self) -> FlashStep {
+        self.visible_steps()
+            .get(self.step)
+            .copied()
+            .unwrap_or(FlashStep::Flash)
+    }
+
+    pub(crate) fn set_step(&mut self, step: FlashStep) {
+        self.step = self
+            .visible_steps()
+            .iter()
+            .position(|candidate| *candidate == step)
+            .unwrap_or(0);
+    }
+
+    pub(crate) fn reset_firmware_identity(&mut self) {
+        self.firmware_identity = None;
+        self.firmware_identity_pending = false;
+        self.firmware_identity_dialog = None;
+        self.user_abl_path = None;
+        self.user_abl_key_class = None;
+        self.user_abl_analyzing = false;
+    }
+
+    pub(crate) fn bootloader_can_next(&self) -> bool {
+        match self.user_abl_path {
+            None => true,
+            Some(_) => {
+                !self.user_abl_analyzing
+                    && self.user_abl_key_class == Some(ltbox_patch::key_map::KeyClass::Testkey)
+            }
+        }
+    }
+}
 
 impl Wizard for FlashWizard {
     fn step(&self) -> usize {
@@ -668,23 +805,26 @@ impl Wizard for FlashWizard {
         &mut self.step
     }
     fn step_count(&self) -> usize {
-        FLASH_STEPS.len()
+        self.visible_steps().len()
     }
     fn can_next(&self) -> bool {
-        match self.step {
-            0 => self.device_region.is_some(),
-            1 => self.target.is_some(),
-            2 => self.data_mode.is_some(),
+        match self.current_step() {
+            FlashStep::Region => self.device_region.is_some(),
+            FlashStep::Target => self.target.is_some(),
+            FlashStep::Data => self.data_mode.is_some(),
             // Folder picked, and — when it ships no loader — a loader provided.
-            3 => {
+            FlashStep::Folder => {
                 self.firmware_folder.is_some()
                     && (!self.loader_required || self.loader_override.is_some())
+                    && !self.firmware_identity_pending
             }
-            4 => {
-                self.firmware_folder.is_some()
+            FlashStep::Bootloader => self.bootloader_can_next(),
+            FlashStep::Confirm => {
+                self.firmware_identity.is_some()
+                    && self.firmware_folder.is_some()
                     && (!self.loader_required || self.loader_override.is_some())
             }
-            _ => false,
+            FlashStep::Flash => false,
         }
     }
 
@@ -1951,6 +2091,96 @@ impl AdvWizard {
             // return File defensively so storage_key() is always valid.
             _ => PickerKind::File,
         }
+    }
+}
+
+#[cfg(test)]
+mod flash_tests {
+    use super::*;
+    use ltbox_patch::key_map::KeyClass;
+
+    fn identity(key_class: KeyClass, fingerprint: &str) -> FirmwareIdentity {
+        FirmwareIdentity {
+            key_class,
+            fingerprint: Some(fingerprint.to_string()),
+            model_token: None,
+        }
+    }
+
+    #[test]
+    fn visible_flash_steps_include_bootloader_only_when_selected_by_gate() {
+        let mut without = FlashWizard::default();
+        assert_eq!(
+            without.visible_steps(),
+            &[
+                FlashStep::Region,
+                FlashStep::Target,
+                FlashStep::Data,
+                FlashStep::Folder,
+                FlashStep::Confirm,
+                FlashStep::Flash,
+            ]
+        );
+        without.set_step(FlashStep::Folder);
+        without.next();
+        assert_eq!(without.current_step(), FlashStep::Confirm);
+        without.back();
+        assert_eq!(without.current_step(), FlashStep::Folder);
+
+        let mut with = FlashWizard {
+            firmware_identity: Some(identity(
+                KeyClass::Lenovo,
+                "qti/TB320FC/TB320FC:15/build:user/release-keys",
+            )),
+            ..FlashWizard::default()
+        };
+        assert_eq!(
+            with.visible_steps(),
+            &[
+                FlashStep::Region,
+                FlashStep::Target,
+                FlashStep::Data,
+                FlashStep::Folder,
+                FlashStep::Bootloader,
+                FlashStep::Confirm,
+                FlashStep::Flash,
+            ]
+        );
+        with.set_step(FlashStep::Folder);
+        with.next();
+        assert_eq!(with.current_step(), FlashStep::Bootloader);
+        with.next();
+        assert_eq!(with.current_step(), FlashStep::Confirm);
+        with.back();
+        assert_eq!(with.current_step(), FlashStep::Bootloader);
+        with.back();
+        assert_eq!(with.current_step(), FlashStep::Folder);
+    }
+
+    #[test]
+    fn firmware_bootloader_gate_matches_key_and_model_rules() {
+        let other = "qti/TB320FC/TB320FC:15/build:user/release-keys";
+        assert!(firmware_needs_bootloader_step(
+            KeyClass::Lenovo,
+            Some(other)
+        ));
+
+        for model in ["TB323FU", "TB376FC", "TB390FU"] {
+            let fingerprint = format!("qti/{model}/{model}:15/build:user/release-keys");
+            assert!(!firmware_needs_bootloader_step(
+                KeyClass::Lenovo,
+                Some(&fingerprint)
+            ));
+        }
+
+        assert!(!firmware_needs_bootloader_step(
+            KeyClass::Testkey,
+            Some(other)
+        ));
+        assert!(!firmware_needs_bootloader_step(
+            KeyClass::Unknown,
+            Some(other)
+        ));
     }
 }
 

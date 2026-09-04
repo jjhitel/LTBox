@@ -10,18 +10,25 @@ impl App {
         if self.log_popup_open && self.flash.is_in_exec() {
             return self.log_popup_view();
         }
-        let step_labels: Vec<&str> = FLASH_STEPS.iter().map(|k| self.t(k)).collect();
+        let step_labels: Vec<&str> = self
+            .flash
+            .visible_steps()
+            .iter()
+            .map(|step| self.t(step.label_key()))
+            .collect();
         let step_bar = wizard_step_bar(&step_labels, self.flash.step);
-        let body = match self.flash.step {
-            0 => self.flash_region_step(),
-            1 => self.flash_target_step(),
-            2 => self.flash_data_step(),
-            3 => self.flash_folder_step(),
-            4 => self.flash_confirm_step(),
-            _ => self.flash_exec_step(),
+        let current_step = self.flash.current_step();
+        let body = match current_step {
+            FlashStep::Region => self.flash_region_step(),
+            FlashStep::Target => self.flash_target_step(),
+            FlashStep::Data => self.flash_data_step(),
+            FlashStep::Folder => self.flash_folder_step(),
+            FlashStep::Bootloader => self.flash_bootloader_step(),
+            FlashStep::Confirm => self.flash_confirm_step(),
+            FlashStep::Flash => self.flash_exec_step(),
         };
-        let nav = if self.flash.step < 5 {
-            let is_start = self.flash.step == 4;
+        let nav = if current_step != FlashStep::Flash {
+            let is_start = current_step == FlashStep::Confirm;
             let label_owned = if is_start {
                 self.t("btn_start").to_string()
             } else {
@@ -55,13 +62,14 @@ impl App {
     }
 
     fn flash_action_bar(&self) -> Option<Element<'_, Message>> {
-        let (title_key, subtitle_key) = match self.flash.step {
-            0 => ("flash_region_title", Some("flash_region_subtitle")),
-            1 => ("flash_target_title", Some("flash_target_subtitle")),
-            2 => ("flash_data_title", Some("flash_data_subtitle")),
-            3 => ("flash_folder_title", Some("flash_folder_subtitle")),
-            4 => ("flash_confirm_title", Some("flash_confirm_subtitle")),
-            _ => return Some(self.exec_action_bar()),
+        let (title_key, subtitle_key) = match self.flash.current_step() {
+            FlashStep::Region => ("flash_region_title", Some("flash_region_subtitle")),
+            FlashStep::Target => ("flash_target_title", Some("flash_target_subtitle")),
+            FlashStep::Data => ("flash_data_title", Some("flash_data_subtitle")),
+            FlashStep::Folder => ("flash_folder_title", Some("flash_folder_subtitle")),
+            FlashStep::Bootloader => ("flash_bootloader_title", Some("flash_bootloader_subtitle")),
+            FlashStep::Confirm => ("flash_confirm_title", Some("flash_confirm_subtitle")),
+            FlashStep::Flash => return Some(self.exec_action_bar()),
         };
         Some(wizard_action_bar(
             self.t(title_key).to_string(),
@@ -349,6 +357,132 @@ impl App {
 
         col = col.push(chips);
         container(col)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into()
+    }
+
+    pub(crate) fn flash_bootloader_step(&self) -> Element<'_, Message> {
+        let d = self.density();
+        let selected = self.flash.user_abl_path.is_some();
+        let analyzing = self.flash.user_abl_analyzing;
+        let mut browse = button(
+            container(
+                column![
+                    text(self.t("flash_bootloader_select").to_string())
+                        .size(d.text(14.0))
+                        .center(),
+                    text("abl.elf")
+                        .size(d.text(11.0))
+                        .style(muted_style)
+                        .center(),
+                ]
+                .spacing(d.space(6.0))
+                .width(Length::Fill)
+                .align_x(iced::Alignment::Center),
+            )
+            .padding(d.padding(20.0, 24.0))
+            .width(Length::Fixed(d.width(280.0)))
+            .style(move |theme: &Theme| sel_card_style(theme, selected)),
+        )
+        .padding(0)
+        .style(move |theme: &Theme, status| {
+            if analyzing {
+                let palette = pal_of(theme);
+                button::Style {
+                    background: Some(palette.surface_container.into()),
+                    text_color: with_alpha(palette.on_surface, 0.38),
+                    border: iced::Border {
+                        radius: theme::shape::LG.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            } else {
+                sel_card_btn_style(theme, status, selected)
+            }
+        });
+        if !analyzing {
+            browse = browse.on_press(Message::Flash(FlashMsg::FlashSelectBootloader));
+        }
+
+        let clear_slot: Element<'_, Message> = if selected {
+            // Same control as the Root wizard's KPM remove button: the shared
+            // lucide `minus` glyph in a neutral circular icon button.
+            m3_icon_button(icon::kpm_remove(), d.image(18.0), |theme, status| {
+                let palette = pal_of(theme);
+                button::Style {
+                    background: Some(
+                        with_alpha(palette.on_surface, 0.10 + theme::state_alpha(status)).into(),
+                    ),
+                    text_color: palette.on_surface,
+                    border: iced::Border {
+                        radius: theme::shape::FULL.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            })
+            .on_press(Message::Flash(FlashMsg::FlashClearBootloader))
+            .into()
+        } else {
+            iced::widget::Space::new()
+                .width(Length::Fixed(M3_ICON_BUTTON_SIZE))
+                .height(Length::Fixed(M3_ICON_BUTTON_SIZE))
+                .into()
+        };
+        let picker_row = row![
+            iced::widget::Space::new()
+                .width(Length::Fixed(M3_ICON_BUTTON_SIZE))
+                .height(Length::Fixed(M3_ICON_BUTTON_SIZE)),
+            browse,
+            clear_slot,
+        ]
+        .spacing(d.space(8.0))
+        .align_y(iced::Alignment::Center);
+
+        let verdict_key = if !selected {
+            "flash_bootloader_empty"
+        } else if analyzing {
+            "flash_bootloader_analyzing"
+        } else {
+            match self.flash.user_abl_key_class {
+                Some(ltbox_patch::key_map::KeyClass::Testkey) => "flash_key_testkey",
+                Some(ltbox_patch::key_map::KeyClass::Lenovo) => "flash_key_lenovo",
+                Some(ltbox_patch::key_map::KeyClass::Unknown) | None => "flash_key_unknown",
+            }
+        };
+        let valid = self.flash.user_abl_key_class == Some(ltbox_patch::key_map::KeyClass::Testkey)
+            && !analyzing;
+        let verdict = text(self.t(verdict_key).to_string())
+            .size(d.text(13.0))
+            .style(move |theme: &Theme| iced::widget::text::Style {
+                color: Some(if valid {
+                    pal_of(theme).success
+                } else if selected && !analyzing {
+                    pal_of(theme).error
+                } else {
+                    pal_of(theme).outline
+                }),
+            });
+
+        let mut content = column![picker_row, verdict]
+            .spacing(d.space(10.0))
+            .align_x(iced::Alignment::Center);
+        if let Some(path) = &self.flash.user_abl_path {
+            content = content.push(
+                text(path.clone())
+                    .size(d.text(11.0))
+                    .style(muted_style)
+                    .center()
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            );
+        }
+
+        container(content)
+            .padding(d.space(28.0))
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)

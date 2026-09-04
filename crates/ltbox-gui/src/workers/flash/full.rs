@@ -8,6 +8,8 @@ pub(crate) fn flash_worker(
     mut device_model: String,
     fw_folder: String,
     loader_override: Option<String>,
+    firmware_identity: Option<FirmwareIdentity>,
+    user_abl_path: Option<String>,
     mut rb_mode: ltbox_patch::rollback::RollbackMode,
     manual_rollback_indices: Option<ManualRollbackIndices>,
     ll: LiveLabels,
@@ -17,6 +19,13 @@ pub(crate) fn flash_worker(
     let edl_start = matches!(conn, ConnectionStatus::Edl);
     let started_in_fastboot = matches!(conn, ConnectionStatus::Fastboot);
     let fw_dir = std::path::Path::new(&fw_folder);
+    let (fw_key_class, firmware_fingerprint) = firmware_identity
+        .map(|identity| (identity.key_class, identity.fingerprint))
+        .unwrap_or((
+            ltbox_patch::key_map::KeyClass::Unknown,
+            Option::<String>::None,
+        ));
+    let user_abl = user_abl_path.map(std::path::PathBuf::from);
 
     // Phase 1/9 — Validate firmware inputs.
     live!(log, "[Flash] {}", phases.marker(1));
@@ -211,11 +220,9 @@ pub(crate) fn flash_worker(
     // 3. Scan firmware folder
     let vendor_boot = fw_dir.join("vendor_boot.img");
     let vbmeta = fw_dir.join("vbmeta.img");
-    let vbmeta_system = fw_dir.join("vbmeta_system.img");
     let boot = fw_dir.join("boot.img");
     let has_vendor_boot = vendor_boot.exists();
     let has_vbmeta = vbmeta.exists();
-    let has_vbmeta_system = vbmeta_system.exists();
     let has_boot = boot.exists();
     let found = ltbox_core::i18n::tr("live_status_found");
     let not_found = ltbox_core::i18n::tr("live_status_not_found");
@@ -265,68 +272,41 @@ pub(crate) fn flash_worker(
         );
     }
 
-    // Cross-check the firmware against the probed model before EDL via
-    // vbmeta_system's build fingerprint (the unified identity source), and retain
-    // it for SKU gates.
-    let mut firmware_fingerprint: Option<String> = None;
-    if has_vbmeta_system {
-        match ltbox_patch::avb::extract_image_avb_info(&vbmeta_system) {
-            Ok(info) => {
-                // Pull the fingerprint up-front so the SKU gate below works on
-                // EDL-start too — there `device_model` is empty and the validate
-                // path would skip without populating it.
-                let fp_prop = ltbox_patch::avb::build_fingerprint(&info);
-
-                if edl_start {
-                    firmware_fingerprint = fp_prop;
-                } else {
-                    use ltbox_patch::region::{ModelValidation, validate_device_model};
-                    match validate_device_model(&info, &device_model) {
-                        ModelValidation::Match { fingerprint } => {
-                            ltbox_core::live!(
-                                log,
-                                "[Flash] {}",
-                                ltbox_core::i18n::tr("live_rescue_model_check_ok")
-                            );
-                            firmware_fingerprint = Some(fingerprint);
-                        }
-                        ModelValidation::Missing => {
-                            ltbox_core::live!(
-                                log,
-                                "[Flash] {}",
-                                ltbox_core::i18n::tr("live_rescue_no_fingerprint_skip")
-                            );
-                            firmware_fingerprint = fp_prop;
-                        }
-                        ModelValidation::Mismatch {
-                            fingerprint,
-                            device_model,
-                        } => {
-                            ltbox_core::live!(
-                                log,
-                                "[Flash] {}",
-                                tr_args!(
-                                    "live_rescue_model_mismatch_abort",
-                                    device = device_model,
-                                    fingerprint = fingerprint
-                                )
-                            );
-                            let err = ltbox_core::i18n::tr("err_flash_model_mismatch_pre_edl");
-                            reboot_fastboot_to_system_after_pre_edl_abort(
-                                &mut log,
-                                started_in_fastboot,
-                            );
-                            return Err(err);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
+    // Cross-check the cached vbmeta_system fingerprint against the probed model
+    // before EDL. Folder-step inspection is the single firmware identity source.
+    if !edl_start {
+        match firmware_fingerprint.as_deref() {
+            None => {
                 ltbox_core::live!(
                     log,
                     "[Flash] {}",
-                    tr_args!("live_rescue_avb_inspect_skip", error = e.to_string())
+                    ltbox_core::i18n::tr("live_rescue_no_fingerprint_skip")
                 );
+            }
+            Some(fingerprint) => {
+                let normalized_model = device_model.replace(' ', "");
+                if normalized_model.is_empty()
+                    || ltbox_core::model::fingerprint_model_match(fingerprint, &normalized_model)
+                {
+                    ltbox_core::live!(
+                        log,
+                        "[Flash] {}",
+                        ltbox_core::i18n::tr("live_rescue_model_check_ok")
+                    );
+                } else {
+                    ltbox_core::live!(
+                        log,
+                        "[Flash] {}",
+                        tr_args!(
+                            "live_rescue_model_mismatch_abort",
+                            device = normalized_model,
+                            fingerprint = fingerprint
+                        )
+                    );
+                    let err = ltbox_core::i18n::tr("err_flash_model_mismatch_pre_edl");
+                    reboot_fastboot_to_system_after_pre_edl_abort(&mut log, started_in_fastboot);
+                    return Err(err);
+                }
             }
         }
     }
@@ -499,15 +479,11 @@ pub(crate) fn flash_worker(
     );
 
     // AVB root-of-trust pre-check (before region conversion, which only re-signs
-    // via testkeys in KEY_MAP). Classify the firmware via vbmeta_system's pubkey
-    // (the unified key source): an `Unknown` key aborts; a Lenovo-key
+    // via testkeys in KEY_MAP). Use the folder step's cached vbmeta_system key
+    // class (the unified key source): an `Unknown` key aborts; a Lenovo-key
     // firmware aborts on cross-region for now (same-region Lenovo-key is handled
     // after EDL opens; cross-region re-sign is a separate change). TB323FU has its
     // own region path (efisp GBL) and is exempt here.
-    let fw_key_class = match ltbox_patch::avb::extract_image_avb_info(&vbmeta_system) {
-        Ok(info) => ltbox_patch::key_map::classify_pubkey(info.public_key_sha1.as_deref()),
-        Err(_) => ltbox_patch::key_map::KeyClass::Unknown,
-    };
     if fw_key_class == ltbox_patch::key_map::KeyClass::Unknown {
         ltbox_core::live!(
             log,
@@ -875,8 +851,8 @@ pub(crate) fn flash_worker(
     }
     // Stage ARB copies; flash them after rawprogram.
     let mut arb_patched: Vec<(String, u8, std::path::PathBuf)> = Vec::new();
-    // abl (bootloader) backup to overlay-restore onto abl_a after the flash —
-    // set only for the testkey-device + Lenovo-key-firmware re-sign case below.
+    // Bootloader to overlay onto abl_a after the flash: either the device backup
+    // or the user-supplied testkey ABL selected by the wizard.
     let mut abl_restore: Option<(u8, std::path::PathBuf)> = None;
 
     // AVB root-of-trust gate (device side). The firmware vbmeta was already
@@ -904,7 +880,8 @@ pub(crate) fn flash_worker(
                 return Err(e);
             }
         };
-        match lenovo_firmware_device_policy(dev.class) {
+        let policy = lenovo_firmware_device_policy(dev.class, user_abl.is_some());
+        match policy {
             LenovoFirmwareDevicePolicy::AbortUnknown => {
                 if edl_start {
                     let _ = session.reset_to_edl(&mut log);
@@ -957,8 +934,8 @@ pub(crate) fn flash_worker(
                 rb_mode = ltbox_patch::rollback::RollbackMode::Off;
             }
             LenovoFirmwareDevicePolicy::ResignTestkey => {
-                // Testkey device + Lenovo-key firmware: re-sign the install to the
-                // RSA-4096 testkey root and preserve the device's own abl. The
+                // Testkey device (or a user-supplied testkey ABL) + Lenovo-key firmware:
+                // re-sign the install to the RSA-4096 testkey root. The
                 // vbmeta_system signer may itself be RSA-2048; it still indicates
                 // a testkey-class device whose root vbmeta trusts this re-sign.
                 // The firmware's abl would re-root the chain to the Lenovo key and
@@ -1046,15 +1023,19 @@ pub(crate) fn flash_worker(
                     overlays.insert(at, ("vendor_boot_a".to_string(), lun, vb));
                 }
                 arb_patched = overlays;
-                match backup_device_abl(&mut session, dev.slot, &arb_work_dir, &mut log) {
-                    Ok(backup) => abl_restore = Some(backup),
-                    Err(e) => {
-                        if edl_start {
-                            let _ = session.reset_to_edl(&mut log);
-                        } else {
-                            let _ = session.reset(&mut log);
+                if let Some(path) = &user_abl {
+                    abl_restore = Some((4, path.clone()));
+                } else {
+                    match backup_device_abl(&mut session, dev.slot, &arb_work_dir, &mut log) {
+                        Ok(backup) => abl_restore = Some(backup),
+                        Err(e) => {
+                            if edl_start {
+                                let _ = session.reset_to_edl(&mut log);
+                            } else {
+                                let _ = session.reset(&mut log);
+                            }
+                            return Err(e);
                         }
-                        return Err(e);
                     }
                 }
                 rb_mode = ltbox_patch::rollback::RollbackMode::Off;
@@ -1498,9 +1479,9 @@ pub(crate) fn flash_worker(
             patch = patch_xmls.len().to_string()
         )
     );
-    // ABL preservation is brick-critical once the firmware's own (Lenovo-key) abl
-    // can land: if rawprogram or an ARB overlay fails after that point, the
-    // original testkey abl must still go back, or the device is left with a
+    // The final ABL overlay is brick-critical once the firmware's own
+    // (Lenovo-key) abl can land: if rawprogram or an ARB overlay fails after that point, the
+    // selected testkey abl must still go back, or the device is left with a
     // Lenovo-key bootloader on a testkey-resigned chain. Restore best-effort on
     // those error paths (device stays in EDL for retry); the success-path
     // restore below stays fatal.
@@ -1531,9 +1512,9 @@ pub(crate) fn flash_worker(
         }
     }
 
-    // Restore the device's original bootloader on abl_a (Lenovo-key firmware
-    // re-signed for a testkey device). The firmware's own abl would re-root the
-    // chain to the Lenovo key and reject the re-signed images; a failed restore
+    // Write the selected testkey bootloader on abl_a (the device backup in the
+    // normal path, or the user's ABL override). The firmware's own abl would
+    // re-root the chain to the Lenovo key and reject the re-signed images; a failed restore
     // leaves the device in EDL rather than resetting into that mismatch.
     if let Some((lun, abl_img)) = &abl_restore {
         live!(

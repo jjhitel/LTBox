@@ -2840,6 +2840,11 @@ impl App {
     /// pre-fill a configured Settings default loader if it fits the model; the
     /// folder step otherwise requires the user to pick one before advancing.
     fn set_flash_firmware_folder(&mut self, path: String) {
+        let was_after_folder = matches!(
+            self.flash.current_step(),
+            FlashStep::Bootloader | FlashStep::Confirm
+        );
+        self.flash.reset_firmware_identity();
         // Users frequently pick the extracted firmware ROOT instead of the
         // `image` folder LTBox flashes; retarget to a direct `image/` child
         // when one exists so the common mis-selection just works.
@@ -2855,11 +2860,9 @@ impl App {
         self.flash.loader_error = None;
         self.flash.firmware_folder = Some(path.clone());
         self.flash.set_firmware_rollback_indices(&path);
-        if self.flash.step == 4
-            && self.flash.loader_required
-            && self.flash.loader_override.is_none()
+        if was_after_folder || (self.flash.loader_required && self.flash.loader_override.is_none())
         {
-            self.flash.step = 3;
+            self.flash.set_step(FlashStep::Folder);
         }
     }
 
@@ -4175,6 +4178,11 @@ mod tests {
         let mut w = FlashWizard {
             step: 4,
             firmware_folder: Some("firmware".to_string()),
+            firmware_identity: Some(FirmwareIdentity {
+                key_class: ltbox_patch::key_map::KeyClass::Testkey,
+                fingerprint: None,
+                model_token: None,
+            }),
             loader_required: true,
             ..Default::default()
         };

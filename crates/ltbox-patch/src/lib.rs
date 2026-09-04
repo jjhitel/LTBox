@@ -2,6 +2,7 @@
 //!
 //! Wraps `avbtool-rs` + `magiskboot` library APIs in-process; no subprocesses.
 
+pub mod abl_key;
 pub mod apatch;
 pub mod avb;
 pub mod boot;

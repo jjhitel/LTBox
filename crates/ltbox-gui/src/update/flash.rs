@@ -101,7 +101,7 @@ impl App {
             }
             FlashMsg::FlashNext => {
                 // Data step → build WorkflowConfig; wipe opens country popup.
-                if self.flash.step == 2 {
+                if self.flash.current_step() == FlashStep::Data {
                     self.wf_config = WorkflowConfig {
                         modify_region: self.flash.target == Some(FlashTarget::OtherRegion),
                         device_region: self.flash.device_region,
@@ -123,7 +123,34 @@ impl App {
                         return Task::none();
                     }
                 }
-                if self.flash.step == 4 {
+                if self.flash.current_step() == FlashStep::Folder {
+                    let Some(folder) = self.flash.firmware_folder.clone() else {
+                        return Task::none();
+                    };
+                    self.flash.firmware_identity = None;
+                    self.flash.firmware_identity_pending = true;
+                    self.flash.firmware_identity_dialog = None;
+                    let inspected_folder = folder.clone();
+                    return Task::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                let image = std::path::Path::new(&folder).join("vbmeta_system.img");
+                                ltbox_patch::avb::extract_image_avb_info(&image)
+                                    .map(|info| FirmwareIdentity::from_avb_info(&info))
+                                    .map_err(|error| error.to_string())
+                            })
+                            .await
+                            .unwrap_or_else(|error| Err(error.to_string()))
+                        },
+                        move |result| {
+                            Message::Flash(FlashMsg::FlashFirmwareIdentityInspected(
+                                inspected_folder,
+                                result,
+                            ))
+                        },
+                    );
+                }
+                if self.flash.current_step() == FlashStep::Confirm {
                     self.flash.next();
                     return self.update(Message::Flash(FlashMsg::FlashExecStart));
                 }
@@ -133,17 +160,19 @@ impl App {
                 // entry would fold a prior override into the baseline, so a
                 // Back→Next round trip would hide a change that Start still
                 // applies. The step-2 rebuild and exec/reset clear it again.
-                if self.flash.step == 4 && self.confirm_baseline.is_none() {
+                if self.flash.current_step() == FlashStep::Confirm
+                    && self.confirm_baseline.is_none()
+                {
                     self.confirm_baseline = Some(self.wf_config.clone());
                 }
                 Task::none()
             }
             FlashMsg::FlashBack => {
-                if self.flash.step == 4 {
+                if self.flash.current_step() == FlashStep::Confirm {
                     // Leaving confirm only closes any open editor. The baseline
                     // and picked overrides persist, so a Back→Next bounce to the
-                    // folder step keeps power-user changes visible and applied.
-                    // Going deeper to the data step rebuilds `wf_config` (and
+                    // previous input step keeps power-user changes visible and applied.
+                    // Going back through the folder to the data step rebuilds `wf_config` (and
                     // re-opens the country popup on wipe), which resets both.
                     self.confirm_edit_field = None;
                 }
@@ -182,6 +211,91 @@ impl App {
                 }
                 Task::none()
             }
+            FlashMsg::FlashFirmwareIdentityInspected(folder, result) => {
+                if self.flash.firmware_folder.as_deref() != Some(folder.as_str()) {
+                    return Task::none();
+                }
+                self.flash.firmware_identity_pending = false;
+                match result {
+                    Ok(identity) => {
+                        if !firmware_needs_bootloader_step(
+                            identity.key_class,
+                            identity.fingerprint.as_deref(),
+                        ) {
+                            self.flash.user_abl_path = None;
+                            self.flash.user_abl_key_class = None;
+                            self.flash.user_abl_analyzing = false;
+                        }
+                        self.flash.firmware_identity = Some(identity);
+                        self.flash.firmware_identity_dialog = Some(FirmwareIdentityDialog::Ready);
+                    }
+                    Err(error) => {
+                        self.flash.reset_firmware_identity();
+                        self.flash.firmware_identity_dialog = Some(FirmwareIdentityDialog::Failed(
+                            tr_args!("flash_firmware_identity_error", error = error),
+                        ));
+                    }
+                }
+                Task::none()
+            }
+            FlashMsg::FlashFirmwareIdentityDialogAction => {
+                let dialog = self.flash.firmware_identity_dialog.take();
+                if matches!(dialog, Some(FirmwareIdentityDialog::Ready))
+                    && self.flash.current_step() == FlashStep::Folder
+                {
+                    self.flash.next();
+                    if self.flash.current_step() == FlashStep::Confirm
+                        && self.confirm_baseline.is_none()
+                    {
+                        self.confirm_baseline = Some(self.wf_config.clone());
+                    }
+                }
+                Task::none()
+            }
+            FlashMsg::FlashSelectBootloader => pickers::pick_file_for(
+                pickers::FilePickSpec::single().with_filter("Bootloader ELF", &["elf"]),
+                &self.recent_paths,
+                |path| Message::Flash(FlashMsg::FlashBootloaderChosen(path)),
+            ),
+            FlashMsg::FlashBootloaderChosen(path) => {
+                let Some(path) = path else {
+                    return Task::none();
+                };
+                self.remember_recent(pickers::PickerKind::File, &path);
+                self.flash.user_abl_path = Some(path.clone());
+                self.flash.user_abl_key_class = None;
+                self.flash.user_abl_analyzing = true;
+                let analysed_path = path.clone();
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            ltbox_patch::abl_key::extract_abl_avb_pubkey_sha1(std::path::Path::new(
+                                &path,
+                            ))
+                            .map(|sha1| ltbox_patch::key_map::classify_pubkey(Some(&sha1)))
+                            .unwrap_or(ltbox_patch::key_map::KeyClass::Unknown)
+                        })
+                        .await
+                        .unwrap_or(ltbox_patch::key_map::KeyClass::Unknown)
+                    },
+                    move |key_class| {
+                        Message::Flash(FlashMsg::FlashBootloaderAnalysed(analysed_path, key_class))
+                    },
+                )
+            }
+            FlashMsg::FlashBootloaderAnalysed(path, key_class) => {
+                if self.flash.user_abl_path.as_deref() == Some(path.as_str()) {
+                    self.flash.user_abl_key_class = Some(key_class);
+                    self.flash.user_abl_analyzing = false;
+                }
+                Task::none()
+            }
+            FlashMsg::FlashClearBootloader => {
+                self.flash.user_abl_path = None;
+                self.flash.user_abl_key_class = None;
+                self.flash.user_abl_analyzing = false;
+                Task::none()
+            }
             FlashMsg::FlashExecStart => {
                 #[cfg(feature = "demo")]
                 if demo::blocks_flash_execution(self) {
@@ -194,6 +308,12 @@ impl App {
                 let device_model = self.device_model.clone();
                 let fw_folder = self.flash.firmware_folder.clone().unwrap_or_default();
                 let loader_override = self.flash.loader_override.clone();
+                let firmware_identity = self.flash.firmware_identity.clone();
+                let user_abl_path = (!self.flash.user_abl_analyzing
+                    && self.flash.user_abl_key_class
+                        == Some(ltbox_patch::key_map::KeyClass::Testkey))
+                .then(|| self.flash.user_abl_path.clone())
+                .flatten();
                 // `None` on every setting but Manual, and the worker refuses a
                 // Manual run that has no targets with a message the user can
                 // read. Bailing here instead left the phased op running with
@@ -244,6 +364,8 @@ impl App {
                                     device_model,
                                     fw_folder,
                                     loader_override,
+                                    firmware_identity,
+                                    user_abl_path,
                                     rb_mode,
                                     manual_indices,
                                     ll,

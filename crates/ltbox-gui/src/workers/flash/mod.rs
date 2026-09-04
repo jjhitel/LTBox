@@ -4,9 +4,9 @@
 //! update_flash handler.
 
 use crate::{
-    ConnectionStatus, CountryPatchProgress, LiveLabels, PhaseReporter, WorkflowConfig,
-    active_slot_suffix, build_tb323fu_arb_overlays, efisp_asset_suffix, find_firmware_loader,
-    fingerprint_token_match, is_rollback_protected_model, open_edl_session,
+    ConnectionStatus, CountryPatchProgress, FirmwareIdentity, LiveLabels, PhaseReporter,
+    WorkflowConfig, active_slot_suffix, build_tb323fu_arb_overlays, efisp_asset_suffix,
+    find_firmware_loader, fingerprint_token_match, is_rollback_protected_model, open_edl_session,
     read_device_rollback_index_via_edl, transition_to_edl,
 };
 use ltbox_core::{live, tr_args};
@@ -63,10 +63,15 @@ enum LenovoFirmwareDevicePolicy {
 /// Decide how a Lenovo-key firmware should be handled from the device's
 /// active-slot vbmeta_system key class. vbmeta_system may use either bundled
 /// testkey size while the root vbmeta still uses testkey_rsa4096, so the exact
-/// vbmeta_system key spec must not gate the testkey re-sign path.
+/// vbmeta_system key spec must not gate the testkey re-sign path. A user-supplied
+/// testkey ABL selects that path regardless of the device key class.
 fn lenovo_firmware_device_policy(
     device_vbs_class: ltbox_patch::key_map::KeyClass,
+    user_abl_supplied: bool,
 ) -> LenovoFirmwareDevicePolicy {
+    if user_abl_supplied {
+        return LenovoFirmwareDevicePolicy::ResignTestkey;
+    }
     match device_vbs_class {
         ltbox_patch::key_map::KeyClass::Unknown => LenovoFirmwareDevicePolicy::AbortUnknown,
         ltbox_patch::key_map::KeyClass::Lenovo => LenovoFirmwareDevicePolicy::KeepLenovo,
@@ -1173,7 +1178,7 @@ mod tests {
     }
 
     #[test]
-    fn lenovo_firmware_resigns_for_device_with_rsa2048_vbmeta_system() {
+    fn lenovo_firmware_policy_uses_device_key_unless_user_abl_is_supplied() {
         let rsa2048 =
             ltbox_patch::key_map::classify_pubkey(Some("cdbb77177f731920bbe0a0f94f84d9038ae0617d"));
         let rsa4096 =
@@ -1182,20 +1187,28 @@ mod tests {
             ltbox_patch::key_map::classify_pubkey(Some("8fcb864f11f53ed11284615fb67685522085d3a2"));
 
         assert_eq!(
-            lenovo_firmware_device_policy(rsa2048),
+            lenovo_firmware_device_policy(rsa2048, false),
             LenovoFirmwareDevicePolicy::ResignTestkey
         );
         assert_eq!(
-            lenovo_firmware_device_policy(rsa4096),
+            lenovo_firmware_device_policy(rsa4096, false),
             LenovoFirmwareDevicePolicy::ResignTestkey
         );
         assert_eq!(
-            lenovo_firmware_device_policy(lenovo),
+            lenovo_firmware_device_policy(lenovo, false),
             LenovoFirmwareDevicePolicy::KeepLenovo
         );
         assert_eq!(
-            lenovo_firmware_device_policy(ltbox_patch::key_map::KeyClass::Unknown),
+            lenovo_firmware_device_policy(ltbox_patch::key_map::KeyClass::Unknown, false),
             LenovoFirmwareDevicePolicy::AbortUnknown
+        );
+        assert_eq!(
+            lenovo_firmware_device_policy(ltbox_patch::key_map::KeyClass::Lenovo, true),
+            LenovoFirmwareDevicePolicy::ResignTestkey
+        );
+        assert_eq!(
+            lenovo_firmware_device_policy(ltbox_patch::key_map::KeyClass::Unknown, true),
+            LenovoFirmwareDevicePolicy::ResignTestkey
         );
     }
 }

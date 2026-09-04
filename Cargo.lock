@@ -3284,6 +3284,7 @@ dependencies = [
  "getrandom 0.4.3",
  "kptools",
  "ltbox-core",
+ "lzma-rust2",
  "magiskboot",
  "serde",
  "serde_json",
