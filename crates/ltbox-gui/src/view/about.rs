@@ -56,9 +56,17 @@ impl App {
 
         // License + disclaimer read as one fine-print footer block (tighter
         // spacing than the panel's), set apart from the main content above.
-        let license = text(format!("{}: GPL-3.0-or-later", self.t("about_license")))
-            .size(d.text(12.0))
-            .style(muted_style);
+        let license = iced::widget::rich_text([
+            iced::widget::span(format!("{}: GPL-3.0-or-later · ", self.t("about_license")))
+                .size(d.text(12.0))
+                .color(self.pal().on_surface_variant),
+            iced::widget::span(self.t("about_licenses_link").to_string())
+                .size(d.text(12.0))
+                .color(self.pal().primary)
+                .underline(true)
+                .link(()),
+        ])
+        .on_link_click(|()| Message::AboutLicensesOpen);
         let disclaimer = text(self.t("about_disclaimer").to_string())
             .size(d.text(11.0))
             .style(muted_style)

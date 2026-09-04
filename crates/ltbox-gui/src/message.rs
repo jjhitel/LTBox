@@ -16,6 +16,8 @@ pub(crate) enum Message {
     StartupDisclaimerToggled(bool),
     StartupDisclaimerConfirm,
     StartupDisclaimerExit,
+    AboutLicensesOpen,
+    AboutLicensesClose,
     Navigate(View),
     ResumeBusyOperation,
     /// Open an external URL (About panel links) in the host's default

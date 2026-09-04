@@ -47,6 +47,12 @@ impl App {
             Message::StartupDisclaimerExit => {
                 return self.update_window(WindowMsg::WindowClose);
             }
+            Message::AboutLicensesOpen => {
+                self.about_licenses_open = true;
+            }
+            Message::AboutLicensesClose => {
+                self.about_licenses_open = false;
+            }
             // Window chrome (titlebar buttons, cursor-drag move/resize,
             // persisted geometry) delegated to a focused handler so the
             // monster match in `update` doesn't have to spell every

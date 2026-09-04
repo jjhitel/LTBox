@@ -6,6 +6,85 @@ use iced::{Element, Length, Theme};
 use theme::with_alpha;
 
 impl App {
+    /// Scrollable inventory of components bundled or linked into LTBox, plus
+    /// credits for independently reimplemented interoperable formats.
+    pub(crate) fn about_licenses_dialog(&self) -> Element<'_, Message> {
+        let license_entry = |name: &'static str, license: &'static str| {
+            row![
+                text(name)
+                    .size(theme::text_size::BODY_MEDIUM)
+                    .font(theme::emphasis::medium())
+                    .width(Length::FillPortion(2)),
+                text(license)
+                    .size(theme::text_size::BODY_MEDIUM)
+                    .style(muted_style)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                    .width(Length::FillPortion(3)),
+            ]
+            .spacing(16)
+            .align_y(iced::Alignment::Start)
+        };
+
+        let licenses = column![
+            license_entry("LTBox", "GPL-3.0-or-later"),
+            license_entry(
+                "Noto Sans CJK",
+                "SIL Open Font License 1.1 — © 2014-2021 Adobe",
+            ),
+            license_entry("Lucide", "ISC"),
+            license_entry("qdl", "BSD-3-Clause — Qualcomm"),
+            license_entry("magiskboot", "GPL-3.0-or-later"),
+            license_entry("kptools", "GPL-2.0-or-later"),
+            license_entry("avbtool-rs", "Apache-2.0"),
+            text(self.t("about_licenses_other").to_string())
+                .size(theme::text_size::BODY_SMALL)
+                .style(muted_style),
+        ]
+        .spacing(10)
+        .width(Length::Fill);
+
+        let credits = column![text("KonaBess by libxzr"), text("SKRoot by abcz316")]
+            .spacing(10)
+            .width(Length::Fill);
+
+        let body = column![
+            text(self.t("about_licenses_section_licenses").to_string())
+                .size(theme::text_size::TITLE_MEDIUM)
+                .font(theme::emphasis::bold()),
+            licenses,
+            widget::rule::horizontal(1),
+            text(self.t("about_licenses_section_credits").to_string())
+                .size(theme::text_size::TITLE_MEDIUM)
+                .font(theme::emphasis::bold()),
+            credits,
+        ]
+        .spacing(14)
+        .width(Length::Fill);
+
+        let close =
+            m3_text_button(self.t("btn_close").to_string()).on_press(Message::AboutLicensesClose);
+        let actions =
+            row![Space::new().width(Length::Fill), close].align_y(iced::Alignment::Center);
+
+        let content = column![
+            text(self.t("about_licenses_title").to_string())
+                .size(theme::text_size::WIZARD_STEP_TITLE)
+                .font(theme::emphasis::bold()),
+            widget::rule::horizontal(1),
+            scrollable(body)
+                .style(m3_scrollable_style)
+                .height(Length::Fixed(420.0))
+                .width(Length::Fill),
+            widget::rule::horizontal(1),
+            actions,
+        ]
+        .spacing(14)
+        .padding(24)
+        .width(600);
+
+        m3_dialog(content.into())
+    }
+
     /// Update flow opened from the sidebar pill. Direct downloads get the
     /// verified self-updater; package-managed installs keep their command.
     pub(crate) fn update_dialog_view(&self) -> Element<'_, Message> {

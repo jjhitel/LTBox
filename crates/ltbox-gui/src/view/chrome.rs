@@ -113,6 +113,9 @@ impl App {
         if self.update_dialog_source.is_some() {
             layers.push(self.update_dialog_view());
         }
+        if self.about_licenses_open {
+            layers.push(self.about_licenses_dialog());
+        }
         let toast_layer_count = usize::from(self.toast_msg.is_some());
         if self.toast_msg.is_some() {
             layers.push(self.toast_view());

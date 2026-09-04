@@ -1758,6 +1758,8 @@ struct App {
     /// Per-launch disclaimer gate. It is deliberately absent from persisted settings.
     startup_disclaimer_open: bool,
     startup_disclaimer_checked: bool,
+    /// Session-only open state for the About screen's license inventory.
+    about_licenses_open: bool,
     root: RootWizard,
     flash: FlashWizard,
     sysupdate: SysUpdateWizard,
@@ -2059,6 +2061,7 @@ impl Default for App {
             translations,
             startup_disclaimer_open: true,
             startup_disclaimer_checked: false,
+            about_licenses_open: false,
             root: RootWizard::default(),
             flash: FlashWizard::default(),
             sysupdate: SysUpdateWizard::default(),
@@ -3740,6 +3743,18 @@ mod tests {
         ] {
             assert!(!Translations::load(language).primary.is_empty());
         }
+    }
+
+    #[test]
+    fn about_license_messages_open_and_close_the_dialog() {
+        let mut app = App::default();
+        assert!(!app.about_licenses_open);
+
+        let _ = app.update(Message::AboutLicensesOpen);
+        assert!(app.about_licenses_open);
+
+        let _ = app.update(Message::AboutLicensesClose);
+        assert!(!app.about_licenses_open);
     }
 
     #[test]
