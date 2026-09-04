@@ -812,10 +812,7 @@ fn measure_text(locale: &str, value: &str, size: f32, weight: Weight, width: Opt
     paragraph.min_bounds()
 }
 
-fn localized_copy<'a>(
-    table: &'a BTreeMap<String, String>,
-    source: CopySource,
-) -> (&'static str, &'a str) {
+fn localized_copy(table: &BTreeMap<String, String>, source: CopySource) -> (&'static str, &str) {
     match source {
         CopySource::Key(key) => (
             key,
