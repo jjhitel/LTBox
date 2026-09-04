@@ -199,8 +199,8 @@ impl App {
             vec![
                 info_kv_center(self.t("konabess_confirm_chip"), chip),
                 info_kv_center(self.t("konabess_table_target"), &target),
-                info_kv_center(self.t("konabess_confirm_device_shape"), &stock_shape),
-                info_kv_center(self.t("konabess_confirm_edited_shape"), &edited_shape),
+                info_kv_center(self.t("konabess_confirm_device_values"), &stock_shape),
+                info_kv_center(self.t("konabess_confirm_edited_values"), &edited_shape),
                 info_kv_center(self.t("konabess_confirm_changes"), change_state),
             ],
             vec![

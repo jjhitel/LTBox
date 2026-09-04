@@ -122,10 +122,7 @@ pub(crate) fn flash_parts_scan(
     ltbox_core::live!(
         log,
         "[FlashParts] {}",
-        tr_args!(
-            "live_dumpparts_scan_complete",
-            count = rows.len().to_string()
-        )
+        tr_args!("live_parts_scan_complete", count = rows.len().to_string())
     );
     FlashPartsScanResult {
         logs: log,
@@ -400,10 +397,7 @@ pub(crate) fn dump_parts_scan(conn: ConnectionStatus, loader_path: String) -> Du
     ltbox_core::live!(
         log,
         "[DumpParts] {}",
-        tr_args!(
-            "live_dumpparts_scan_complete",
-            count = rows.len().to_string()
-        )
+        tr_args!("live_parts_scan_complete", count = rows.len().to_string())
     );
     DumpPartsScanResult {
         logs: log,

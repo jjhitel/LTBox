@@ -322,14 +322,11 @@ pub(crate) fn sysupdate_worker(
                         }
                         use ltbox_patch::region::{ModelValidation, validate_device_model};
                         match validate_device_model(&info, &device_model) {
-                            ModelValidation::Match { fingerprint } => {
+                            ModelValidation::Match { .. } => {
                                 ltbox_core::live!(
                                     log,
                                     "[Rescue] {}",
-                                    tr_args!(
-                                        "live_rescue_model_check_ok",
-                                        fingerprint = fingerprint
-                                    )
+                                    ltbox_core::i18n::tr("live_rescue_model_check_ok")
                                 );
                             }
                             ModelValidation::Missing => {
@@ -513,11 +510,7 @@ pub(crate) fn sysupdate_worker(
                     ltbox_core::live!(
                         log,
                         "[Rescue] {}",
-                        tr_args!(
-                            "live_rescue_no_testkey",
-                            slot = slot,
-                            path = loader_dir.display().to_string()
-                        )
+                        tr_args!("live_rescue_no_testkey", slot = slot)
                     );
                     continue;
                 };
