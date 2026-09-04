@@ -7,6 +7,9 @@ use iced::font::Weight;
 use iced::{Font, Pixels, Size, alignment};
 
 #[path = "../src/layout_constraints.rs"]
+// Production consumes every budget in this module; the guard only reads the
+// ones it measures, so its view of the module is legitimately partial.
+#[allow(dead_code)]
 mod layout_constraints;
 use layout_constraints::*;
 
@@ -927,7 +930,7 @@ fn bundled_locale_copy_fits_constrained_layout_slots() {
                     let row_width = WIZARD_LIST_MAX_WIDTH - 2.0 * WIZARD_STEP_HORIZONTAL_PADDING;
                     let text_width_limit = row_width
                         - 2.0 * WIZARD_LIST_HORIZONTAL_PADDING
-                        - WIZARD_LIST_ICON_SIZE
+                        - WIZARD_LIST_GLYPH_ICON_SIZE
                         - WIZARD_LIST_ICON_GAP;
                     let text_height_limit =
                         WIZARD_LIST_CARD_HEIGHT - 2.0 * WIZARD_LIST_VERTICAL_PADDING;

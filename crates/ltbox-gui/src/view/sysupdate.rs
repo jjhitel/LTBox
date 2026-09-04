@@ -96,7 +96,7 @@ impl App {
 
     pub(crate) fn sysupdate_action_step(&self) -> Element<'_, Message> {
         let d = self.density();
-        let icon_size = self.wizard_list_icon(WIZARD_LIST_ICON_SIZE);
+        let icon_size = self.wizard_list_icon(WIZARD_LIST_GLYPH_ICON_SIZE);
         let metrics = self.wizard_list_metrics(WIZARD_LIST_LABEL_SIZE, WIZARD_LIST_DESC_SIZE);
         let off_icon = lucide_list_primary(icon::tile_update_off(), icon_size);
         let on_icon = lucide_list_primary(icon::tile_update_on(), icon_size);

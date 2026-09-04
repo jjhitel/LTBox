@@ -20,6 +20,10 @@ pub(crate) const WIZARD_CARD_SQUARE_SUB_HEIGHT: f32 = 60.0;
 pub(crate) const WIZARD_LIST_CARD_HEIGHT: f32 = 72.0;
 pub(crate) const WIZARD_LIST_MAX_WIDTH: f32 = 620.0;
 pub(crate) const WIZARD_LIST_ICON_SIZE: f32 = 44.0;
+/// List-row icon size for Lucide glyphs. A stroke glyph fills its em box, so it
+/// reads much heavier than a brand logo at the same size; glyph rows use this
+/// while logo rows use `WIZARD_LIST_ICON_SIZE`.
+pub(crate) const WIZARD_LIST_GLYPH_ICON_SIZE: f32 = 32.0;
 pub(crate) const WIZARD_LIST_LABEL_SIZE: f32 = 16.0;
 pub(crate) const WIZARD_LIST_DESC_SIZE: f32 = 12.0;
 pub(crate) const WIZARD_LIST_VERTICAL_PADDING: f32 = 10.0;

@@ -10,7 +10,7 @@ impl App {
     pub(crate) fn view_reboot(&self) -> Element<'_, Message> {
         let d = self.density();
         let conn = self.connection;
-        let icon_size = self.wizard_list_icon(32.0);
+        let icon_size = self.wizard_list_icon(WIZARD_LIST_GLYPH_ICON_SIZE);
         let (label_size, desc_size) = self.wizard_list_text(18.0, 12.0);
         let row_height = self.wizard_list_row_height();
         // Disabled cards: M3 tokens (12% surface alpha, 38% text alpha).
