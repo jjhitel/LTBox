@@ -54,28 +54,18 @@ impl App {
         .spacing(d.space(12.0))
         .align_y(iced::Alignment::Center);
 
-        // License + disclaimer read as one fine-print footer block (tighter
-        // spacing than the panel's), set apart from the main content above.
-        let license = iced::widget::rich_text([
-            iced::widget::span(format!("{}: GPL-3.0-or-later · ", self.t("about_license")))
-                .size(d.text(12.0))
-                .color(self.pal().on_surface_variant),
-            iced::widget::span(self.t("about_licenses_link").to_string())
-                .size(d.text(12.0))
-                .color(self.pal().primary)
-                .underline(true)
-                .link(()),
-        ])
+        // Fine-print footer. The dialog behind the link opens with LTBox's own
+        // license, so naming it out here as well would only repeat it.
+        let licenses_link = iced::widget::rich_text([iced::widget::span(
+            self.t("about_licenses_link").to_string(),
+        )
+        .size(d.text(12.0))
+        .color(self.pal().primary)
+        .underline(true)
+        .link(())])
         .on_link_click(|()| Message::AboutLicensesOpen);
-        let disclaimer = text(self.t("about_disclaimer").to_string())
-            .size(d.text(11.0))
-            .style(muted_style)
-            .center();
-        let footer = column![license, disclaimer]
-            .spacing(d.space(4.0))
-            .align_x(iced::Alignment::Center);
 
-        let col = column![app_icon, title, description, version, links, footer]
+        let col = column![app_icon, title, description, version, links, licenses_link]
             .spacing(d.space(14.0))
             .align_x(iced::Alignment::Center);
 
