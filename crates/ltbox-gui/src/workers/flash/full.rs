@@ -500,9 +500,9 @@ pub(crate) fn flash_worker(
 
     // AVB root-of-trust pre-check (before region conversion, which only re-signs
     // via testkeys in KEY_MAP). Classify the firmware via vbmeta_system's pubkey
-    // (the unified key source): an `Unknown` key aborts; a fixed-key ("key2")
-    // firmware aborts on cross-region for now (same-region key2 is handled after
-    // EDL opens; cross-region key2 re-sign is a separate change). TB323FU has its
+    // (the unified key source): an `Unknown` key aborts; a Lenovo-key
+    // firmware aborts on cross-region for now (same-region Lenovo-key is handled
+    // after EDL opens; cross-region re-sign is a separate change). TB323FU has its
     // own region path (efisp GBL) and is exempt here.
     let fw_key_class = match ltbox_patch::avb::extract_image_avb_info(&vbmeta_system) {
         Ok(info) => ltbox_patch::key_map::classify_pubkey(info.public_key_sha1.as_deref()),
@@ -517,16 +517,16 @@ pub(crate) fn flash_worker(
         reboot_fastboot_to_system_after_pre_edl_abort(&mut log, started_in_fastboot);
         return Err(ltbox_core::i18n::tr("err_flash_vbmeta_key_unknown"));
     }
-    // 4. Region conversion. Skipped for a fixed-key ("key2") firmware: its
+    // 4. Region conversion. Skipped for a Lenovo-key firmware: its
     //    vbmeta isn't in KEY_MAP, so the standard (testkey) converter cannot
-    //    re-sign it. Cross-region key2 is handled after EDL opens, where the
+    //    re-sign it. Cross-region Lenovo-key is handled after EDL opens, where the
     //    device key class decides between a testkey re-sign + conversion
-    //    (testkey device) or an abort (fixed device).
+    //    (testkey device) or an abort (Lenovo-key device).
     let mut region_pair: Option<ltbox_patch::region::RegionAvbOutput> = None;
     if cfg.modify_region
         && !tb323fu_skip_region
         && !xiaoxin_skip_region
-        && fw_key_class != ltbox_patch::key_map::KeyClass::Fixed
+        && fw_key_class != ltbox_patch::key_map::KeyClass::Lenovo
     {
         if has_vendor_boot && has_vbmeta {
             ltbox_core::live!(log, "[Region] {}", ltbox_core::i18n::tr("live_region_on"));
@@ -842,7 +842,7 @@ pub(crate) fn flash_worker(
     }
 
     // TB376FC/TB390FU require a dedicated fail-closed comparison before the
-    // fixed-key device gate so every unsafe or unreadable case reboots to system.
+    // Lenovo-key device gate so every unsafe or unreadable case reboots to system.
     if xiaoxin_pro13_flash {
         let firmware_indices = match (
             ltbox_patch::avb::extract_image_avb_info(&fw_dir.join("boot.img")),
@@ -876,18 +876,18 @@ pub(crate) fn flash_worker(
     // Stage ARB copies; flash them after rawprogram.
     let mut arb_patched: Vec<(String, u8, std::path::PathBuf)> = Vec::new();
     // abl (bootloader) backup to overlay-restore onto abl_a after the flash —
-    // set only for the testkey-device + fixed-firmware re-sign case below.
+    // set only for the testkey-device + Lenovo-key-firmware re-sign case below.
     let mut abl_restore: Option<(u8, std::path::PathBuf)> = None;
 
     // AVB root-of-trust gate (device side). The firmware vbmeta was already
     // classified (`fw_key_class`): `Unknown` aborted before region conversion;
-    // `Testkey` firmware and a `Fixed` firmware on TB323FU take their existing
-    // paths. Here a `Fixed` ("key2") firmware on any other model classifies the
-    // device's active-slot vbmeta and either proceeds as-is (fixed device, same
+    // `Testkey` firmware and a `Lenovo` firmware on TB323FU take their existing
+    // paths. Here a `Lenovo` firmware on any other model classifies the
+    // device's active-slot vbmeta and either proceeds as-is (Lenovo-key device, same
     // region, no downgrade), re-signs to the testkey + preserves the device
     // bootloader (testkey device — including a cross-region convert-then-resign),
-    // or aborts (fixed device cross-region/downgrade, or unknown device key).
-    if fw_key_class == ltbox_patch::key_map::KeyClass::Fixed && !target_is_tb323fu {
+    // or aborts (Lenovo-key device cross-region/downgrade, or unknown device key).
+    if fw_key_class == ltbox_patch::key_map::KeyClass::Lenovo && !target_is_tb323fu {
         let kc_dir = ltbox_core::app_paths::work_dir_for("flash_keyclass");
         let _ = std::fs::remove_dir_all(&kc_dir);
         std::fs::create_dir_all(&kc_dir)
@@ -904,8 +904,8 @@ pub(crate) fn flash_worker(
                 return Err(e);
             }
         };
-        match fixed_firmware_device_policy(dev.class) {
-            FixedFirmwareDevicePolicy::AbortUnknown => {
+        match lenovo_firmware_device_policy(dev.class) {
+            LenovoFirmwareDevicePolicy::AbortUnknown => {
                 if edl_start {
                     let _ = session.reset_to_edl(&mut log);
                 } else {
@@ -913,8 +913,8 @@ pub(crate) fn flash_worker(
                 }
                 return Err(ltbox_core::i18n::tr("err_flash_device_key_unknown"));
             }
-            FixedFirmwareDevicePolicy::KeepFixed => {
-                // Fixed device + fixed firmware: the bootloader enforces rollback.
+            LenovoFirmwareDevicePolicy::KeepLenovo => {
+                // Lenovo-key device + Lenovo-key firmware: the bootloader enforces rollback.
                 // Other models still reject region conversion; TB376FC/TB390FU
                 // flash the selected package as-is and store identity in proinfo.
                 let fw_boot_idx = ltbox_patch::avb::extract_image_avb_info(&boot)
@@ -933,7 +933,7 @@ pub(crate) fn flash_worker(
                     }
                     // Same cause as an unresolvable signing key: this device
                     // is on firmware that closed the test-key hole.
-                    return Err(ltbox_core::i18n::tr("err_device_key_fixed"));
+                    return Err(ltbox_core::i18n::tr("err_device_key_lenovo"));
                 }
                 // Manual indexes would have to be written into the images, and
                 // rewriting one invalidates its LenovoRSA signature that this
@@ -946,27 +946,27 @@ pub(crate) fn flash_worker(
                         let _ = session.reset(&mut log);
                     }
                     return Err(ltbox_core::i18n::tr(
-                        "err_flash_rollback_manual_device_key_fixed",
+                        "err_flash_rollback_manual_device_key_lenovo",
                     ));
                 }
                 ltbox_core::live!(
                     log,
                     "[AVB] {}",
-                    ltbox_core::i18n::tr("live_flash_key2_proceed")
+                    ltbox_core::i18n::tr("live_flash_lenovo_key_proceed")
                 );
                 rb_mode = ltbox_patch::rollback::RollbackMode::Off;
             }
-            FixedFirmwareDevicePolicy::ResignTestkey => {
-                // Testkey device + fixed firmware: re-sign the install to the
+            LenovoFirmwareDevicePolicy::ResignTestkey => {
+                // Testkey device + Lenovo-key firmware: re-sign the install to the
                 // RSA-4096 testkey root and preserve the device's own abl. The
                 // vbmeta_system signer may itself be RSA-2048; it still indicates
                 // a testkey-class device whose root vbmeta trusts this re-sign.
-                // The firmware's abl would re-root the chain to the fixed key and
+                // The firmware's abl would re-root the chain to the Lenovo key and
                 // reject the re-signed images.
                 ltbox_core::live!(
                     log,
                     "[AVB] {}",
-                    ltbox_core::i18n::tr("live_flash_key2_resign")
+                    ltbox_core::i18n::tr("live_flash_lenovo_key_resign")
                 );
                 let arb_work_dir = ltbox_core::app_paths::work_dir_for("flash_arb");
                 let _ = std::fs::remove_dir_all(&arb_work_dir);
@@ -1498,10 +1498,10 @@ pub(crate) fn flash_worker(
             patch = patch_xmls.len().to_string()
         )
     );
-    // ABL preservation is brick-critical once the firmware's own (fixed-key) abl
+    // ABL preservation is brick-critical once the firmware's own (Lenovo-key) abl
     // can land: if rawprogram or an ARB overlay fails after that point, the
     // original testkey abl must still go back, or the device is left with a
-    // fixed-key bootloader on a testkey-resigned chain. Restore best-effort on
+    // Lenovo-key bootloader on a testkey-resigned chain. Restore best-effort on
     // those error paths (device stays in EDL for retry); the success-path
     // restore below stays fatal.
     if let Err(e) = session.flash_rawprogram_with_wipe(&raw_xmls, &patch_xmls, cfg.wipe, &mut log) {
@@ -1531,9 +1531,9 @@ pub(crate) fn flash_worker(
         }
     }
 
-    // Restore the device's original bootloader on abl_a (testkey-fixed firmware
+    // Restore the device's original bootloader on abl_a (Lenovo-key firmware
     // re-signed for a testkey device). The firmware's own abl would re-root the
-    // chain to the fixed key and reject the re-signed images; a failed restore
+    // chain to the Lenovo key and reject the re-signed images; a failed restore
     // leaves the device in EDL rather than resetting into that mismatch.
     if let Some((lun, abl_img)) = &abl_restore {
         live!(

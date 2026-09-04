@@ -54,23 +54,23 @@ fn reboot_fastboot_to_system_after_pre_edl_abort(log: &mut Vec<String>, started_
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FixedFirmwareDevicePolicy {
+enum LenovoFirmwareDevicePolicy {
     AbortUnknown,
-    KeepFixed,
+    KeepLenovo,
     ResignTestkey,
 }
 
-/// Decide how a fixed-key ("key2") firmware should be handled from the device's
+/// Decide how a Lenovo-key firmware should be handled from the device's
 /// active-slot vbmeta_system key class. vbmeta_system may use either bundled
 /// testkey size while the root vbmeta still uses testkey_rsa4096, so the exact
 /// vbmeta_system key spec must not gate the testkey re-sign path.
-fn fixed_firmware_device_policy(
+fn lenovo_firmware_device_policy(
     device_vbs_class: ltbox_patch::key_map::KeyClass,
-) -> FixedFirmwareDevicePolicy {
+) -> LenovoFirmwareDevicePolicy {
     match device_vbs_class {
-        ltbox_patch::key_map::KeyClass::Unknown => FixedFirmwareDevicePolicy::AbortUnknown,
-        ltbox_patch::key_map::KeyClass::Fixed => FixedFirmwareDevicePolicy::KeepFixed,
-        ltbox_patch::key_map::KeyClass::Testkey => FixedFirmwareDevicePolicy::ResignTestkey,
+        ltbox_patch::key_map::KeyClass::Unknown => LenovoFirmwareDevicePolicy::AbortUnknown,
+        ltbox_patch::key_map::KeyClass::Lenovo => LenovoFirmwareDevicePolicy::KeepLenovo,
+        ltbox_patch::key_map::KeyClass::Testkey => LenovoFirmwareDevicePolicy::ResignTestkey,
     }
 }
 
@@ -370,7 +370,7 @@ fn read_device_vbmeta(
 
     // Device key class from the active-slot vbmeta_system pubkey. Do not retain
     // its exact testkey spec: vbmeta_system may use RSA-2048 while root vbmeta
-    // uses RSA-4096, and fixed-firmware re-sign targets that RSA-4096 root.
+    // uses RSA-4096, and Lenovo-key-firmware re-sign targets that RSA-4096 root.
     let active_info = vbs_info[active]
         .as_ref()
         .ok_or_else(|| format!("device vbmeta_system{slot} AVB unreadable"))?;
@@ -415,9 +415,9 @@ fn backup_device_abl(
 }
 
 /// Best-effort restore of the backed-up device `abl` onto `abl_a` for the flash
-/// error paths: once the firmware's own (fixed-key) abl may have been written,
+/// error paths: once the firmware's own (Lenovo-key) abl may have been written,
 /// the original testkey abl must go back even on failure, or the device is left
-/// with a fixed-key bootloader on a testkey-resigned chain. Failures here are
+/// with a Lenovo-key bootloader on a testkey-resigned chain. Failures here are
 /// logged and swallowed — the caller is already returning an error and leaves
 /// the device in EDL for retry.
 fn restore_abl_best_effort(
@@ -1036,7 +1036,7 @@ pub(crate) use simple::simple_flash_worker;
 #[cfg(test)]
 mod tests {
     use super::{
-        FixedFirmwareDevicePolicy, ZSTD_FREE_SPACE_RESERVE_BYTES, fixed_firmware_device_policy,
+        LenovoFirmwareDevicePolicy, ZSTD_FREE_SPACE_RESERVE_BYTES, lenovo_firmware_device_policy,
         require_firmware_loader, should_reboot_fastboot_to_system_after_pre_edl_abort,
         stream_zstd_decoder, zstd_output_limit,
     };
@@ -1173,29 +1173,29 @@ mod tests {
     }
 
     #[test]
-    fn fixed_firmware_resigns_for_device_with_rsa2048_vbmeta_system() {
+    fn lenovo_firmware_resigns_for_device_with_rsa2048_vbmeta_system() {
         let rsa2048 =
             ltbox_patch::key_map::classify_pubkey(Some("cdbb77177f731920bbe0a0f94f84d9038ae0617d"));
         let rsa4096 =
             ltbox_patch::key_map::classify_pubkey(Some("2597c218aae470a130f61162feaae70afd97f011"));
-        let key2 =
+        let lenovo =
             ltbox_patch::key_map::classify_pubkey(Some("8fcb864f11f53ed11284615fb67685522085d3a2"));
 
         assert_eq!(
-            fixed_firmware_device_policy(rsa2048),
-            FixedFirmwareDevicePolicy::ResignTestkey
+            lenovo_firmware_device_policy(rsa2048),
+            LenovoFirmwareDevicePolicy::ResignTestkey
         );
         assert_eq!(
-            fixed_firmware_device_policy(rsa4096),
-            FixedFirmwareDevicePolicy::ResignTestkey
+            lenovo_firmware_device_policy(rsa4096),
+            LenovoFirmwareDevicePolicy::ResignTestkey
         );
         assert_eq!(
-            fixed_firmware_device_policy(key2),
-            FixedFirmwareDevicePolicy::KeepFixed
+            lenovo_firmware_device_policy(lenovo),
+            LenovoFirmwareDevicePolicy::KeepLenovo
         );
         assert_eq!(
-            fixed_firmware_device_policy(ltbox_patch::key_map::KeyClass::Unknown),
-            FixedFirmwareDevicePolicy::AbortUnknown
+            lenovo_firmware_device_policy(ltbox_patch::key_map::KeyClass::Unknown),
+            LenovoFirmwareDevicePolicy::AbortUnknown
         );
     }
 }

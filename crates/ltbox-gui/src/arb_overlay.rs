@@ -145,7 +145,7 @@ pub(crate) fn provision_tb323fu_efisp(
 pub(crate) type ArbOverlay = (String, u8, std::path::PathBuf);
 
 /// Testkey re-sign overlays for an AVB flash — used by the TB323FU anti-rollback
-/// path and the non-TB323FU key2 / cross-region re-sign. The device-committed
+/// path and the non-TB323FU Lenovo-key / cross-region re-sign. The device-committed
 /// boot + vbmeta_system indices come from `device_floors` (component-wise across
 /// both slots on EDL-start) or are read from the active slot here.
 ///
@@ -156,12 +156,12 @@ pub(crate) type ArbOverlay = (String, u8, std::path::PathBuf);
 /// floor (`max`, never lowered); other chained partitions (e.g. recovery) are
 /// re-signed only; the vbmeta is rebuilt with selected chain partition descriptor
 /// public keys updated to the testkey and flashed LAST (it ties the chain
-/// together — shrinks the partial-write brick window). For a key2 cross-region
+/// together — shrinks the partial-write brick window). For a Lenovo-key cross-region
 /// install, `vbmeta_base` overrides the rebuild base with the region-converted,
 /// testkey vbmeta so its recomputed vendor_boot hash is preserved; otherwise it
 /// uses the firmware's own `vbmeta.img`.
 ///
-/// `force_resign` re-signs even without a downgrade (key2 firmware on a testkey
+/// `force_resign` re-signs even without a downgrade (Lenovo-key firmware on a testkey
 /// device). Returns `(overlays, need)`; `need` is the downgrade flag — the
 /// TB323FU caller swaps the efisp GBL to its `_arb` (testkey-root) variant.
 #[allow(clippy::too_many_arguments)]
@@ -328,7 +328,7 @@ pub(crate) fn build_tb323fu_arb_overlays(
     let boot_target = inst_boot_idx.max(dev_boot_idx);
     let vbs_target = inst_vbs_idx.max(dev_vbs_idx);
     // Re-sign with the testkey's OWN algorithm (derived from KEY), not the source
-    // image's: a key2 image may use a different RSA size, which avbtool would
+    // image's: a Lenovo-key image may use a different RSA size, which avbtool would
     // reject against the testkey.
     let key_algo = ltbox_patch::avb::algorithm_for_key_spec(KEY)
         .ok_or_else(|| format!("unknown AVB algorithm for {KEY}"))?;
