@@ -165,7 +165,7 @@ pub(crate) fn fastboot_reboot_then_adb_edl(tag: &str, log: &mut Vec<String>) -> 
             ltbox_core::live!(
                 log,
                 "[{tag}] {}",
-                tr_args!("live_fastboot_open_failed", error = e.to_string())
+                tr_args!("err_fastboot_open_failed", error = e.to_string())
             );
             return wait_for_manual_edl(tag, log);
         }

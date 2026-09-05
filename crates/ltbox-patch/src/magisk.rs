@@ -318,7 +318,7 @@ pub fn patch_root_image(
             "magiskboot repack produced no new-boot.img".into(),
         ));
     }
-    ltbox_core::live!(log, "[Magisk] {}", tr("log_magisk_patch_complete"));
+    ltbox_core::live!(log, "[Magisk] {}", tr("log_patch_complete"));
     Ok(new_boot)
 }
 

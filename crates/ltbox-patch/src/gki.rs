@@ -125,7 +125,7 @@ pub fn patch_boot(work_dir: &Path, kernel_src: &Path, log: &mut Vec<String>) -> 
             "magiskboot repack produced no new-boot.img".into(),
         ));
     }
-    ltbox_core::live!(log, "[GKI] {}", tr("log_gki_patch_complete"));
+    ltbox_core::live!(log, "[GKI] {}", tr("log_patch_complete"));
     Ok(new_boot)
 }
 

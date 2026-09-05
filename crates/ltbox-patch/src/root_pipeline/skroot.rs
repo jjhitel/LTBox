@@ -64,7 +64,7 @@ pub fn patch_boot(work_dir: &Path, log: &mut Vec<String>) -> Result<PathBuf> {
             "magiskboot repack produced no new-boot.img".into(),
         ));
     }
-    ltbox_core::live!(log, "[SKRoot] {}", tr("log_skroot_patch_complete"));
+    ltbox_core::live!(log, "[SKRoot] {}", tr("log_patch_complete"));
     Ok(new_boot)
 }
 

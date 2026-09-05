@@ -514,7 +514,7 @@ pub(crate) fn root_worker(
                 // the device is still in Firehose.
                 session
                     .reset_to_edl(&mut log)
-                    .map_err(|e| tr_args!("err_root_reset_to_edl_failed", error = e))?;
+                    .map_err(|e| tr_args!("err_reboot_edl_reset_failed", error = e))?;
                 live!(log, "[EDL] {}", ll.closing_dump);
                 // Drop session — serial port closes so
                 // the post-patch open gets a fresh handle.

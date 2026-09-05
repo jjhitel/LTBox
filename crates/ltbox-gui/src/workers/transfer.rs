@@ -84,8 +84,8 @@ pub(crate) fn flash_parts_scan(
         conn,
         &loader_path,
         "FlashParts",
-        "live_flashparts_edl_open_failed",
-        "live_flashparts_scan_failed",
+        "err_edl_session_open_failed",
+        "err_parts_scan_failed",
         &mut log,
     ) {
         Ok(v) => v,
@@ -225,7 +225,7 @@ pub(crate) fn flash_parts_execute(
             ltbox_core::live!(
                 log,
                 "[FlashParts] {}",
-                tr_args!("live_flashparts_edl_open_failed", error = e.to_string())
+                tr_args!("err_edl_session_open_failed", error = e.to_string())
             );
             ltbox_core::live!(
                 log,
@@ -338,14 +338,10 @@ pub(crate) fn flash_parts_execute(
     ltbox_core::live!(
         log,
         "[FlashParts] {}",
-        ltbox_core::i18n::tr("live_flashparts_resetting")
+        ltbox_core::i18n::tr("live_resetting_system")
     );
     session.reset_tolerant(&mut log);
-    ltbox_core::live!(
-        log,
-        "[FlashParts] {}",
-        ltbox_core::i18n::tr("live_flashparts_done")
-    );
+    ltbox_core::live!(log, "[FlashParts] {}", ltbox_core::i18n::tr("live_op_done"));
     Ok(log)
 }
 
@@ -358,8 +354,8 @@ pub(crate) fn dump_parts_scan(conn: ConnectionStatus, loader_path: String) -> Du
         conn,
         &loader_path,
         "DumpParts",
-        "live_dumpparts_edl_open_failed",
-        "live_dumpparts_scan_failed",
+        "err_edl_session_open_failed",
+        "err_parts_scan_failed",
         &mut log,
     ) {
         Ok(v) => v,
@@ -525,7 +521,7 @@ pub(crate) fn dump_parts_execute(
     let mut session = match ltbox_device::edl::EdlSession::open(&loader, &mut log) {
         Ok(s) => s,
         Err(e) => {
-            let msg = tr_args!("live_dumpparts_edl_open_failed", error = e.to_string());
+            let msg = tr_args!("err_edl_session_open_failed", error = e.to_string());
             ltbox_core::live!(log, "[DumpParts] {msg}");
             flush_worker_logs(&mut log);
             return Err(msg);
@@ -615,7 +611,7 @@ pub(crate) fn dump_parts_execute(
     ltbox_core::live!(
         log,
         "[DumpParts] {}",
-        ltbox_core::i18n::tr("live_dumpparts_resetting")
+        ltbox_core::i18n::tr("live_resetting_system")
     );
     session.reset_tolerant(&mut log);
     // Surface critical/partial failures after reset so the UI can fail the
@@ -625,11 +621,7 @@ pub(crate) fn dump_parts_execute(
         flush_worker_logs(&mut log);
         return Err(err);
     }
-    ltbox_core::live!(
-        log,
-        "[DumpParts] {}",
-        ltbox_core::i18n::tr("live_dumpparts_done")
-    );
+    ltbox_core::live!(log, "[DumpParts] {}", ltbox_core::i18n::tr("live_op_done"));
     Ok(log)
 }
 
@@ -668,7 +660,7 @@ pub(crate) fn dump_physical_execute(
     let mut session = match ltbox_device::edl::EdlSession::open(&loader, &mut log) {
         Ok(s) => s,
         Err(e) => {
-            let msg = tr_args!("live_dump_phys_edl_open_failed", error = e.to_string());
+            let msg = tr_args!("err_edl_session_open_failed", error = e.to_string());
             ltbox_core::live!(log, "[DumpPhys] {msg}");
             flush_worker_logs(&mut log);
             return Err(msg);
@@ -717,7 +709,7 @@ pub(crate) fn dump_physical_execute(
     ltbox_core::live!(
         log,
         "[DumpPhys] {}",
-        ltbox_core::i18n::tr("live_dump_phys_resetting_system")
+        ltbox_core::i18n::tr("live_resetting_system")
     );
     session.reset_tolerant(&mut log);
     if !failure_msgs.is_empty() {
@@ -726,11 +718,7 @@ pub(crate) fn dump_physical_execute(
         flush_worker_logs(&mut log);
         return Err(err);
     }
-    ltbox_core::live!(
-        log,
-        "[DumpPhys] {}",
-        ltbox_core::i18n::tr("live_dump_phys_done")
-    );
+    ltbox_core::live!(log, "[DumpPhys] {}", ltbox_core::i18n::tr("live_op_done"));
     flush_worker_logs(&mut log);
     Ok(log)
 }
@@ -764,7 +752,7 @@ pub(crate) fn flash_physical_execute(
             ltbox_core::live!(
                 log,
                 "[FlashPhys] {}",
-                tr_args!("live_flashphys_edl_open_failed", error = e.to_string())
+                tr_args!("err_edl_session_open_failed", error = e.to_string())
             );
             ltbox_core::live!(
                 log,
@@ -824,14 +812,10 @@ pub(crate) fn flash_physical_execute(
     ltbox_core::live!(
         log,
         "[FlashPhys] {}",
-        ltbox_core::i18n::tr("live_flashphys_resetting")
+        ltbox_core::i18n::tr("live_resetting_system")
     );
     session.reset_tolerant(&mut log);
-    ltbox_core::live!(
-        log,
-        "[FlashPhys] {}",
-        ltbox_core::i18n::tr("live_flashphys_done")
-    );
+    ltbox_core::live!(log, "[FlashPhys] {}", ltbox_core::i18n::tr("live_op_done"));
     Ok(log)
 }
 

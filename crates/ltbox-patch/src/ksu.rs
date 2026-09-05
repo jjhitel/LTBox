@@ -83,6 +83,6 @@ pub fn patch_root_image(
             "magiskboot repack produced no new-boot.img".into(),
         ));
     }
-    ltbox_core::live!(log, "[KSU] {}", tr("log_ksu_patch_complete"));
+    ltbox_core::live!(log, "[KSU] {}", tr("log_patch_complete"));
     Ok(new_boot)
 }

@@ -47,7 +47,7 @@ fn reboot_fastboot_to_system_after_pre_edl_abort(log: &mut Vec<String>, started_
             ltbox_core::live!(
                 log,
                 "[Fastboot] {}",
-                tr_args!("live_fastboot_open_failed", error = e.to_string())
+                tr_args!("err_fastboot_open_failed", error = e.to_string())
             );
         }
     }
