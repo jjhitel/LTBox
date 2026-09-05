@@ -85,33 +85,150 @@ pub(crate) fn prepare_tb323fu_efisp(
         }
     };
     let suffix = efisp_asset_suffix(is_prc, false);
+    fetch_efisp_asset(suffix, efi_dir, "[Root]", log).map(Some)
+}
+
+/// Download the pinned efisp GBL for `suffix` into `efi_dir` and verify it.
+///
+/// Every caller writes the result to the device's `efisp` partition, so the
+/// release tag is pinned, the asset name must be one of a fixed set, and the
+/// bytes are SHA-256 checked before the path is handed back. The Flash path
+/// grew those three guards first; Root and KonaBess reached the same partition
+/// through a copy that floated on `latest` and verified nothing.
+pub(crate) fn fetch_efisp_asset(
+    suffix: &str,
+    efi_dir: &std::path::Path,
+    log_tag: &str,
+    log: &mut Vec<String>,
+) -> std::result::Result<std::path::PathBuf, String> {
+    let expected_name = efisp_expected_asset(suffix).ok_or_else(|| {
+        tr_args!(
+            "err_efisp_asset_unknown",
+            asset = suffix,
+            tag = EFISP_GBL_RELEASE_TAG
+        )
+    })?;
     live!(
         log,
-        "[Root] {}",
+        "{} {}",
+        log_tag,
         tr_args!("live_flash_efisp_fetch", variant = suffix)
     );
     let gh = ltbox_core::github::GitHubClient::from_url("github.com/miner7222/gbl_root_baldur")
-        .map_err(|e| tr_args!("err_root_efisp_github_failed", error = e))?;
-    let (asset_name, asset_url) = gh
-        .latest_release_asset_where(|name| name.to_ascii_lowercase().ends_with(suffix))
-        .map_err(|e| tr_args!("err_root_efisp_asset_missing", suffix = suffix, error = e))?;
+        .map_err(|e| tr_args!("err_efisp_github_failed", error = e))?;
+    let assets = gh
+        .release_by_tag(EFISP_GBL_RELEASE_TAG)
+        .map_err(|e| tr_args!("err_efisp_github_failed", error = e))?;
+    let (asset_name, asset_url) = assets
+        .into_iter()
+        .find(|(name, _)| name == expected_name)
+        .ok_or_else(|| {
+            tr_args!(
+                "err_efisp_asset_missing",
+                suffix = suffix,
+                tag = EFISP_GBL_RELEASE_TAG
+            )
+        })?;
     let _ = std::fs::remove_dir_all(efi_dir);
     std::fs::create_dir_all(efi_dir)
-        .map_err(|e| tr_args!("err_root_efisp_work_dir_failed", error = e))?;
+        .map_err(|e| tr_args!("err_efisp_work_dir_failed", error = e))?;
     let efi_path = efi_dir.join(&asset_name);
-    if let Err(e) = ltbox_core::downloader::download_to_file(&asset_url, &efi_path, log) {
-        return Err(tr_args!(
-            "err_root_efisp_download_failed",
-            asset = asset_name,
-            error = e
-        ));
-    }
+    ltbox_core::downloader::download_to_file(&asset_url, &efi_path, log)
+        .map_err(|e| tr_args!("err_efisp_download_failed", asset = asset_name, error = e))?;
+    verify_efisp_asset(&efi_path, &asset_name)?;
     live!(
         log,
-        "[Root] {}",
+        "{} {}",
+        log_tag,
         tr_args!("live_flash_efisp_fetched", name = asset_name)
     );
-    Ok(Some(efi_path))
+    Ok(efi_path)
+}
+
+/// Pinned gbl_root_baldur release used for TB323FU efisp GBL images.
+pub(crate) const EFISP_GBL_RELEASE_TAG: &str = "5.3.120-mod5";
+
+/// Exact asset names accepted for the pinned efisp release.
+pub(crate) const EFISP_EXPECTED_ASSETS: &[(&str, &str)] = &[
+    (
+        "generic_superfastboot_prc.efi",
+        "22471c543e13a433cb05c5c54bcfaf107f2643a6cfd7e46d8d73764b349e8cf2",
+    ),
+    (
+        "generic_superfastboot_prc_arb.efi",
+        "fc55e6a4912f20c1bf0c664bb985e10d0c4e0944f92fab5e4f855b22e2aefcdf",
+    ),
+    (
+        "generic_superfastboot_row.efi",
+        "90b16cacc4f2f6aded2c5bf0eed7d20b6a294115f6cf09dab555b4a4496e2628",
+    ),
+    (
+        "generic_superfastboot_row_arb.efi",
+        "99b62f4aeca619df4f480f6bffa3f0fea3ef2516a8fe48a092613c2aa68d10e2",
+    ),
+];
+
+/// Map a region/ARB suffix to the exact pinned asset name for the
+/// `5.3.120-mod5` gbl_root_baldur release. Unknown suffixes refuse.
+pub(crate) fn efisp_expected_asset(suffix: &str) -> Option<&'static str> {
+    match suffix {
+        "_prc.efi" => Some("generic_superfastboot_prc.efi"),
+        "_prc_arb.efi" => Some("generic_superfastboot_prc_arb.efi"),
+        "_row.efi" => Some("generic_superfastboot_row.efi"),
+        "_row_arb.efi" => Some("generic_superfastboot_row_arb.efi"),
+        _ => None,
+    }
+}
+
+/// SHA-256 hex for a pinned efisp asset name. Unknown names refuse.
+pub(crate) fn efisp_expected_sha256(asset_name: &str) -> Option<&'static str> {
+    EFISP_EXPECTED_ASSETS
+        .iter()
+        .find(|(name, _)| *name == asset_name)
+        .map(|(_, hash)| *hash)
+}
+
+pub(crate) fn sha256_hex_file(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
+}
+
+/// Verify a downloaded efisp EFI against the pinned name → SHA-256 map.
+/// Unknown names and hash mismatches both refuse.
+pub(crate) fn verify_efisp_asset(path: &std::path::Path, asset_name: &str) -> Result<(), String> {
+    let expected = efisp_expected_sha256(asset_name).ok_or_else(|| {
+        tr_args!(
+            "err_efisp_asset_unknown",
+            asset = asset_name,
+            tag = EFISP_GBL_RELEASE_TAG
+        )
+    })?;
+    let actual = sha256_hex_file(path)?;
+    if actual != expected {
+        return Err(tr_args!(
+            "err_efisp_hash_mismatch",
+            asset = asset_name,
+            expected = expected,
+            actual = actual
+        ));
+    }
+    Ok(())
 }
 
 /// Provision a staged TB323FU region GBL. `None` is the already-provisioned

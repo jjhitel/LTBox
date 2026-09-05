@@ -6,8 +6,8 @@
 use crate::{
     ConnectionStatus, CountryPatchProgress, FirmwareIdentity, LiveLabels, PhaseReporter,
     WorkflowConfig, active_slot_suffix, build_tb323fu_arb_overlays, efisp_asset_suffix,
-    find_firmware_loader, fingerprint_token_match, is_rollback_protected_model, open_edl_session,
-    read_device_rollback_index_via_edl, transition_to_edl,
+    fetch_efisp_asset, find_firmware_loader, fingerprint_token_match, is_rollback_protected_model,
+    open_edl_session, read_device_rollback_index_via_edl, transition_to_edl,
 };
 use ltbox_core::{live, tr_args};
 
