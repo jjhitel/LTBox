@@ -135,68 +135,12 @@ impl App {
     }
 
     pub(crate) fn unroot_loader_step(&self) -> Element<'_, Message> {
-        let d = self.density();
-        let selected = self.unroot.loader_path.is_some();
-        let status = if let Some(p) = &self.unroot.loader_path {
-            p.clone()
-        } else {
-            self.t("edl_loader_placeholder").to_string()
-        };
-        let btn = button(
-            container(
-                column![
-                    text(self.t("btn_browse_loader").to_string())
-                        .size(d.text(14.0))
-                        .center(),
-                    text(self.loader_picker_desc())
-                        .size(d.text(11.0))
-                        .style(muted_style)
-                        .center(),
-                ]
-                .spacing(d.space(6.0))
-                .width(Length::Fill)
-                .align_x(iced::Alignment::Center),
-            )
-            .padding(d.padding(20.0, 24.0))
-            .width(Length::Fixed(d.width(280.0)))
-            .style(move |t: &Theme| sel_card_style(t, selected)),
-        )
-        .on_press(Message::Unroot(UnrootMsg::UnrootSelectLoader))
-        .padding(0)
-        .style(move |t: &Theme, status| sel_card_btn_style(t, status, selected));
-        // Recent loader picks — same shared `File` bucket (filtered to loader
-        // extensions) as the Root / dump / flash loader pickers. This was the
-        // only loader step missing its recents strip.
-        let chips = self.recent_file_chips(
-            LOADER_PICKER_EXTS,
+        self.loader_picker_card(
+            &self.unroot.loader_path,
+            self.unroot.loader_error.as_ref(),
+            Message::Unroot(UnrootMsg::UnrootSelectLoader),
             |p| Message::Unroot(UnrootMsg::UnrootLoaderChosen(Some(p))),
-            "picker_recents",
-        );
-        let col = column![
-            btn,
-            text(status)
-                .size(d.text(12.0))
-                .width(Length::Fill)
-                .style(move |t: &Theme| {
-                    let p = pal_of(t);
-                    iced::widget::text::Style {
-                        color: Some(if selected { p.success } else { p.outline }),
-                    }
-                })
-                .center()
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
-            chips,
-        ]
-        .spacing(d.space(14.0))
-        .padding(d.space(28.0))
-        .width(Length::Fill)
-        .align_x(iced::Alignment::Center);
-        container(col)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
+        )
     }
 
     pub(crate) fn unroot_folder_step(&self) -> Element<'_, Message> {

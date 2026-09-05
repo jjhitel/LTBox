@@ -517,6 +517,9 @@ pub(crate) struct UnrootWizard {
     /// method step (mirrors the Root wizard's step-5 fold-through);
     /// anyone without a default sees the explicit loader picker.
     pub(crate) loader_path: Option<String>,
+    /// Loader-resolution failure, kept apart from any scan error so a
+    /// refused pick does not overwrite why the last scan failed.
+    pub(crate) loader_error: Option<String>,
 }
 
 pub(crate) const UNROOT_STEPS: &[&str] = &[
@@ -543,7 +546,7 @@ impl Wizard for UnrootWizard {
         // pick and doesn't have to bundle a loader sub-row.
         match self.step {
             0 => self.unroot_type.is_some(),
-            1 => self.loader_path.is_some(),
+            1 => self.loader_path.is_some() && self.loader_error.is_none(),
             2 => self.folder_path.is_some(),
             3 => true,
             _ => false,
@@ -1019,6 +1022,9 @@ pub(crate) enum PartsSortColumn {
 pub(crate) struct FlashPartsWizard {
     pub(crate) step: usize, // 0=Loader, 1=Select, 2=Confirm, 3=Exec
     pub(crate) loader_path: Option<String>,
+    /// Loader-resolution failure, kept apart from any scan error so a
+    /// refused pick does not overwrite why the last scan failed.
+    pub(crate) loader_error: Option<String>,
     pub(crate) rows: Vec<FlashPartRow>,
     pub(crate) scanning: bool,
     pub(crate) scan_error: Option<String>,
@@ -1104,7 +1110,7 @@ impl Wizard for FlashPartsWizard {
     }
     fn can_next(&self) -> bool {
         match self.step {
-            0 => self.loader_path.is_some() && !self.scanning,
+            0 => self.loader_path.is_some() && self.loader_error.is_none() && !self.scanning,
             1 => self.rows.iter().any(|r| match r.state {
                 FlashRowState::Flash => r.file_path.is_some(),
                 FlashRowState::Erase => true,
@@ -1151,6 +1157,9 @@ pub(crate) struct DumpPartsScanResult {
 pub(crate) struct DumpPartsWizard {
     pub(crate) step: usize, // 0=Loader, 1=Select, 2=Exec
     pub(crate) loader_path: Option<String>,
+    /// Loader-resolution failure, kept apart from any scan error so a
+    /// refused pick does not overwrite why the last scan failed.
+    pub(crate) loader_error: Option<String>,
     pub(crate) rows: Vec<DumpPartRow>,
     pub(crate) output_dir: Option<String>,
     pub(crate) scanning: bool,
@@ -1179,7 +1188,7 @@ impl DumpPartsWizard {
     }
     pub(crate) fn can_next(&self) -> bool {
         match self.step {
-            0 => self.loader_path.is_some() && !self.scanning,
+            0 => self.loader_path.is_some() && self.loader_error.is_none() && !self.scanning,
             1 => self.rows.iter().any(|r| r.selected),
             _ => false,
         }
@@ -1257,7 +1266,7 @@ impl DumpPhysWizard {
     }
     pub(crate) fn can_next(&self) -> bool {
         match self.step {
-            0 => self.loader_path.is_some(),
+            0 => self.loader_path.is_some() && self.loader_error.is_none(),
             1 => self.selected.iter().any(|&s| s),
             _ => false,
         }
@@ -1314,7 +1323,7 @@ impl Wizard for FlashPhysWizard {
     }
     fn can_next(&self) -> bool {
         match self.step {
-            0 => self.loader_path.is_some(),
+            0 => self.loader_path.is_some() && self.loader_error.is_none(),
             // At least one row selected AND every selected row has a file.
             1 => {
                 let any = self.selected.iter().any(|&s| s);

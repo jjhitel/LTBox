@@ -79,7 +79,7 @@ impl App {
     fn konabess_loader_step(&self) -> Element<'_, Message> {
         self.loader_picker_card(
             &self.konabess.loader_path,
-            &self.konabess.loader_error,
+            self.konabess.loader_error.as_ref(),
             Message::KonaBess(KonaBessMsg::KonaBessSelectLoader),
             |path| Message::KonaBess(KonaBessMsg::KonaBessLoaderChosen(Some(path))),
         )

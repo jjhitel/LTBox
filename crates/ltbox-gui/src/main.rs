@@ -3161,6 +3161,21 @@ impl App {
     /// any filename with one of those extensions. A directory is still
     /// accepted for backwards compatibility with older recents entries
     /// and is resolved via [`find_edl_loader`].
+    /// Route a picked loader into one wizard's `(loader_path, loader_error)`
+    /// pair. Cancelling changes nothing; a resolved pick clears the error; a
+    /// rejected pick clears the path, so a wizard can never advance on the
+    /// loader it just refused.
+    fn apply_loader_pick<F>(&mut self, picked: Option<String>, set: F)
+    where
+        F: FnOnce(&mut Self, Option<String>, Option<String>),
+    {
+        let Some(p) = picked else { return };
+        match self.resolve_loader_input(&p) {
+            Ok(loader) => set(self, Some(loader), None),
+            Err(msg) => set(self, None, Some(msg)),
+        }
+    }
+
     fn resolve_loader_input(&mut self, selected_path: &str) -> std::result::Result<String, String> {
         let path = std::path::Path::new(selected_path);
         if path.is_file() {
@@ -3820,6 +3835,55 @@ mod tests {
 
         let _ = app.update(Message::AboutLicensesClose);
         assert!(!app.about_licenses_open);
+    }
+
+    #[test]
+    fn a_refused_loader_pick_clears_the_path_and_blocks_next() {
+        // Previously each wizard hand-rolled this: most left the old
+        // loader_path in place on a bad pick, and only KonaBess gated Next on
+        // the error, so the rest advanced on a loader they had just refused.
+        let dir = tempfile::tempdir().unwrap();
+        let good = dir.path().join("xbl_s_devprg_ns.melf");
+        std::fs::write(&good, b"loader").unwrap();
+        let bad = dir.path().join("not-a-loader.txt");
+        std::fs::write(&bad, b"nope").unwrap();
+
+        let mut app = App::default();
+        let _ = app.update_dump_phys(DumpPhysMsg::DumpPhysLoaderChosen(Some(
+            good.to_string_lossy().to_string(),
+        )));
+        assert!(app.dump_phys.loader_path.is_some());
+        assert!(app.dump_phys.loader_error.is_none());
+        assert!(app.dump_phys.can_next());
+
+        let _ = app.update_dump_phys(DumpPhysMsg::DumpPhysLoaderChosen(Some(
+            bad.to_string_lossy().to_string(),
+        )));
+        assert!(app.dump_phys.loader_path.is_none());
+        assert!(app.dump_phys.loader_error.is_some());
+        assert!(!app.dump_phys.can_next());
+
+        // Cancelling the picker leaves the step exactly as it was.
+        let before = app.dump_phys.loader_error.clone();
+        let _ = app.update_dump_phys(DumpPhysMsg::DumpPhysLoaderChosen(None));
+        assert_eq!(app.dump_phys.loader_error, before);
+    }
+
+    #[test]
+    fn a_loader_pick_no_longer_overwrites_why_the_scan_failed() {
+        // Both partition wizards used to funnel loader errors into
+        // `scan_error`, so re-picking a loader erased the scan failure.
+        let dir = tempfile::tempdir().unwrap();
+        let bad = dir.path().join("not-a-loader.txt");
+        std::fs::write(&bad, b"nope").unwrap();
+
+        let mut app = App::default();
+        app.dump_parts.scan_error = Some("scan blew up".to_string());
+        let _ = app.update_dump_parts(DumpPartsMsg::DumpPartsLoaderChosen(Some(
+            bad.to_string_lossy().to_string(),
+        )));
+        assert_eq!(app.dump_parts.scan_error.as_deref(), Some("scan blew up"));
+        assert!(app.dump_parts.loader_error.is_some());
     }
 
     #[test]

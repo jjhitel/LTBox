@@ -145,15 +145,20 @@ impl App {
     /// and the two Message variants differ between callers, so they are
     /// threaded in as params; the title / placeholder / accepted
     /// extensions / colors are identical across all four wizards.
+    ///
+    /// `error` is whatever the caller wants surfaced on this step. The two
+    /// partition wizards scan from here, so they pass the loader failure when
+    /// there is one and the scan failure otherwise.
     pub(crate) fn loader_picker_card<'a>(
         &'a self,
         loader_path: &'a Option<String>,
-        loader_error: &'a Option<String>,
+        error: Option<&'a String>,
         on_select: Message,
         on_chosen: impl Fn(String) -> Message,
     ) -> Element<'a, Message> {
         let d = self.density();
         let selected = loader_path.is_some();
+        let loader_error = error;
         let status = match (loader_path, loader_error) {
             (_, Some(e)) => format!("⚠ {e}"),
             (Some(p), None) => p.clone(),
@@ -220,7 +225,10 @@ impl App {
     pub(crate) fn flash_parts_loader_step(&self) -> Element<'_, Message> {
         self.loader_picker_card(
             &self.flash_parts.loader_path,
-            &self.flash_parts.scan_error,
+            self.flash_parts
+                .loader_error
+                .as_ref()
+                .or(self.flash_parts.scan_error.as_ref()),
             Message::FlashParts(FlashPartsMsg::FlashPartsSelectLoader),
             |p| Message::FlashParts(FlashPartsMsg::FlashPartsLoaderChosen(Some(p))),
         )
@@ -566,7 +574,10 @@ impl App {
     pub(crate) fn dump_parts_loader_step(&self) -> Element<'_, Message> {
         self.loader_picker_card(
             &self.dump_parts.loader_path,
-            &self.dump_parts.scan_error,
+            self.dump_parts
+                .loader_error
+                .as_ref()
+                .or(self.dump_parts.scan_error.as_ref()),
             Message::DumpParts(DumpPartsMsg::DumpPartsSelectLoader),
             |p| Message::DumpParts(DumpPartsMsg::DumpPartsLoaderChosen(Some(p))),
         )
@@ -736,7 +747,7 @@ impl App {
     pub(crate) fn dump_phys_loader_step(&self) -> Element<'_, Message> {
         self.loader_picker_card(
             &self.dump_phys.loader_path,
-            &self.dump_phys.loader_error,
+            self.dump_phys.loader_error.as_ref(),
             Message::DumpPhys(DumpPhysMsg::DumpPhysSelectLoader),
             |p| Message::DumpPhys(DumpPhysMsg::DumpPhysLoaderChosen(Some(p))),
         )
@@ -858,7 +869,7 @@ impl App {
     pub(crate) fn flash_phys_loader_step(&self) -> Element<'_, Message> {
         self.loader_picker_card(
             &self.flash_phys.loader_path,
-            &self.flash_phys.loader_error,
+            self.flash_phys.loader_error.as_ref(),
             Message::FlashPhys(FlashPhysMsg::FlashPhysSelectLoader),
             |p| Message::FlashPhys(FlashPhysMsg::FlashPhysLoaderChosen(Some(p))),
         )

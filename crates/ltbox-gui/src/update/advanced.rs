@@ -11,15 +11,10 @@ impl App {
                 Message::DumpPhys(DumpPhysMsg::DumpPhysLoaderChosen(__v))
             }),
             DumpPhysMsg::DumpPhysLoaderChosen(path) => {
-                if let Some(p) = path {
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.dump_phys.loader_path = Some(loader);
-                            self.dump_phys.loader_error = None;
-                        }
-                        Err(msg) => self.dump_phys.loader_error = Some(msg),
-                    }
-                }
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.dump_phys.loader_path = loader;
+                    app.dump_phys.loader_error = err;
+                });
                 Task::none()
             }
             DumpPhysMsg::DumpPhysToggleRow(idx) => {
@@ -101,15 +96,10 @@ impl App {
                 Message::FlashPhys(FlashPhysMsg::FlashPhysLoaderChosen(__v))
             }),
             FlashPhysMsg::FlashPhysLoaderChosen(path) => {
-                if let Some(p) = path {
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.flash_phys.loader_path = Some(loader);
-                            self.flash_phys.loader_error = None;
-                        }
-                        Err(msg) => self.flash_phys.loader_error = Some(msg),
-                    }
-                }
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.flash_phys.loader_path = loader;
+                    app.flash_phys.loader_error = err;
+                });
                 Task::none()
             }
             FlashPhysMsg::FlashPhysToggleRow(idx) => {
@@ -192,15 +182,10 @@ impl App {
                 Message::DumpParts(DumpPartsMsg::DumpPartsLoaderChosen(__v))
             }),
             DumpPartsMsg::DumpPartsLoaderChosen(path) => {
-                if let Some(p) = path {
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.dump_parts.loader_path = Some(loader);
-                            self.dump_parts.scan_error = None;
-                        }
-                        Err(msg) => self.dump_parts.scan_error = Some(msg),
-                    }
-                }
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.dump_parts.loader_path = loader;
+                    app.dump_parts.loader_error = err;
+                });
                 Task::none()
             }
             DumpPartsMsg::DumpPartsToggleRow(idx) => {
@@ -358,15 +343,10 @@ impl App {
                 Message::FlashParts(FlashPartsMsg::FlashPartsLoaderChosen(__v))
             }),
             FlashPartsMsg::FlashPartsLoaderChosen(path) => {
-                if let Some(p) = path {
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.flash_parts.loader_path = Some(loader);
-                            self.flash_parts.scan_error = None;
-                        }
-                        Err(msg) => self.flash_parts.scan_error = Some(msg),
-                    }
-                }
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.flash_parts.loader_path = loader;
+                    app.flash_parts.loader_error = err;
+                });
                 Task::none()
             }
             FlashPartsMsg::FlashPartsToggleRow(idx) => {

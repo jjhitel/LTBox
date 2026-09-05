@@ -25,15 +25,10 @@ impl App {
                 Message::Unroot(UnrootMsg::UnrootLoaderChosen(__v))
             }),
             UnrootMsg::UnrootLoaderChosen(path) => {
-                if let Some(p) = path {
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.unroot.loader_path = Some(loader);
-                            self.error_msg = None;
-                        }
-                        Err(msg) => self.error_msg = Some(msg),
-                    }
-                }
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.unroot.loader_path = loader;
+                    app.unroot.loader_error = err;
+                });
                 Task::none()
             }
             UnrootMsg::UnrootNext => {

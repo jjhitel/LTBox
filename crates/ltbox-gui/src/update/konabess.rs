@@ -21,23 +21,21 @@ impl App {
                 Message::KonaBess(KonaBessMsg::KonaBessLoaderChosen(path))
             }),
             KonaBessMsg::KonaBessLoaderChosen(path) => {
-                if let Some(path) = path {
-                    match self.resolve_loader_input(&path) {
-                        Ok(loader) if self.loader_fits_model(std::path::Path::new(&loader)) => {
-                            self.konabess.loader_path = Some(loader);
-                            self.konabess.loader_error = None;
+                self.apply_loader_pick(path, |app, loader, err| {
+                    // KonaBess additionally refuses a loader whose kind does not
+                    // match the connected model.
+                    match loader {
+                        Some(l) if !app.loader_fits_model(std::path::Path::new(&l)) => {
+                            app.konabess.loader_path = None;
+                            app.konabess.loader_error =
+                                Some(app.t("loader_model_mismatch_tooltip").to_string());
                         }
-                        Ok(_) => {
-                            self.konabess.loader_path = None;
-                            self.konabess.loader_error =
-                                Some(self.t("loader_model_mismatch_tooltip").to_string());
-                        }
-                        Err(message) => {
-                            self.konabess.loader_path = None;
-                            self.konabess.loader_error = Some(message);
+                        other => {
+                            app.konabess.loader_path = other;
+                            app.konabess.loader_error = err;
                         }
                     }
-                }
+                });
                 Task::none()
             }
             KonaBessMsg::KonaBessSelectImport => pickers::pick_file_for(

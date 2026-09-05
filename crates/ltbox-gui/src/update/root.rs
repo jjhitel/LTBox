@@ -126,15 +126,10 @@ impl App {
                 self.pick_loader_with_default(|__v| Message::Root(RootMsg::RootLoaderChosen(__v)))
             }
             RootMsg::RootLoaderChosen(path) => {
-                if let Some(p) = path {
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.root.folder_path = Some(loader);
-                            self.error_msg = None;
-                        }
-                        Err(msg) => self.error_msg = Some(msg),
-                    }
-                }
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.root.folder_path = loader;
+                    app.error_msg = err;
+                });
                 Task::none()
             }
             RootMsg::RootNext => {

@@ -197,18 +197,13 @@ impl App {
                 })
             }
             FlashMsg::FlashLoaderChosen(path) => {
-                if let Some(p) = path {
-                    // Model-aware resolve: upgrades a `.melf` to a sibling Sahara
-                    // manifest on TB323FU (and rejects a standalone `.melf`
-                    // there), validates the extension, and records the recent.
-                    match self.resolve_loader_input(&p) {
-                        Ok(loader) => {
-                            self.flash.loader_override = Some(loader);
-                            self.flash.loader_error = None;
-                        }
-                        Err(msg) => self.flash.loader_error = Some(msg),
-                    }
-                }
+                // Model-aware resolve: upgrades a `.melf` to a sibling Sahara
+                // manifest on TB323FU (and rejects a standalone `.melf` there),
+                // validates the extension, and records the recent.
+                self.apply_loader_pick(path, |app, loader, err| {
+                    app.flash.loader_override = loader;
+                    app.flash.loader_error = err;
+                });
                 Task::none()
             }
             FlashMsg::FlashFirmwareIdentityInspected(folder, result) => {
