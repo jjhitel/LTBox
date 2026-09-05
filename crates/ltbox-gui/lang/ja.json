@@ -256,6 +256,7 @@
   "err_no_adb_device_replug": "ADB デバイスを検出できません。ケーブルを差し直してみてください",
   "err_no_device_connected": "デバイスが接続されていません",
   "err_no_hardcoded_lun": "{partition} のハードコードされた LUN がありません",
+  "err_parts_scan_empty": "デバイスからパーティションが返されませんでした。",
   "err_parts_scan_failed": "パーティションのスキャンに失敗しました： {error}",
   "err_patch_arb_copy_failed": "{image}: コピーに失敗しました： {error}",
   "err_patch_arb_footer_failed": "{image}: add_hash_footer に失敗しました： {error}",

@@ -256,6 +256,7 @@
   "err_no_adb_device_replug": "ADB 기기가 감지되지 않았습니다. 케이블을 다시 연결해 보세요.",
   "err_no_device_connected": "연결된 기기가 없습니다.",
   "err_no_hardcoded_lun": "{partition}의 하드코딩된 LUN이 없습니다.",
+  "err_parts_scan_empty": "기기가 파티션을 반환하지 않았습니다.",
   "err_parts_scan_failed": "파티션 검사에 실패했습니다: {error}",
   "err_patch_arb_copy_failed": "{image}: 복사 실패: {error}",
   "err_patch_arb_footer_failed": "{image}: add_hash_footer 실패: {error}",

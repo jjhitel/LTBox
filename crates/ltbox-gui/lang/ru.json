@@ -256,6 +256,7 @@
   "err_no_adb_device_replug": "ADB-устройство не обнаружено — переподключите кабель",
   "err_no_device_connected": "Устройство не подключено",
   "err_no_hardcoded_lun": "Для {partition} нет жёстко заданного LUN",
+  "err_parts_scan_empty": "Устройство не вернуло ни одного раздела.",
   "err_parts_scan_failed": "Не удалось просканировать разделы: {error}",
   "err_patch_arb_copy_failed": "{image}: ошибка копирования: {error}",
   "err_patch_arb_footer_failed": "Не удалось добавить хеш-футер AVB к {image}: {error}",

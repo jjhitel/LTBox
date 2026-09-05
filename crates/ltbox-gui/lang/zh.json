@@ -256,6 +256,7 @@
   "err_no_adb_device_replug": "未检测到 ADB 设备，请重新插拔数据线",
   "err_no_device_connected": "未连接设备",
   "err_no_hardcoded_lun": "{partition} 没有硬编码 LUN",
+  "err_parts_scan_empty": "设备未返回任何分区。",
   "err_parts_scan_failed": "分区扫描失败：{error}",
   "err_patch_arb_copy_failed": "{image}：复制失败：{error}",
   "err_patch_arb_footer_failed": "{image}：add_hash_footer 失败：{error}",

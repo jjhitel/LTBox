@@ -256,6 +256,7 @@
   "err_no_adb_device_replug": "No ADB device detected — try replugging the cable",
   "err_no_device_connected": "No device connected",
   "err_no_hardcoded_lun": "No hardcoded LUN for {partition}",
+  "err_parts_scan_empty": "The device returned no partitions.",
   "err_parts_scan_failed": "Partition scan failed: {error}",
   "err_patch_arb_copy_failed": "{image}: copy failed: {error}",
   "err_patch_arb_footer_failed": "Could not add an AVB hash footer to {image}: {error}",

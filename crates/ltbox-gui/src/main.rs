@@ -3161,6 +3161,15 @@ impl App {
     /// any filename with one of those extensions. A directory is still
     /// accepted for backwards compatibility with older recents entries
     /// and is resolved via [`find_edl_loader`].
+    /// Error to surface for a finished Firehose GPT scan: the worker's own
+    /// failure, or a scan that came back with no partitions at all. `None`
+    /// means the table is usable and the wizard may advance. Both partition
+    /// wizards run the same scan, but only one of them used to notice the
+    /// empty case.
+    fn parts_scan_outcome(&self, error: Option<String>, rows_empty: bool) -> Option<String> {
+        error.or_else(|| rows_empty.then(|| self.t("err_parts_scan_empty").to_string()))
+    }
+
     /// Route a picked loader into one wizard's `(loader_path, loader_error)`
     /// pair. Cancelling changes nothing; a resolved pick clears the error; a
     /// rejected pick clears the path, so a wizard can never advance on the
@@ -3835,6 +3844,21 @@ mod tests {
 
         let _ = app.update(Message::AboutLicensesClose);
         assert!(!app.about_licenses_open);
+    }
+
+    #[test]
+    fn an_empty_partition_scan_is_an_error_in_both_wizards() {
+        // Read Partitions reported it; Flash Partitions silently sat on the
+        // loader step with an empty table and no explanation.
+        let app = App::default();
+        assert!(app.parts_scan_outcome(None, true).is_some());
+        assert!(app.parts_scan_outcome(None, false).is_none());
+        // A worker failure outranks the empty check.
+        assert_eq!(
+            app.parts_scan_outcome(Some("boom".to_string()), true)
+                .as_deref(),
+            Some("boom")
+        );
     }
 
     #[test]

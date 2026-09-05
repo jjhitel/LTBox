@@ -262,12 +262,9 @@ impl App {
                 self.dump_parts.scanning = false;
                 self.dump_parts.rows = result.rows;
                 self.dump_parts.apply_sort();
-                if let Some(err) = result.error {
-                    self.dump_parts.scan_error = Some(err);
-                } else if self.dump_parts.rows.is_empty() {
-                    self.dump_parts.scan_error =
-                        Some("No partitions returned from device".to_string());
-                } else {
+                self.dump_parts.scan_error =
+                    self.parts_scan_outcome(result.error, self.dump_parts.rows.is_empty());
+                if self.dump_parts.scan_error.is_none() {
                     self.dump_parts.step = 1;
                     // A successful Firehose GPT scan proves the device is in
                     // EDL; reflect it immediately (the 3s poll may still show a
@@ -452,9 +449,10 @@ impl App {
                 self.flash_parts.scanning = false;
                 self.flash_parts.rows = result.rows;
                 self.flash_parts.apply_sort();
-                self.flash_parts.scan_error = result.error.clone();
+                self.flash_parts.scan_error =
+                    self.parts_scan_outcome(result.error, self.flash_parts.rows.is_empty());
                 self.end_op();
-                if result.error.is_none() && !self.flash_parts.rows.is_empty() {
+                if self.flash_parts.scan_error.is_none() {
                     self.flash_parts.next(); // → Select
                     // A successful Firehose GPT scan proves the device is in
                     // EDL; reflect it immediately (the 3s poll may still show a
