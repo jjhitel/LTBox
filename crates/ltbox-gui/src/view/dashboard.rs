@@ -137,6 +137,15 @@ impl App {
                         .width(Length::Fill),
                 ),
             );
+        } else if self.connection == ConnectionStatus::AdbSideload {
+            content = content.push(
+                self.warning_banner(
+                    text(self.t("dash_adb_sideload").to_string())
+                        .size(d.text(theme::text_size::BODY_SMALL))
+                        .style(warning_container_text_style)
+                        .width(Length::Fill),
+                ),
+            );
         } else if self.platform_supported == Some(false) {
             content = content.push(
                 self.warning_banner(

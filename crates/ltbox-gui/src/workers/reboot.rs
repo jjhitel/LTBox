@@ -12,7 +12,10 @@ pub(crate) fn reboot_worker(
 ) -> Result<Vec<String>, String> {
     let mut log = Vec::new();
     match (conn, target) {
-        (ConnectionStatus::Adb | ConnectionStatus::AdbRecovery, t) => {
+        (
+            ConnectionStatus::Adb | ConnectionStatus::AdbRecovery | ConnectionStatus::AdbSideload,
+            t,
+        ) => {
             let mut adb = ltbox_device::adb::AdbManager::new();
             // `AdbManager::reboot` needs the serial
             // from a prior `check_device` call.

@@ -261,7 +261,7 @@ impl AdbManager {
     }
 
     /// Like `check_device` but returns the raw state token
-    /// (`"device"`, `"recovery"`, `"unauthorized"`,
+    /// (`"device"`, `"recovery"`, `"sideload"`, `"unauthorized"`,
     /// `"adb_server_blocking"`) so callers can pattern-match without
     /// importing `adb_client::DeviceState`.
     ///
@@ -270,8 +270,18 @@ impl AdbManager {
     /// | libusb enumeration empty | `Ok(None)` |
     /// | Device visible + auth ok + `ro.bootmode == "recovery"` | `Ok(Some("recovery"))` |
     /// | Device visible + auth ok + any other bootmode | `Ok(Some("device"))` |
+    /// | Device visible + auth ok + the expected `CLSE` shell refusal | `Ok(Some("sideload"))` |
     /// | Device visible + auth fails AND a process holds `127.0.0.1:5037` | `Ok(Some("adb_server_blocking"))` |
     /// | Device visible + auth fails AND no adb server present | `Ok(Some("unauthorized"))` |
+    ///
+    /// The `sideload` row is what separates "connected but useless" from
+    /// "not authorized". `adb_client` gives no access to the connect
+    /// banner that names the state outright, so the state is inferred from
+    /// the exact `CLSE` response used when minadbd refuses a shell. Rescue
+    /// mode uses the same response and may therefore be reported as
+    /// sideload; the discarded connect banner is the only way to tell them
+    /// apart. Other shell errors are returned so transport failures cannot
+    /// masquerade as a connected sideload device.
     pub fn check_device_state(&mut self) -> Result<Option<&'static str>> {
         let infos =
             find_all_connected_adb_devices().map_err(|e| AdbError::Client(e.to_string()))?;
@@ -285,11 +295,16 @@ impl AdbManager {
                 // hit for subsequent state polls so the Dashboard's 3 s
                 // heartbeat doesn't re-shell every tick.
                 if self.cached_bootmode.is_none() {
-                    let mode = self.shell_inner("getprop ro.bootmode").unwrap_or_default();
-                    self.cached_bootmode = Some(if mode.trim() == "recovery" {
-                        "recovery"
-                    } else {
-                        "device"
+                    self.cached_bootmode = Some(match self.shell_inner("getprop ro.bootmode") {
+                        Ok(mode) if mode.trim() == "recovery" => "recovery",
+                        Ok(_) => "device",
+                        // The dependency discards the connect banner, so
+                        // use only its exact unsupported-shell response as
+                        // the minadbd-style sideload inference. Rescue uses
+                        // the same response and is therefore an unavoidable
+                        // false-positive until the banner is exposed.
+                        Err(err) if is_sideload_shell_refusal(&err) => "sideload",
+                        Err(err) => return Err(err),
                     });
                 }
                 Ok(self.cached_bootmode)
@@ -664,6 +679,16 @@ fn unique_key_temp_token() -> String {
     format!("{}-{nanos}-{seq}", std::process::id())
 }
 
+const ADB_SHELL_REFUSED: &str =
+    "ADB request failed - Open session failed: got CLSE in response instead of OKAY";
+
+/// Match only the `adb_client` response for an unsupported `shell:` service.
+/// Transport errors are also wrapped in `CommandFailed` by `shell_inner`, so
+/// broad matching here would mislabel a disconnected device as sideload.
+fn is_sideload_shell_refusal(error: &AdbError) -> bool {
+    matches!(error, AdbError::CommandFailed(message) if message == ADB_SHELL_REFUSED)
+}
+
 /// Heuristic: did the most recent ADB transaction fail because adbd
 /// disconnected mid-call (the typical signature of "reboot fired,
 /// transport dropped before ack made it back")? Matches the wording
@@ -705,11 +730,33 @@ impl Default for AdbManager {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_key_at_path, is_adbd_dropped_after_reboot, remove_corrupt_key,
-        unique_key_temp_token, validate_key_file, write_key_atomic,
+        AdbError, ensure_key_at_path, is_adbd_dropped_after_reboot, is_sideload_shell_refusal,
+        remove_corrupt_key, unique_key_temp_token, validate_key_file, write_key_atomic,
     };
     use rsa::pkcs8::{EncodePrivateKey, LineEnding};
     use std::path::PathBuf;
+
+    #[test]
+    fn only_exact_shell_refusal_is_sideload() {
+        let refusal = adb_client::RustADBError::ADBRequestFailed(
+            "Open session failed: got CLSE in response instead of OKAY".into(),
+        );
+        assert!(is_sideload_shell_refusal(&AdbError::CommandFailed(
+            refusal.to_string(),
+        )));
+
+        for error in [
+            AdbError::CommandFailed("ADB error: USB Error: Timeout".into()),
+            AdbError::CommandFailed("ADB error: USB Error: No device".into()),
+            AdbError::CommandFailed(
+                "ADB request failed - Open session failed: got FAIL in response instead of OKAY"
+                    .into(),
+            ),
+            AdbError::Timeout,
+        ] {
+            assert!(!is_sideload_shell_refusal(&error));
+        }
+    }
 
     #[test]
     fn matches_libusb_pipe() {

@@ -477,6 +477,10 @@ impl App {
                                     r.status = ConnectionStatus::AdbUnauthorized;
                                     return r;
                                 }
+                                Ok(Some("sideload")) => {
+                                    r.status = ConnectionStatus::AdbSideload;
+                                    return r;
+                                }
                                 Ok(Some("device")) | Ok(Some("recovery")) => {
                                     let raw_model =
                                         adb.get_model().ok().flatten().unwrap_or_default();

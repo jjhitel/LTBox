@@ -599,6 +599,13 @@ impl RebootTarget {
         match (conn, self) {
             (ConnectionStatus::None, _) => false,
             (ConnectionStatus::AdbUnauthorized, _) => false,
+            // minadbd answers `reboot:` even though it refuses `shell:`,
+            // so system/recovery/bootloader work. EDL does not: LTBox
+            // reaches it by running `reboot edl` in a shell there is none
+            // of, and the resulting error can pass for adbd dropping the
+            // connection after a reboot that never fired.
+            (ConnectionStatus::AdbSideload, Self::Edl) => false,
+            (ConnectionStatus::AdbSideload, _) => true,
             (ConnectionStatus::AdbServerBlocking, _) => false,
             (ConnectionStatus::Adb, _) => true,
             (ConnectionStatus::AdbRecovery, _) => true,
@@ -1587,6 +1594,7 @@ fn probe_connection_for_edl() -> Option<ConnectionStatus> {
         Some("device" | "recovery") => Some(ConnectionStatus::Adb),
         Some("adb_server_blocking") => Some(ConnectionStatus::AdbServerBlocking),
         Some("unauthorized" | "authorizing") => Some(ConnectionStatus::AdbUnauthorized),
+        Some("sideload") => Some(ConnectionStatus::AdbSideload),
         _ => None,
     }
 }
@@ -1728,6 +1736,7 @@ fn edl_entry_action(conn: ConnectionStatus) -> EdlEntryAction {
         ConnectionStatus::Adb | ConnectionStatus::AdbRecovery => EdlEntryAction::AdbReboot,
         ConnectionStatus::Fastboot => EdlEntryAction::FastbootRebootThenAdb,
         ConnectionStatus::AdbUnauthorized
+        | ConnectionStatus::AdbSideload
         | ConnectionStatus::AdbServerBlocking
         | ConnectionStatus::None => EdlEntryAction::ManualWait,
     }

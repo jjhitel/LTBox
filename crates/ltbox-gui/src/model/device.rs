@@ -122,6 +122,12 @@ pub(crate) enum ConnectionStatus {
     /// (`unauthorized` / `authorizing`). Shell probes fail; dashboard
     /// shows an authorize-debug prompt.
     AdbUnauthorized,
+    /// Recovery sideload: adbd completed the connect without an auth
+    /// challenge but serves no `shell:`. Authorized, and still unusable —
+    /// no property can be read, so the dashboard stays empty. Kept apart
+    /// from `AdbUnauthorized` so it never tells the user to re-tap
+    /// "Allow USB debugging" at a screen that has no such prompt.
+    AdbSideload,
     /// An external `adb.exe` server (or anything else listening on
     /// `127.0.0.1:5037`) is holding the Android USB interface
     /// exclusively, so LTBox's libusb claim returns `LIBUSB_ERROR_BUSY`
@@ -139,6 +145,7 @@ impl ConnectionStatus {
             Self::Adb => "conn_adb",
             Self::AdbRecovery => "conn_adb_recovery",
             Self::AdbUnauthorized => "conn_adb_unauthorized",
+            Self::AdbSideload => "conn_adb_sideload",
             Self::AdbServerBlocking => "conn_adb_server_blocking",
             Self::Fastboot => "conn_fastboot",
             Self::Edl => "conn_edl",
@@ -148,17 +155,22 @@ impl ConnectionStatus {
         match self {
             Self::None => pal.on_surface_variant,
             Self::Adb | Self::AdbRecovery => pal.success,
-            Self::AdbUnauthorized | Self::AdbServerBlocking => pal.warning,
+            Self::AdbUnauthorized | Self::AdbServerBlocking | Self::AdbSideload => pal.warning,
             Self::Fastboot => pal.warning,
             Self::Edl => pal.tertiary,
         }
     }
-    /// True when exec paths should skip the ADB probe. AdbUnauthorized
-    /// + AdbServerBlocking count as "no usable ADB" — shell would fail.
+    /// True when exec paths should skip the ADB probe. AdbUnauthorized,
+    /// AdbSideload and AdbServerBlocking all count as "no usable ADB" —
+    /// shell would fail.
     pub(crate) fn skip_adb(self) -> bool {
         matches!(
             self,
-            Self::Fastboot | Self::Edl | Self::AdbUnauthorized | Self::AdbServerBlocking
+            Self::Fastboot
+                | Self::Edl
+                | Self::AdbUnauthorized
+                | Self::AdbSideload
+                | Self::AdbServerBlocking
         )
     }
 }
