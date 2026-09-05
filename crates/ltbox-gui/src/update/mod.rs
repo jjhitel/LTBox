@@ -537,6 +537,7 @@ impl App {
                             // poll. Reuse the successful handle for get_all_vars.
                             if let Ok(mut dev) = ltbox_device::fastboot::FastbootDevice::open() {
                                 r.status = ConnectionStatus::Fastboot;
+                                r.fastboot_userspace = dev.is_userspace();
                                 let vars = dev.get_all_vars().unwrap_or_default();
                                 r.model = vars.model.unwrap_or_default();
                                 r.slot = vars.current_slot.unwrap_or_default();
@@ -584,6 +585,7 @@ impl App {
                 if !r.slot.is_empty() {
                     self.device_slot = r.slot;
                 }
+                self.fastboot_userspace = r.fastboot_userspace;
                 if !r.firmware.is_empty() {
                     self.device_firmware = r.firmware;
                 }

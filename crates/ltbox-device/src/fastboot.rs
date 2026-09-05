@@ -262,6 +262,22 @@ impl FastbootDevice {
     pub fn reboot_bootloader(&mut self) -> Result<()> {
         self.command("reboot-bootloader").map(|_| ())
     }
+
+    /// Reboot into userspace fastboot. Bootloaders that predate fastbootd
+    /// answer this with FAIL, which surfaces as a command error.
+    pub fn reboot_fastboot(&mut self) -> Result<()> {
+        self.command("reboot-fastboot").map(|_| ())
+    }
+
+    /// Whether this endpoint is fastbootd rather than the bootloader's
+    /// own fastboot. Both enumerate identically, so only `is-userspace`
+    /// separates them; a bootloader that predates fastbootd does not know
+    /// the variable and fails the getvar, which reads as `false`.
+    pub fn is_userspace(&mut self) -> bool {
+        self.getvar("is-userspace")
+            .map(|v| v.trim().eq_ignore_ascii_case("yes"))
+            .unwrap_or(false)
+    }
 }
 
 /// Normalize a fastboot `current-slot` payload to `_a` / `_b`.

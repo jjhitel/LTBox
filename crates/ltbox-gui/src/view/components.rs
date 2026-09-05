@@ -1062,6 +1062,7 @@ impl RebootTarget {
             Self::System => icon::reboot_system(),
             Self::Recovery => icon::reboot_recovery(),
             Self::Bootloader => icon::reboot_bootloader(),
+            Self::Fastbootd => icon::reboot_fastbootd(),
             Self::Edl => icon::reboot_edl(),
         };
         lucide_list_primary(glyph, size)

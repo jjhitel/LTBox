@@ -26,6 +26,7 @@ pub(crate) fn reboot_worker(
                 RebootTarget::System => "",
                 RebootTarget::Recovery => "recovery",
                 RebootTarget::Bootloader => "bootloader",
+                RebootTarget::Fastbootd => "fastboot",
                 RebootTarget::Edl => "edl",
             };
             if let Err(e) = adb.reboot(arg) {
@@ -46,6 +47,15 @@ pub(crate) fn reboot_worker(
                         tr_args!(
                             "err_fastboot_command_failed",
                             command = "reboot-bootloader",
+                            error = e
+                        )
+                    })?;
+                }
+                RebootTarget::Fastbootd => {
+                    dev.reboot_fastboot().map_err(|e| {
+                        tr_args!(
+                            "err_fastboot_command_failed",
+                            command = "reboot-fastboot",
                             error = e
                         )
                     })?;

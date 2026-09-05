@@ -52,7 +52,7 @@ impl App {
                     tr_args!(
                         "log_reboot_target_from",
                         target = self.t(target.label_key()),
-                        source = self.t(conn.label_key())
+                        source = self.t(self.connection_label_key())
                     ),
                 ));
                 let reboot_cmd_sent = self.t("log_reboot_command_sent").to_string();

@@ -440,6 +440,7 @@ impl AdbManager {
             "bootloader" => RebootType::Bootloader,
             "recovery" => RebootType::Recovery,
             "sideload" => RebootType::Sideload,
+            "fastboot" => RebootType::Fastboot,
             _ => RebootType::System,
         };
         // RebootType has no EDL variant; fall back to shell. adbd dies

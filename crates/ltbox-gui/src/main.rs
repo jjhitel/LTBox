@@ -563,6 +563,9 @@ enum RebootTarget {
     System,
     Recovery,
     Bootloader,
+    /// Userspace fastboot. Reached with `reboot fastboot` over ADB, and
+    /// with `reboot-fastboot` from the bootloader.
+    Fastbootd,
     Edl,
 }
 impl RebootTarget {
@@ -571,6 +574,7 @@ impl RebootTarget {
             Self::System => "reboot_system",
             Self::Recovery => "reboot_recovery",
             Self::Bootloader => "reboot_bootloader",
+            Self::Fastbootd => "reboot_fastbootd",
             Self::Edl => "reboot_edl",
         }
     }
@@ -579,6 +583,7 @@ impl RebootTarget {
             Self::System => "reboot_system_desc",
             Self::Recovery => "reboot_recovery_desc",
             Self::Bootloader => "reboot_bootloader_desc",
+            Self::Fastbootd => "reboot_fastbootd_desc",
             Self::Edl => "reboot_edl_desc",
         }
     }
@@ -589,6 +594,7 @@ impl RebootTarget {
             Self::System => "reboot_target_system",
             Self::Recovery => "reboot_target_recovery",
             Self::Bootloader => "reboot_target_bootloader",
+            Self::Fastbootd => "reboot_target_fastbootd",
             Self::Edl => "reboot_target_edl",
         }
     }
@@ -616,7 +622,13 @@ impl RebootTarget {
         }
     }
     fn all() -> &'static [RebootTarget] {
-        &[Self::System, Self::Recovery, Self::Bootloader, Self::Edl]
+        &[
+            Self::System,
+            Self::Recovery,
+            Self::Bootloader,
+            Self::Fastbootd,
+            Self::Edl,
+        ]
     }
 }
 
@@ -1253,6 +1265,10 @@ fn format_bytes_auto(bytes: u64) -> String {
 #[derive(Debug, Clone, Default)]
 struct DevicePollResult {
     status: ConnectionStatus,
+    /// `status == Fastboot` and the endpoint answered `is-userspace: yes`,
+    /// i.e. fastbootd rather than the bootloader. Display only — every
+    /// behavioural branch treats the two the same.
+    fastboot_userspace: bool,
     model: String,
     slot: String,
     /// Trimmed `ro.build.display.id` — leading device-model prefix
@@ -1820,6 +1836,9 @@ struct App {
     connection: ConnectionStatus,
     device_model: String,
     device_slot: String,
+    /// Whether the live Fastboot connection is fastbootd. Only the
+    /// connection label reads it; see [`DevicePollResult`].
+    fastboot_userspace: bool,
     device_firmware: String,
     /// Untrimmed `ro.build.display.id`. Mirrors `device_firmware` but
     /// keeps the leading device-model prefix so the OTA popup can
@@ -2108,6 +2127,7 @@ impl Default for App {
             connection: ConnectionStatus::default(),
             device_model: String::new(),
             device_slot: String::new(),
+            fastboot_userspace: false,
             device_firmware: String::new(),
             device_firmware_full: String::new(),
             device_arb: String::new(),
@@ -3109,6 +3129,18 @@ impl App {
         });
     }
 
+    /// Label key for the live connection. Identical to
+    /// [`ConnectionStatus::label_key`] except that a Fastboot endpoint
+    /// reporting `is-userspace` is named fastbootd — the two are the same
+    /// connection everywhere else, so only the label distinguishes them.
+    fn connection_label_key(&self) -> &'static str {
+        if self.connection == ConnectionStatus::Fastboot && self.fastboot_userspace {
+            "conn_fastbootd"
+        } else {
+            self.connection.label_key()
+        }
+    }
+
     /// The connected dual-USB-C model whose port guide is currently eligible
     /// to open, or `None`. Eligible when the model is one of [`DUAL_USBC_MODELS`]
     /// and the user has neither permanently dismissed ("don't show again")
@@ -3801,6 +3833,34 @@ mod tests {
 
         let _ = app.update(Message::AboutLicensesClose);
         assert!(!app.about_licenses_open);
+    }
+
+    #[test]
+    fn fastbootd_is_labelled_apart_from_the_bootloader() {
+        let mut app = App {
+            connection: ConnectionStatus::Fastboot,
+            ..App::default()
+        };
+        assert_eq!(app.connection_label_key(), "conn_fastboot");
+
+        app.fastboot_userspace = true;
+        assert_eq!(app.connection_label_key(), "conn_fastbootd");
+
+        // The flag only ever qualifies a Fastboot connection.
+        app.connection = ConnectionStatus::Adb;
+        assert_eq!(app.connection_label_key(), "conn_adb");
+    }
+
+    #[test]
+    fn fastbootd_is_reachable_from_every_transport_that_can_ask_for_it() {
+        // ADB routes it through the `reboot:` service, so it works even in
+        // sideload, where there is no shell. The bootloader sends
+        // `reboot-fastboot`. EDL resets only to system or back to EDL.
+        assert!(RebootTarget::Fastbootd.available_from(ConnectionStatus::Adb));
+        assert!(RebootTarget::Fastbootd.available_from(ConnectionStatus::Fastboot));
+        assert!(RebootTarget::Fastbootd.available_from(ConnectionStatus::AdbSideload));
+        assert!(!RebootTarget::Fastbootd.available_from(ConnectionStatus::Edl));
+        assert!(!RebootTarget::Fastbootd.available_from(ConnectionStatus::AdbUnauthorized));
     }
 
     #[test]

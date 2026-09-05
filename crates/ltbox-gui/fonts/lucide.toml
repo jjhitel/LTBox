@@ -21,6 +21,7 @@ nav_settings      = "settings"
 reboot_system     = "smartphone"
 reboot_recovery   = "wrench"
 reboot_bootloader = "terminal"
+reboot_fastbootd  = "square-terminal"
 reboot_edl        = "usb"
 
 # Root mode (72 px)
