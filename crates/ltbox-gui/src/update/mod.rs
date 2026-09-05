@@ -258,12 +258,8 @@ impl App {
             Message::FileSelected(path) => {
                 if let Some(p) = path {
                     self.remember_recent(self.picker_target.kind(), &p);
-                    match self.picker_target {
-                        PickerTarget::RootFile => self.root.file_path = Some(p),
-                        // Root loader `.melf` file — stored in
-                        // `folder_path` for historical field-name reasons.
-                        PickerTarget::RootLoader => self.root.folder_path = Some(p),
-                        _ => {}
+                    if self.picker_target == PickerTarget::RootFile {
+                        self.root.file_path = Some(p);
                     }
                 }
                 self.picker_target = PickerTarget::None;
@@ -285,11 +281,8 @@ impl App {
                     return Task::none();
                 }
                 self.remember_recent(target.kind(), &path);
-                match target {
-                    PickerTarget::RootFile => self.root.file_path = Some(path),
-                    PickerTarget::RootLoader => self.root.folder_path = Some(path),
-                    PickerTarget::UnrootLoader => self.unroot.loader_path = Some(path),
-                    _ => {}
+                if target == PickerTarget::RootFile {
+                    self.root.file_path = Some(path);
                 }
             }
             Message::RecentFolderPicked(target, path) => {

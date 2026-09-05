@@ -121,18 +121,21 @@ impl App {
             }
             RootMsg::RootSelectFolder => {
                 // Historical field name; value is now a single EDL loader file.
-                if let Some(path) = self.resolved_default_loader() {
-                    // A fitting Settings default loader bypasses the picker; a
-                    // model-mismatched (or missing) one falls through to it.
-                    self.root.folder_path = Some(path);
-                    return Task::none();
+                // A fitting Settings default loader bypasses the picker; a
+                // model-mismatched (or missing) one falls through to it.
+                self.pick_loader_with_default(|__v| Message::Root(RootMsg::RootLoaderChosen(__v)))
+            }
+            RootMsg::RootLoaderChosen(path) => {
+                if let Some(p) = path {
+                    match self.resolve_loader_input(&p) {
+                        Ok(loader) => {
+                            self.root.folder_path = Some(loader);
+                            self.error_msg = None;
+                        }
+                        Err(msg) => self.error_msg = Some(msg),
+                    }
                 }
-                self.picker_target = PickerTarget::RootLoader;
-                pickers::pick_file_for(
-                    loader_file_spec(),
-                    &self.recent_paths,
-                    Message::FileSelected,
-                )
+                Task::none()
             }
             RootMsg::RootNext => {
                 if self.root.step == 6 {

@@ -2026,17 +2026,7 @@ enum PickerTarget {
     #[default]
     None,
     RootFile,
-    /// Root pipeline EDL loader (.melf file). Stored in
-    /// `self.root.folder_path` despite the name — the field was repurposed
-    /// from "firmware folder" to "loader file" when the root flow stopped
-    /// needing `rawprogram*.xml` and just uses `qdl-rs dump-part` /
-    /// `qdl-rs write` against a GPT-resolved partition name on LUN 4.
-    RootLoader,
     UnrootFolder,
-    /// Unroot EDL loader (.melf / .xml file) — routes a recent pick into
-    /// `unroot.loader_path`. Shares the `File` recents bucket like the other
-    /// loader pickers (Root loader, dump/flash loaders).
-    UnrootLoader,
     FlashFolder,
 }
 
@@ -2057,10 +2047,7 @@ impl PickerTarget {
         use pickers::PickerKind;
         match self {
             // Root OTA file is a unified file pick (zip or apk).
-            // Root loader is also a file pick (.melf) — shares the File
-            // bucket so the user sees recent .melf picks in the recents
-            // strip regardless of which wizard they came from.
-            Self::None | Self::RootFile | Self::RootLoader | Self::UnrootLoader => PickerKind::File,
+            Self::None | Self::RootFile => PickerKind::File,
             // Firmware folders all share the "full QFIL" bucket — Unroot
             // and Flash typically point the user at the same dump/archive
             // they extracted from `ltbox dump full`.
@@ -3833,6 +3820,60 @@ mod tests {
 
         let _ = app.update(Message::AboutLicensesClose);
         assert!(!app.about_licenses_open);
+    }
+
+    #[test]
+    fn root_and_unroot_loader_steps_upgrade_a_tb323fu_melf_to_the_manifest() {
+        // Every other wizard resolved the pick through `resolve_loader_input`;
+        // these two assigned the raw path, so a TB323FU `.melf` reached the
+        // Sahara handshake without the manifest it needs.
+        let dir = tempfile::tempdir().unwrap();
+        let melf = dir.path().join("xbl_s_devprg_ns.melf");
+        std::fs::write(&melf, b"loader").unwrap();
+        let manifest = dir.path().join(ltbox_core::sahara_xml::MANIFEST_FILENAME);
+        std::fs::write(&manifest, b"<data/>").unwrap();
+        let picked = melf.to_string_lossy().to_string();
+        let want = manifest.to_string_lossy().to_string();
+
+        let mut root_app = App {
+            device_model: "TB323FU".to_string(),
+            ..App::default()
+        };
+        let _ = root_app.update(Message::Root(RootMsg::RootLoaderChosen(Some(
+            picked.clone(),
+        ))));
+        assert_eq!(root_app.root.folder_path.as_deref(), Some(want.as_str()));
+        assert!(root_app.error_msg.is_none());
+
+        let mut unroot_app = App {
+            device_model: "TB323FU".to_string(),
+            ..App::default()
+        };
+        let _ = unroot_app.update(Message::Unroot(UnrootMsg::UnrootLoaderChosen(Some(
+            picked.clone(),
+        ))));
+        assert_eq!(
+            unroot_app.unroot.loader_path.as_deref(),
+            Some(want.as_str())
+        );
+
+        // A non-TB323FU keeps the .melf it was given.
+        let mut other = App {
+            device_model: "TB320FC".to_string(),
+            ..App::default()
+        };
+        let _ = other.update(Message::Root(RootMsg::RootLoaderChosen(Some(
+            picked.clone(),
+        ))));
+        assert_eq!(other.root.folder_path.as_deref(), Some(picked.as_str()));
+
+        // Both steps still record the pick in the shared file recents.
+        assert!(
+            root_app
+                .recent_paths
+                .recent(pickers::PickerKind::File.storage_key())
+                .contains(&picked)
+        );
     }
 
     #[test]

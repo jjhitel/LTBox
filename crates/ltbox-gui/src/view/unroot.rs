@@ -169,7 +169,7 @@ impl App {
         // only loader step missing its recents strip.
         let chips = self.recent_file_chips(
             LOADER_PICKER_EXTS,
-            |p| Message::RecentFilePicked(PickerTarget::UnrootLoader, p),
+            |p| Message::Unroot(UnrootMsg::UnrootLoaderChosen(Some(p))),
             "picker_recents",
         );
         let col = column![

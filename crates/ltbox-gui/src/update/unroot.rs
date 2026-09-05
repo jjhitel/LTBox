@@ -26,8 +26,13 @@ impl App {
             }),
             UnrootMsg::UnrootLoaderChosen(path) => {
                 if let Some(p) = path {
-                    self.remember_recent(pickers::PickerKind::File, &p);
-                    self.unroot.loader_path = Some(p);
+                    match self.resolve_loader_input(&p) {
+                        Ok(loader) => {
+                            self.unroot.loader_path = Some(loader);
+                            self.error_msg = None;
+                        }
+                        Err(msg) => self.error_msg = Some(msg),
+                    }
                 }
                 Task::none()
             }

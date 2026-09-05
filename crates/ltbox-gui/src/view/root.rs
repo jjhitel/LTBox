@@ -621,7 +621,7 @@ impl App {
         .style(move |t: &Theme, status| sel_card_btn_style(t, status, selected));
         let chips = self.recent_file_chips(
             LOADER_PICKER_EXTS,
-            |p| Message::RecentFilePicked(PickerTarget::RootLoader, p),
+            |p| Message::Root(RootMsg::RootLoaderChosen(Some(p))),
             "picker_recents",
         );
         let col = column![

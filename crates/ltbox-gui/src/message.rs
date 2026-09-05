@@ -266,7 +266,12 @@ pub(crate) enum RootMsg {
     RootVersion(VerChoice),
     RootNightlySource(NightlySource),
     RootSelectFile,
+    /// Open the EDL loader picker for the root pipeline. Named for the
+    /// step, which predates the field it fills.
     RootSelectFolder,
+    /// Loader picked for the root pipeline, or `None` on cancel. Routed
+    /// through `resolve_loader_input` like every other loader step.
+    RootLoaderChosen(Option<String>),
     RootNext,
     RootBack,
     RootSelectKpm,
