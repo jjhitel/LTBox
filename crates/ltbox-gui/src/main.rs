@@ -4231,7 +4231,7 @@ mod tests {
 
     #[test]
     fn efisp_is_empty_only_for_all_zero() {
-        assert!(efisp_is_empty(&[]));
+        assert!(!efisp_is_empty(&[]));
         assert!(efisp_is_empty(&[0u8; 4096]));
         assert!(!efisp_is_empty(&[0, 0, 1, 0]));
         let mut buf = vec![0u8; 1024];

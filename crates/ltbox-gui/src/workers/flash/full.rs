@@ -1408,15 +1408,29 @@ pub(crate) fn flash_worker(
     if target_is_tb323fu && (tb323fu_arb_need || cfg.modify_region) {
         // TB323FU's AVB fingerprint carries no region token; read the region
         // from the firmware vendor_boot's `product_region` DTB marker instead.
-        let is_prc = ltbox_patch::region::detect_product_region(&vendor_boot)
-            == Some(ltbox_patch::region::RegionTarget::Prc);
-        let suffix = efisp_asset_suffix(is_prc, tb323fu_arb_need);
-        let efi_path = fetch_efisp_asset(
-            suffix,
-            &ltbox_core::app_paths::work_dir_for("flash_efisp"),
-            "[Flash]",
-            &mut log,
-        )?;
+        let staged =
+            efisp_suffix_for_vendor_boot(&vendor_boot, tb323fu_arb_need).and_then(|suffix| {
+                fetch_efisp_asset(
+                    suffix,
+                    &ltbox_core::app_paths::work_dir_for("flash_efisp"),
+                    "[Flash]",
+                    &mut log,
+                )
+            });
+        let efi_path = match staged {
+            Ok(path) => path,
+            Err(error) => {
+                // No partition writes have started. Release Firehose while
+                // preserving EDL for devices that started there for recovery.
+                live!(log, "[Flash] {error}");
+                if edl_start {
+                    let _ = session.reset_to_edl(&mut log);
+                } else {
+                    session.reset_tolerant(&mut log);
+                }
+                return Err(error);
+            }
+        };
         efisp_efi = Some(efi_path);
     }
 

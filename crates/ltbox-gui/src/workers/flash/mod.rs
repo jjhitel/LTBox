@@ -5,7 +5,7 @@
 
 use crate::{
     ConnectionStatus, CountryPatchProgress, FirmwareIdentity, LiveLabels, PhaseReporter,
-    WorkflowConfig, active_slot_suffix, build_tb323fu_arb_overlays, efisp_asset_suffix,
+    WorkflowConfig, active_slot_suffix, build_tb323fu_arb_overlays, efisp_suffix_for_vendor_boot,
     fetch_efisp_asset, find_firmware_loader, fingerprint_token_match, is_rollback_protected_model,
     open_edl_session, read_device_rollback_index_via_edl, transition_to_edl,
 };

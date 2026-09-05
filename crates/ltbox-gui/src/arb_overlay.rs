@@ -20,11 +20,40 @@ pub(crate) fn efisp_asset_suffix(is_prc: bool, arb: bool) -> &'static str {
 }
 
 /// A dumped `efisp` partition counts as empty (un-provisioned) when every byte
-/// is zero — the stock/erased state. A GBL-provisioned `efisp` carries the EFI
+/// is zero and the dump is nonempty — the stock/erased state.
+/// A GBL-provisioned efisp carries the EFI
 /// payload, so it has non-zero bytes. The TB323FU root flow uses an empty result
 /// to provision the appropriate region GBL before continuing.
 pub(crate) fn efisp_is_empty(data: &[u8]) -> bool {
-    data.iter().all(|&b| b == 0)
+    !data.is_empty() && data.iter().all(|&b| b == 0)
+}
+
+/// A missing, unreadable or zero-length dump cannot establish provisioning state.
+fn read_efisp_is_empty(path: &std::path::Path) -> Result<bool, String> {
+    let data = std::fs::read(path).map_err(|error| {
+        tr_args!(
+            "err_efisp_read_failed",
+            path = path.display(),
+            error = error
+        )
+    })?;
+    if data.is_empty() {
+        return Err(ltbox_core::i18n::tr("err_efisp_dump_empty"));
+    }
+    Ok(efisp_is_empty(&data))
+}
+
+/// Select a GBL only after positively identifying the vendor_boot region.
+pub(crate) fn efisp_suffix_for_vendor_boot(
+    path: &std::path::Path,
+    arb: bool,
+) -> Result<&'static str, String> {
+    use ltbox_patch::region::RegionTarget;
+    match ltbox_patch::region::detect_product_region(path) {
+        Some(RegionTarget::Prc) => Ok(efisp_asset_suffix(true, arb)),
+        Some(RegionTarget::Row) => Ok(efisp_asset_suffix(false, arb)),
+        None => Err(tr_args!("err_efisp_region_unknown", path = path.display())),
+    }
 }
 
 /// Inspect TB323FU `efisp` and, when it is still all-zero, stage the matching
@@ -55,9 +84,7 @@ pub(crate) fn prepare_tb323fu_efisp(
                 error = e
             )
         })?;
-    let efisp_empty = std::fs::read(&dumped_efisp)
-        .map(|data| efisp_is_empty(&data))
-        .unwrap_or(true);
+    let efisp_empty = read_efisp_is_empty(&dumped_efisp)?;
     if !efisp_empty {
         live!(log, "[Root] {}", ltbox_core::i18n::tr("log_root_efisp_ok"));
         return Ok(None);
@@ -66,25 +93,24 @@ pub(crate) fn prepare_tb323fu_efisp(
     // Empty efisp is the stock, GBL-unprovisioned state. Region comes from
     // vendor_boot's product_region marker because the AVB fingerprint carries
     // no PRC/ROW token on TB323FU.
-    let is_prc = if let Some(path) = dumped_vendor_boot {
-        ltbox_patch::region::detect_product_region(path)
-            == Some(ltbox_patch::region::RegionTarget::Prc)
+    let suffix = if let Some(path) = dumped_vendor_boot {
+        efisp_suffix_for_vendor_boot(path, false)?
     } else {
         let partition = format!("vendor_boot{slot_suffix}");
         let path = work_dir.join("vendor_boot.img");
-        match ltbox_core::partition_lun::lun_for_partition(&partition) {
-            Some(lun)
-                if session
-                    .dump_partition(&partition, &path, 0, lun, log)
-                    .is_ok() =>
-            {
-                ltbox_patch::region::detect_product_region(&path)
-                    == Some(ltbox_patch::region::RegionTarget::Prc)
-            }
-            _ => false,
-        }
+        let lun = ltbox_core::partition_lun::lun_for_partition(&partition)
+            .ok_or_else(|| tr_args!("err_no_hardcoded_lun", partition = partition))?;
+        session
+            .dump_partition(&partition, &path, 0, lun, log)
+            .map_err(|error| {
+                tr_args!(
+                    "err_root_dump_partition_failed",
+                    partition = partition,
+                    error = error
+                )
+            })?;
+        efisp_suffix_for_vendor_boot(&path, false)?
     };
-    let suffix = efisp_asset_suffix(is_prc, false);
     fetch_efisp_asset(suffix, efi_dir, "[Root]", log).map(Some)
 }
 
@@ -494,4 +520,51 @@ pub(crate) fn build_tb323fu_arb_overlays(
     );
 
     Ok((overlays, need))
+}
+
+#[cfg(test)]
+mod provisioning_tests {
+    use super::{efisp_suffix_for_vendor_boot, read_efisp_is_empty};
+
+    #[test]
+    fn efisp_dump_requires_readable_nonempty_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("efisp.img");
+        assert!(read_efisp_is_empty(&path).is_err());
+        assert!(read_efisp_is_empty(dir.path()).is_err());
+        std::fs::write(&path, []).unwrap();
+        assert!(read_efisp_is_empty(&path).is_err());
+        std::fs::write(&path, [0; 4096]).unwrap();
+        assert!(read_efisp_is_empty(&path).unwrap());
+        std::fs::write(&path, [0, 0, 1, 0]).unwrap();
+        assert!(!read_efisp_is_empty(&path).unwrap());
+    }
+
+    #[test]
+    fn gbl_selection_requires_a_known_region_for_stock_and_arb() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vendor_boot.img");
+        for arb in [false, true] {
+            assert!(efisp_suffix_for_vendor_boot(&path, arb).is_err());
+            assert!(efisp_suffix_for_vendor_boot(dir.path(), arb).is_err());
+        }
+        for data in [b"".as_slice(), b"invalid", b"product_region\0model\0"] {
+            std::fs::write(&path, data).unwrap();
+            for arb in [false, true] {
+                assert!(efisp_suffix_for_vendor_boot(&path, arb).is_err());
+            }
+        }
+        // Minimal product_region FDT property layout accepted by the detector.
+        for (region, stock, arb) in [
+            (b"PRC\0", "_prc.efi", "_prc_arb.efi"),
+            (b"ROW\0", "_row.efi", "_row_arb.efi"),
+        ] {
+            let mut data = b"product_region\0\0".to_vec();
+            data.extend_from_slice(&[0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0x26, 0xb7]);
+            data.extend_from_slice(region);
+            std::fs::write(&path, data).unwrap();
+            assert_eq!(efisp_suffix_for_vendor_boot(&path, false).unwrap(), stock);
+            assert_eq!(efisp_suffix_for_vendor_boot(&path, true).unwrap(), arb);
+        }
+    }
 }
