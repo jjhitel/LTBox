@@ -7,6 +7,9 @@ use crate::*;
 use iced::Task;
 use ltbox_core::tr_args;
 
+#[cfg(test)]
+mod device_poll_tests;
+
 mod advanced;
 mod flash;
 mod konabess;
@@ -19,6 +22,29 @@ mod unroot;
 mod window;
 
 impl App {
+    /// Drop fields and open views belonging to the previous physical device.
+    /// Serial-keyed lookup caches remain valid for their original device.
+    fn clear_device_snapshot(&mut self) {
+        self.device_model.clear();
+        self.device_slot.clear();
+        self.device_firmware.clear();
+        self.device_firmware_full.clear();
+        self.device_arb.clear();
+        self.device_rollback_floors = None;
+        self.rollback_popup_open = false;
+        self.device_ram.clear();
+        self.device_storage.clear();
+        self.device_market_name.clear();
+        self.device_serial.clear();
+        self.platform_supported = None;
+        self.fastboot_userspace = false;
+        self.device_info_popup = None;
+        self.ota_popup = None;
+        self.qfil_popup = None;
+        self.firmware_menu_open = false;
+        self.flash_region_pending = None;
+    }
+
     fn open_available_release_page(&self) {
         let Some(release) = self.update_available.as_ref() else {
             return;
@@ -575,6 +601,12 @@ impl App {
                     self.dual_usb_advisory_model().map(str::to_owned);
                 let prev_serial = self.device_serial.clone();
                 let prev_status = self.connection;
+                // A new nonempty serial identifies a new snapshot even without
+                // an intervening disconnected poll. Blank serials during mode
+                // transitions or transient read failures do not prove a swap.
+                if !r.serial.is_empty() && r.serial != self.device_serial {
+                    self.clear_device_snapshot();
+                }
                 self.connection = r.status;
                 if !r.model.is_empty() {
                     self.device_model = r.model;
@@ -597,7 +629,7 @@ impl App {
                 // single cycle while the device is still very much in
                 // bootloader mode; assigning unconditionally made the popup
                 // close under the user mid-interaction. Floors are only
-                // dropped once the transport actually changes.
+                // dropped on a device swap or when leaving Fastboot.
                 if r.rollback_floors.is_some() {
                     self.device_rollback_floors = r.rollback_floors;
                 } else if self.connection != ConnectionStatus::Fastboot {
@@ -618,18 +650,7 @@ impl App {
                 }
                 self.platform_supported = r.platform_supported;
                 if self.connection == ConnectionStatus::None {
-                    self.device_model.clear();
-                    self.device_slot.clear();
-                    self.device_firmware.clear();
-                    self.device_firmware_full.clear();
-                    self.device_arb.clear();
-                    self.device_rollback_floors = None;
-                    self.rollback_popup_open = false;
-                    self.device_ram.clear();
-                    self.device_storage.clear();
-                    self.device_market_name.clear();
-                    self.device_serial.clear();
-                    self.platform_supported = None;
+                    self.clear_device_snapshot();
                 }
                 // Device swap / disconnect mid-lookup: invalidate any in-flight
                 // region auto-detect so a prior device's PRC/ROW answer can't
