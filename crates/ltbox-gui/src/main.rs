@@ -22,6 +22,8 @@ mod demo;
 mod device_name;
 mod layout_constraints;
 mod loader;
+#[cfg(test)]
+mod manual_rollback_tests;
 mod message;
 mod model;
 mod operation_phase;
@@ -1150,11 +1152,7 @@ impl RollbackSetting {
 }
 
 /// Explicit per-partition rollback targets for `RollbackMode::Manual`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ManualRollbackIndices {
-    pub(crate) boot: u64,
-    pub(crate) vbmeta_system: u64,
-}
+pub(crate) type ManualRollbackIndices = ltbox_patch::rollback::RollbackIndices;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ManualRollbackEditor {

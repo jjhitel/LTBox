@@ -39,6 +39,64 @@ pub struct FastbootRollbackFloors {
     pub boot_index: u64,
 }
 
+/// Rollback indices selected for the `boot` and `vbmeta_system` partitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RollbackIndices {
+    pub boot: u64,
+    pub vbmeta_system: u64,
+}
+
+/// Manual rollback targets and whether each target differs from firmware.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ManualRollbackPlan {
+    pub targets: RollbackIndices,
+    pub boot_changed: bool,
+    pub vbmeta_system_changed: bool,
+}
+
+impl ManualRollbackPlan {
+    /// Returns whether either partition target differs from its firmware index.
+    pub fn changes_indices(&self) -> bool {
+        self.boot_changed || self.vbmeta_system_changed
+    }
+}
+
+/// A requested manual target that is below the device floor for one partition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ManualRollbackBelowFloor {
+    pub partition: &'static str,
+    pub requested: u64,
+    pub floor: u64,
+}
+
+/// Validate manual rollback targets against device floors and report changes.
+pub fn plan_manual_rollback(
+    firmware: RollbackIndices,
+    device_floors: RollbackIndices,
+    requested: RollbackIndices,
+) -> std::result::Result<ManualRollbackPlan, ManualRollbackBelowFloor> {
+    if requested.boot < device_floors.boot {
+        return Err(ManualRollbackBelowFloor {
+            partition: "boot",
+            requested: requested.boot,
+            floor: device_floors.boot,
+        });
+    }
+    if requested.vbmeta_system < device_floors.vbmeta_system {
+        return Err(ManualRollbackBelowFloor {
+            partition: "vbmeta_system",
+            requested: requested.vbmeta_system,
+            floor: device_floors.vbmeta_system,
+        });
+    }
+
+    Ok(ManualRollbackPlan {
+        targets: requested,
+        boot_changed: firmware.boot != requested.boot,
+        vbmeta_system_changed: firmware.vbmeta_system != requested.vbmeta_system,
+    })
+}
+
 /// Classify exactly two meaningful fastboot rollback entries excluding
 /// location 1 (`recovery`). The lower location is `vbmeta_system`; the higher
 /// location is `boot`. Returns `None` for every other shape so callers can use
@@ -281,5 +339,129 @@ mod tests {
         assert!(!needs_patch(RollbackMode::Manual, 0, Some(10)));
         assert!(!needs_patch(RollbackMode::Manual, 100, Some(10)));
         assert!(!needs_patch(RollbackMode::Manual, 0, None));
+    }
+
+    #[test]
+    fn manual_plan_accepts_asymmetric_floor_boundaries_and_preserves_targets() {
+        let firmware = RollbackIndices {
+            boot: 50,
+            vbmeta_system: 80,
+        };
+        let floors = RollbackIndices {
+            boot: 10,
+            vbmeta_system: 90,
+        };
+        let requested = RollbackIndices {
+            boot: 10,
+            vbmeta_system: 100,
+        };
+
+        let plan = plan_manual_rollback(firmware, floors, requested).unwrap();
+
+        assert_eq!(plan.targets, requested);
+        assert!(plan.boot_changed);
+        assert!(plan.vbmeta_system_changed);
+        assert!(plan.changes_indices());
+    }
+
+    #[test]
+    fn manual_plan_rejects_boot_below_floor_before_unchanged_check() {
+        let requested = RollbackIndices {
+            boot: 9,
+            vbmeta_system: 20,
+        };
+        let error = plan_manual_rollback(
+            requested,
+            RollbackIndices {
+                boot: 10,
+                vbmeta_system: 20,
+            },
+            requested,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            ManualRollbackBelowFloor {
+                partition: "boot",
+                requested: 9,
+                floor: 10,
+            }
+        );
+    }
+
+    #[test]
+    fn manual_plan_rejects_vbmeta_system_below_floor() {
+        let error = plan_manual_rollback(
+            RollbackIndices {
+                boot: 10,
+                vbmeta_system: 9,
+            },
+            RollbackIndices {
+                boot: 10,
+                vbmeta_system: 10,
+            },
+            RollbackIndices {
+                boot: 10,
+                vbmeta_system: 9,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            ManualRollbackBelowFloor {
+                partition: "vbmeta_system",
+                requested: 9,
+                floor: 10,
+            }
+        );
+    }
+
+    #[test]
+    fn manual_plan_accepts_firmware_equal_to_requested_at_floor() {
+        let requested = RollbackIndices {
+            boot: 10,
+            vbmeta_system: 20,
+        };
+        let plan = plan_manual_rollback(
+            requested,
+            RollbackIndices {
+                boot: 10,
+                vbmeta_system: 20,
+            },
+            requested,
+        )
+        .unwrap();
+
+        assert_eq!(plan.targets, requested);
+        assert!(!plan.boot_changed);
+        assert!(!plan.vbmeta_system_changed);
+        assert!(!plan.changes_indices());
+    }
+
+    #[test]
+    fn manual_plan_preserves_targets_above_firmware_and_u64_max() {
+        let requested = RollbackIndices {
+            boot: u64::MAX,
+            vbmeta_system: u64::MAX - 1,
+        };
+        let plan = plan_manual_rollback(
+            RollbackIndices {
+                boot: 1,
+                vbmeta_system: 2,
+            },
+            RollbackIndices {
+                boot: 0,
+                vbmeta_system: 0,
+            },
+            requested,
+        )
+        .unwrap();
+
+        assert_eq!(plan.targets, requested);
+        assert_eq!(plan.targets.boot, u64::MAX);
+        assert_eq!(plan.targets.vbmeta_system, u64::MAX - 1);
+        assert!(plan.changes_indices());
     }
 }

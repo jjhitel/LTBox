@@ -3243,6 +3243,7 @@ dependencies = [
 name = "ltbox-gui"
 version = "3.2.9"
 dependencies = [
+ "avbtool-rs",
  "camino",
  "dark-light",
  "dirs",

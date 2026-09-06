@@ -1,5 +1,6 @@
 use super::*;
 use crate::{ManualRollbackIndices, PhaseReporter};
+use ltbox_patch::rollback::RollbackIndices;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flash_worker(
@@ -343,33 +344,20 @@ pub(crate) fn flash_worker(
     // user's selected rollback-bypass + region modes are preserved exactly as
     // on an ADB/bootloader start.
 
-    // TB323FU must never run a blind ON: ON bumps even
-    // matching indices and would force the testkey/_arb
-    // chain when no downgrade is in play. Demote to AUTO so
-    // the EDL-dumped device index decides per partition.
-    if target_is_tb323fu && rb_mode != ltbox_patch::rollback::RollbackMode::Off {
-        if rb_mode == ltbox_patch::rollback::RollbackMode::On {
-            rb_mode = ltbox_patch::rollback::RollbackMode::Auto;
-            ltbox_core::live!(
-                log,
-                "[ARB] {}",
-                ltbox_core::i18n::tr("live_flash_tb323fu_force_auto")
-            );
-        } else if rb_mode == ltbox_patch::rollback::RollbackMode::Manual {
-            rb_mode = ltbox_patch::rollback::RollbackMode::Off;
-            ltbox_core::live!(
-                log,
-                "[ARB] {}",
-                ltbox_core::i18n::tr("rollback_manual_tb323fu_disabled")
-            );
-        }
-    }
-    if xiaoxin_pro13_flash && rb_mode != ltbox_patch::rollback::RollbackMode::Auto {
-        rb_mode = ltbox_patch::rollback::RollbackMode::Auto;
+    // TB323FU keeps explicit Manual targets; only blind On is demoted to Auto.
+    // TB376FC/TB390FU never modify rollback indices, regardless of UI input.
+    let effective_mode =
+        effective_flash_rollback_mode(rb_mode, target_is_tb323fu, xiaoxin_pro13_flash);
+    if effective_mode != rb_mode {
+        rb_mode = effective_mode;
         ltbox_core::live!(
             log,
             "[ARB] {}",
-            ltbox_core::i18n::tr("live_flash_xiaoxin_force_auto")
+            ltbox_core::i18n::tr(if xiaoxin_pro13_flash {
+                "live_flash_xiaoxin_force_auto"
+            } else {
+                "live_flash_tb323fu_force_auto"
+            })
         );
     }
     if tb323fu_skip_region {
@@ -842,6 +830,62 @@ pub(crate) fn flash_worker(
         }
     }
 
+    // Manual is a checked request, not an automatic clamp. Resolve its floor
+    // before entering any signing branch or issuing a partition write. Keeping
+    // this outside the Lenovo-key gate also protects unchanged stock images.
+    let mut manual_device = None;
+    let mut checked_manual_floors = None;
+    let manual_plan = if rb_mode == ltbox_patch::rollback::RollbackMode::Manual {
+        let planned = (|| {
+            if manual_rollback_indices.is_none() {
+                return Err(ltbox_core::i18n::tr("rollback_manual_error_missing"));
+            }
+            let floors = if !is_rollback_protected_model(&device_model) {
+                // TB322FC has no committed rollback protection.
+                RollbackIndices {
+                    boot: 0,
+                    vbmeta_system: 0,
+                }
+            } else if let Some(floors) =
+                manual_device_floors(edl_floors, fastboot_rollback_floors, device_rollback_index)
+            {
+                floors
+            } else {
+                let floor_dir = ltbox_core::app_paths::work_dir_for("flash_manual_arb");
+                std::fs::create_dir_all(&floor_dir)
+                    .map_err(|e| tr_args!("err_arb_work_dir_failed", error = e))?;
+                let device =
+                    read_device_vbmeta(&mut session, active_slot.as_deref(), &floor_dir, &mut log)
+                        .map_err(|error| {
+                            live!(log, "[ARB] {error}");
+                            ltbox_core::i18n::tr("err_flash_manual_rollback_floor_unreadable")
+                        })?;
+                let floors = RollbackIndices {
+                    boot: device.boot_floor,
+                    vbmeta_system: device.vbs_floor,
+                };
+                manual_device = Some(device);
+                floors
+            };
+            checked_manual_floors = Some(floors);
+            manual::prepare_manual_rollback_plan(fw_dir, floors, manual_rollback_indices)
+        })();
+        match planned {
+            Ok(plan) => Some(plan),
+            Err(error) => {
+                live!(log, "[ARB] {error}");
+                if edl_start {
+                    let _ = session.reset_to_edl(&mut log);
+                } else {
+                    session.reset_tolerant(&mut log);
+                }
+                return Err(error);
+            }
+        }
+    } else {
+        None
+    };
+
     // Full-firmware flash: rawprogram + patch XMLs
     // drive every program node (no slot guessing).
     let (raw_xmls, patch_xmls) = ltbox_device::edl::collect_firmware_xmls_for_flash(fw_dir, false)
@@ -868,8 +912,11 @@ pub(crate) fn flash_worker(
         let _ = std::fs::remove_dir_all(&kc_dir);
         std::fs::create_dir_all(&kc_dir)
             .map_err(|e| tr_args!("err_keyclass_work_dir_failed", error = e))?;
-        let dev = match read_device_vbmeta(&mut session, active_slot.as_deref(), &kc_dir, &mut log)
-        {
+        let device_info = match manual_device.take() {
+            Some(device) => Ok(device),
+            None => read_device_vbmeta(&mut session, active_slot.as_deref(), &kc_dir, &mut log),
+        };
+        let dev = match device_info {
             Ok(d) => d,
             Err(e) => {
                 if edl_start {
@@ -912,11 +959,10 @@ pub(crate) fn flash_worker(
                     // is on firmware that closed the test-key hole.
                     return Err(ltbox_core::i18n::tr("err_device_key_lenovo"));
                 }
-                // Manual indexes would have to be written into the images, and
-                // rewriting one invalidates its LenovoRSA signature that this
-                // device is the only thing that will accept. The mode cannot be
-                // honoured, so stop instead of silently flashing stock indexes.
-                if rb_mode == ltbox_patch::rollback::RollbackMode::Manual {
+                // Only changed targets invalidate the LenovoRSA signature.
+                // Unchanged Manual targets already passed the device floor gate
+                // and can retain the original signed firmware byte for byte.
+                if manual_plan.is_some_and(|plan| plan.changes_indices()) {
                     if edl_start {
                         let _ = session.reset_to_edl(&mut log);
                     } else {
@@ -1006,16 +1052,28 @@ pub(crate) fn flash_worker(
                     }
                 }
 
-                let (mut overlays, _need) = build_tb323fu_arb_overlays(
+                let built = build_testkey_arb_overlays(
                     &mut session,
                     fw_dir,
                     &arb_work_dir,
                     Some(dev.slot),
                     Some((dev.boot_floor, dev.vbs_floor)),
+                    manual_plan.map(|plan| plan.targets),
                     true,
                     resign_base.as_deref(),
                     &mut log,
-                )?;
+                );
+                let (mut overlays, _need) = match built {
+                    Ok(built) => built,
+                    Err(error) => {
+                        if edl_start {
+                            let _ = session.reset_to_edl(&mut log);
+                        } else {
+                            session.reset_tolerant(&mut log);
+                        }
+                        return Err(error);
+                    }
+                };
                 if let Some(vb) = region_vendor_boot {
                     let lun = ltbox_core::partition_lun::lun_for_partition("vendor_boot_a")
                         .ok_or_else(|| "no LUN for vendor_boot_a".to_string())?;
@@ -1043,120 +1101,49 @@ pub(crate) fn flash_worker(
         }
     }
     if rb_mode == ltbox_patch::rollback::RollbackMode::Manual {
-        let Some(indices) = manual_rollback_indices else {
-            let err = ltbox_core::i18n::tr("rollback_manual_error_missing");
-            session.reset_tolerant(&mut log);
-            return Err(err);
-        };
-        let arb_work_dir = ltbox_core::app_paths::work_dir_for("flash_arb");
-        let _ = std::fs::remove_dir_all(&arb_work_dir);
-        std::fs::create_dir_all(&arb_work_dir)
-            .map_err(|e| tr_args!("err_arb_work_dir_failed", error = e))?;
-
-        for (log_name, filename, target) in [
-            ("boot", "boot.img", indices.boot),
-            ("vbmeta_system", "vbmeta_system.img", indices.vbmeta_system),
-        ] {
-            let source = fw_dir.join(filename);
-            if !source.exists() {
-                ltbox_core::live!(
-                    log,
-                    "[ARB] {}",
-                    tr_args!(
-                        "live_arb_skip_image_missing",
-                        name = log_name,
-                        file = source.display().to_string()
-                    )
-                );
-                continue;
-            }
-            let image_info = match ltbox_patch::avb::extract_image_avb_info(&source) {
-                Ok(info) => info,
-                Err(e) => {
-                    let err = tr_args!(
-                        "err_patch_arb_inspect_failed",
-                        image = log_name,
-                        error = e.to_string()
-                    );
-                    ltbox_core::live!(log, "[ARB] {err}");
-                    session.reset_tolerant(&mut log);
-                    return Err(err);
+        let staged = (|| {
+            let plan =
+                manual_plan.ok_or_else(|| ltbox_core::i18n::tr("rollback_manual_error_missing"))?;
+            let arb_work_dir = ltbox_core::app_paths::work_dir_for("flash_arb");
+            if target_is_tb323fu {
+                if !plan.changes_indices() {
+                    return Ok((Vec::new(), false));
                 }
-            };
-            let key_from_map = match ltbox_patch::key_map::key_spec_for_signed_pubkey(
-                image_info.public_key_sha1.as_deref(),
-            ) {
-                Ok(spec) => spec,
-                Err(sha) => {
-                    let err = ltbox_patch::key_map::unresolved_signing_key_error(log_name, &sha);
-                    ltbox_core::live!(log, "[ARB] {err}");
-                    session.reset_tolerant(&mut log);
-                    return Err(err);
-                }
-            };
-            let patched = arb_work_dir.join(format!("{log_name}.manual.img"));
-            let is_vbmeta = log_name.starts_with("vbmeta");
-            let patch_result = if is_vbmeta {
-                match key_from_map {
-                    Some(spec) => {
-                        std::fs::copy(&source, &patched)
-                            .map_err(|e| format!("copy vbmeta: {e}"))?;
-                        ltbox_patch::avb::resign_image(
-                            &patched,
-                            spec,
-                            &image_info.algorithm,
-                            Some(target),
-                        )
-                        .map_err(|e| format!("resign {log_name}: {e}"))
-                    }
-                    None => Err(tr_args!(
-                        "err_patch_arb_resign_failed",
-                        image = log_name,
-                        error = "unsigned image; cannot stage required ARB overlay"
-                    )),
-                }
-            } else if image_info.algorithm == "NONE" {
-                std::fs::copy(&source, &patched).map_err(|e| format!("copy chained: {e}"))?;
-                ltbox_patch::avb::add_hash_footer(&patched, &image_info, key_from_map, Some(target))
-                    .map_err(|e| format!("patch {log_name}: {e}"))
-            } else if let Some(spec) = key_from_map {
-                std::fs::copy(&source, &patched).map_err(|e| format!("copy chained: {e}"))?;
-                ltbox_patch::avb::resign_image(&patched, spec, &image_info.algorithm, Some(target))
-                    .map_err(|e| format!("resign {log_name}: {e}"))
-            } else {
-                Err(tr_args!(
-                    "err_patch_arb_resign_failed",
-                    image = log_name,
-                    error = "unsigned image; cannot stage required ARB overlay"
-                ))
-            };
-            if let Err(e) = patch_result {
-                let err = tr_args!(
-                    "live_arb_patch_failed",
-                    name = log_name,
-                    error = e.to_string()
-                );
-                ltbox_core::live!(log, "[ARB] {err}");
-                session.reset_tolerant(&mut log);
-                return Err(err);
-            }
-            let lun = ltbox_core::partition_lun::lun_for_partition(log_name)
-                .ok_or_else(|| format!("no hardcoded LUN for {log_name}"))?;
-            arb_patched.push((
-                format!("{log_name}{}", active_slot_suffix(None)),
-                lun,
-                patched.clone(),
-            ));
-            live!(
-                log,
-                "[ARB] {}",
-                tr_args!(
-                    "live_arb_manual_prepared",
-                    name = log_name,
-                    path = patched.display().to_string(),
-                    target = target.to_string()
+                let floors = checked_manual_floors.ok_or_else(|| {
+                    ltbox_core::i18n::tr("err_flash_manual_rollback_floor_unreadable")
+                })?;
+                let _ = std::fs::remove_dir_all(&arb_work_dir);
+                std::fs::create_dir_all(&arb_work_dir)
+                    .map_err(|e| tr_args!("err_arb_work_dir_failed", error = e))?;
+                build_testkey_arb_overlays(
+                    &mut session,
+                    fw_dir,
+                    &arb_work_dir,
+                    active_slot.as_deref(),
+                    Some((floors.boot, floors.vbmeta_system)),
+                    Some(plan.targets),
+                    false,
+                    None,
+                    &mut log,
                 )
-            );
+            } else {
+                manual::build_manual_rollback_overlays(fw_dir, &arb_work_dir, plan, &mut log)
+                    .map(|overlays| (overlays, false))
+            }
+        })();
+        match staged {
+            Ok((overlays, needs_arb_gbl)) => {
+                arb_patched = overlays;
+                tb323fu_arb_need = needs_arb_gbl;
+            }
+            Err(error) => {
+                if edl_start {
+                    let _ = session.reset_to_edl(&mut log);
+                } else {
+                    session.reset_tolerant(&mut log);
+                }
+                return Err(error);
+            }
         }
     } else if rb_mode != ltbox_patch::rollback::RollbackMode::Off && target_is_tb323fu {
         // TB323FU stages the testkey chain whenever the
@@ -1171,12 +1158,13 @@ pub(crate) fn flash_worker(
         let _ = std::fs::remove_dir_all(&arb_work_dir);
         std::fs::create_dir_all(&arb_work_dir)
             .map_err(|e| tr_args!("err_arb_work_dir_failed", error = e))?;
-        let (overlays, need) = build_tb323fu_arb_overlays(
+        let (overlays, need) = build_testkey_arb_overlays(
             &mut session,
             fw_dir,
             &arb_work_dir,
             active_slot.as_deref(),
             edl_floors,
+            None,
             false,
             None,
             &mut log,
@@ -1399,7 +1387,7 @@ pub(crate) fn flash_worker(
 
     // Download the efisp GBL now that the ARB dump has
     // decided stock vs `_arb` (testkey-root). The `_arb`
-    // GBL is fetched whenever a downgrade re-signed the
+    // GBL is fetched whenever Auto or Manual re-signed the
     // chain; the normal GBL is fetched for a cross-region
     // ("Other region") provisioning install. Neither is
     // gated on data wipe — flashing efisp no longer forces
@@ -1535,7 +1523,7 @@ pub(crate) fn flash_worker(
     // provisioned together, before the best-effort region /
     // country work that can abort in between. A fetched EFI
     // (Some) is flashed: the `_arb` variant whenever a
-    // downgrade re-signed the chain — fatal on failure since
+    // index change re-signed the chain — fatal on failure since
     // that chain can't boot without it — or the normal
     // variant on a region-provisioning wipe (best-effort).
     // With no EFI fetched, a same-region wipe strips efisp;
@@ -1574,13 +1562,13 @@ pub(crate) fn flash_worker(
                 }
             }
             None => {
-                // A downgrade always fetches the `_arb` GBL,
+                // A re-signed chain always fetches the `_arb` GBL,
                 // so reaching here with `need` set is an
                 // internal inconsistency — fail safe.
                 if tb323fu_arb_need {
                     return Err(ltbox_core::i18n::tr("err_flash_efisp_arb_missing"));
                 }
-                // Same-region wipe with no downgrade strips
+                // Same-region wipe with no re-signing strips
                 // the GBL; other modes leave efisp as-is.
                 if cfg.wipe && !cfg.modify_region {
                     ltbox_core::live!(
