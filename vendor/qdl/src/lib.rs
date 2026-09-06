@@ -728,7 +728,8 @@ pub fn firehose_read_storage(
         }
 
         last_read_was_zero_len = false;
-        let _ = out.write(&buf[..n])?;
+        out.write_all(&buf[..n])
+            .context("Error writing storage data")?;
 
         bytes_left -= n;
         pb.add(n as u64);
