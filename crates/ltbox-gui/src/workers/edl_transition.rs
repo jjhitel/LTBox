@@ -167,6 +167,9 @@ pub(crate) fn fastboot_reboot_then_adb_edl(tag: &str, log: &mut Vec<String>) -> 
                 "[{tag}] {}",
                 tr_args!("err_fastboot_open_failed", error = e.to_string())
             );
+            if matches!(e, ltbox_device::fastboot::FastbootError::MultipleDevices) {
+                return Err(());
+            }
             return wait_for_manual_edl(tag, log);
         }
     }
@@ -210,6 +213,10 @@ pub(crate) fn ensure_edl(
     tag: &str,
     log: &mut Vec<String>,
 ) -> Result<(), ()> {
+    if let Err(error) = ltbox_device::selection::ensure_single_usb_target() {
+        ltbox_core::live!(log, "[{tag}] {error}");
+        return Err(());
+    }
     match edl_entry_action(conn) {
         EdlEntryAction::AlreadyEdl => {
             ltbox_core::live!(log, "[{tag}] {}", ltbox_core::i18n::tr("live_edl_already"));

@@ -78,7 +78,7 @@ fn find_usb_handle_by_sn(
     devices: &mut dyn Iterator<Item = DeviceInfo>,
     serial_no: String,
 ) -> Result<Device> {
-    let mut dev: Option<DeviceInfo> = None;
+    let mut matches = Vec::new();
 
     for d in devices {
         if let Some(prod_str) = d.product_string() {
@@ -90,38 +90,60 @@ fn find_usb_handle_by_sn(
             };
             let sn = &prod_str[sn_pos + "_SN:".len()..];
             if sn.eq_ignore_ascii_case(&serial_no) {
-                dev = Some(d);
-                break;
+                matches.push(d);
             }
         }
     }
 
-    match dev {
-        Some(h) => Ok(h.open().wait()?),
-        None => bail!(
+    if matches.is_empty() {
+        bail!(
             "Found no devices in EDL mode with serial number {}",
             serial_no
-        ),
+        );
     }
+    Ok(select_single_edl(matches)?.open().wait()?)
+}
+
+/// Select before opening or claiming any device, even when serials are duplicated.
+fn select_single_edl<T>(devices: impl IntoIterator<Item = T>) -> Result<T> {
+    let mut devices = devices.into_iter();
+    let first = devices.next().context("Found no devices in EDL mode")?;
+    if devices.next().is_some() {
+        bail!("Multiple EDL devices found. Disconnect other devices and try again.");
+    }
+    Ok(first)
 }
 
 pub fn setup_usb_device(serial_no: Option<String>) -> Result<QdlUsbConfig> {
     let mut devices = nusb::list_devices()
         .wait()
-        .unwrap()
+        .context("Failed to enumerate USB devices")?
         .filter(|d| d.vendor_id() == USB_VID_QCOM && USB_PID_EDL.contains(&d.product_id()));
 
     let dev = match serial_no {
         Some(s) => find_usb_handle_by_sn(&mut devices, s)?,
         None => {
-            let Some(d) = devices.next() else {
-                bail!("Found no devices in EDL mode")
-            };
+            let d = select_single_edl(devices)?;
             d.open().wait()?
         }
     };
 
     setup_usb_device_from_device(dev)
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::select_single_edl;
+
+    #[test]
+    fn ambiguous_enumeration_never_selects_the_first_device() {
+        assert!(select_single_edl::<u8>([]).is_err());
+        assert_eq!(select_single_edl([7]).unwrap(), 7);
+        for devices in [[1, 2], [2, 1], [1, 1]] {
+            let error = select_single_edl(devices).unwrap_err().to_string();
+            assert!(error.contains("Multiple EDL devices"));
+        }
+    }
 }
 
 fn setup_usb_device_from_device(dev: Device) -> Result<QdlUsbConfig> {

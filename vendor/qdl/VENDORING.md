@@ -69,6 +69,11 @@ carrying the minimal patches we need.
   `firehose_read_storage`, and `sahara_dump_region` now call
   `pb.finish_println("")` when their transfer loop ends.
 
+- **Reject ambiguous USB selection** (`src/usb.rs`). Enumerate every matching
+  EDL candidate before opening a handle, including duplicate serial matches.
+  Multiple candidates require the user to disconnect other devices. Propagate
+  enumeration errors instead of panicking.
+
 ## Updating
 
 To re-sync with upstream: re-copy `src/` + `Cargo.toml` from the desired

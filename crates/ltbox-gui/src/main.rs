@@ -1593,6 +1593,7 @@ pub(crate) fn transition_to_edl(
     conn: ConnectionStatus,
     log: &mut Vec<String>,
 ) -> std::result::Result<(), String> {
+    ltbox_device::selection::ensure_single_usb_target().map_err(|e| e.to_string())?;
     let live = probe_connection_for_edl().unwrap_or(conn);
     ensure_edl(live, "EDL", log).map_err(|()| ltbox_core::i18n::tr("err_edl_transition_failed"))
 }

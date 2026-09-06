@@ -177,6 +177,8 @@ impl AdbManager {
     /// coarse to identify a specific device when multiple of the same
     /// model are around.
     fn connect_device(&mut self) -> Result<&mut ADBUSBDevice> {
+        crate::selection::ensure_single_usb_target()
+            .map_err(|e| AdbError::Client(e.to_string()))?;
         if self.device.is_none() {
             let key_path = Self::ensure_key_path()?;
             // Retry the libusb claim a few times — see

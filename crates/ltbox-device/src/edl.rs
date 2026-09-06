@@ -144,6 +144,8 @@ fn update_flash_progress(
 pub enum EdlError {
     #[error("EDL port not found")]
     PortNotFound,
+    #[error("Multiple EDL devices found. Disconnect other devices and try again.")]
+    MultipleDevices,
     #[error("Timed out after {0:?} waiting for a stable EDL port")]
     PortTimeout(Duration),
     #[error("Serial error: {0}")]
@@ -161,7 +163,7 @@ pub enum EdlError {
 type Result<T> = std::result::Result<T, EdlError>;
 
 /// Scan for the Qualcomm 9008 EDL endpoint via libusb. Returns
-/// [`EDL_DEVICE_MARKER`] when at least one matching device is enumerated,
+/// [`EDL_DEVICE_MARKER`] when exactly one matching device is enumerated,
 /// otherwise [`EdlError::PortNotFound`].
 ///
 /// Implemented with `nusb::list_devices()` to mirror the discovery path
@@ -175,37 +177,49 @@ pub fn find_edl_device() -> Result<String> {
     let devices = nusb::list_devices()
         .wait()
         .map_err(|e| EdlError::Serial(format!("USB device enumeration failed: {e}")))?;
-    for d in devices {
-        if d.vendor_id() == QUALCOMM_VID && d.product_id() == QUALCOMM_EDL_PID {
-            return Ok(EDL_DEVICE_MARKER.to_string());
-        }
+    match devices
+        .filter(|d| d.vendor_id() == QUALCOMM_VID && d.product_id() == QUALCOMM_EDL_PID)
+        .count()
+    {
+        0 => Err(EdlError::PortNotFound),
+        1 => Ok(EDL_DEVICE_MARKER.to_string()),
+        _ => Err(EdlError::MultipleDevices),
     }
-    Err(EdlError::PortNotFound)
 }
 
 /// Scan for the Qualcomm 9008 serial port exposed by the kernel-driver mode.
 pub fn find_edl_port() -> Result<String> {
     let ports = serialport::available_ports().map_err(|e| EdlError::Serial(e.to_string()))?;
-    for port in &ports {
-        if let serialport::SerialPortType::UsbPort(usb) = &port.port_type
-            && usb.vid == QUALCOMM_VID
-            && usb.pid == QUALCOMM_EDL_PID
-        {
-            return Ok(port.port_name.clone());
-        }
-    }
-    // Windows fallback: the WDF kernel driver (`qcwdfser`) publishes the 9008
-    // COM port with USB metadata that `serialport` classifies as `Unknown`, so
-    // the VID/PID loop above misses it. Resolve the COM name natively by
-    // matching the present device's hardware ID — no serialport classification,
-    // no PowerShell. `find_qcom_edl_port_windows` is self-gating (it only
-    // returns a port when a matching device is currently present), so it stays
-    // cheap on the idle poll path.
+    let mut candidates: Vec<String> = ports
+        .into_iter()
+        .filter_map(|port| match port.port_type {
+            serialport::SerialPortType::UsbPort(usb)
+                if usb.vid == QUALCOMM_VID && usb.pid == QUALCOMM_EDL_PID =>
+            {
+                Some(port.port_name)
+            }
+            _ => None,
+        })
+        .collect();
+    // Merge even when serialport found a target: another kernel-driver port
+    // can have Unknown metadata and only appear through SetupAPI.
     #[cfg(windows)]
-    if let Some(port_name) = find_qcom_edl_port_windows() {
-        return Ok(port_name);
+    candidates.extend(find_qcom_edl_ports_windows()?);
+    select_edl_port(&mut candidates)
+}
+
+fn select_edl_port(candidates: &mut Vec<String>) -> Result<String> {
+    #[cfg(windows)]
+    candidates
+        .iter_mut()
+        .for_each(|port| port.make_ascii_uppercase());
+    candidates.sort();
+    candidates.dedup();
+    match candidates.as_slice() {
+        [] => Err(EdlError::PortNotFound),
+        [port] => Ok(port.clone()),
+        _ => Err(EdlError::MultipleDevices),
     }
-    Err(EdlError::PortNotFound)
 }
 
 /// Windows-only: resolve the EDL 9008 serial COM port by hardware ID via
@@ -213,16 +227,16 @@ pub fn find_edl_port() -> Result<String> {
 /// WDF kernel driver's non-standard metadata). Enumerates only currently
 /// present devices in the Ports class (`DIGCF_PRESENT`), matches the hardware
 /// ID `VID_05C6&PID_9008`, and reads the assigned `PortName` (e.g. `COM3`) from
-/// the device's registry key. Returns `None` when no such port exists — the
+/// the device's registry key. Returns an empty list when no such port exists — the
 /// device is absent, or bound to a non-serial driver that created no COM port.
 #[cfg(windows)]
-fn find_qcom_edl_port_windows() -> Option<String> {
+fn find_qcom_edl_ports_windows() -> Result<Vec<String>> {
     use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
         DICS_FLAG_GLOBAL, DIGCF_PRESENT, DIREG_DEV, SP_DEVINFO_DATA, SPDRP_HARDWAREID,
         SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
         SetupDiGetDeviceRegistryPropertyW, SetupDiOpenDevRegKey,
     };
-    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, GetLastError, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::System::Registry::{KEY_READ, RegCloseKey, RegQueryValueExW};
     use windows_sys::core::GUID;
 
@@ -247,16 +261,25 @@ fn find_qcom_edl_port_windows() -> Option<String> {
             DIGCF_PRESENT,
         );
         if hdev == INVALID_HANDLE_VALUE as isize {
-            return None;
+            return Err(EdlError::Serial(
+                std::io::Error::last_os_error().to_string(),
+            ));
         }
 
-        let mut found: Option<String> = None;
+        let mut found = Vec::new();
         let mut index = 0u32;
         loop {
             let mut info: SP_DEVINFO_DATA = std::mem::zeroed();
             info.cbSize = std::mem::size_of::<SP_DEVINFO_DATA>() as u32;
             if SetupDiEnumDeviceInfo(hdev, index, &mut info) == 0 {
-                break; // ERROR_NO_MORE_ITEMS
+                let error = GetLastError();
+                if error != ERROR_NO_MORE_ITEMS {
+                    SetupDiDestroyDeviceInfoList(hdev);
+                    return Err(EdlError::Serial(format!(
+                        "EDL port enumeration failed: {error}"
+                    )));
+                }
+                break;
             }
             index += 1;
 
@@ -309,13 +332,12 @@ fn find_qcom_edl_port_windows() -> Option<String> {
                     .unwrap_or(count);
                 let port = String::from_utf16_lossy(&port_buf[..end]);
                 if !port.is_empty() {
-                    found = Some(port);
-                    break;
+                    found.push(port);
                 }
             }
         }
         SetupDiDestroyDeviceInfoList(hdev);
-        found
+        Ok(found)
     }
 }
 
@@ -372,7 +394,12 @@ where
 {
     // Phase 1: watch for disconnect OR name change; the OS can keep the
     // old COM handle alive briefly while the new one enumerates.
-    if let Ok(initial) = find_port() {
+    let initial = match find_port() {
+        Ok(port) => Some(port),
+        Err(EdlError::PortNotFound) => None,
+        Err(error) => return Err(error),
+    };
+    if let Some(initial) = initial {
         let mut observed = Duration::ZERO;
         let mut saw_disconnect = false;
         while observed < EDL_DISCONNECT_OBSERVE && !deadline_exceeded() {
@@ -478,6 +505,8 @@ impl WipeErasePlanEntry {
 impl EdlSession {
     /// Open: find port → Sahara upload → Firehose configure.
     pub fn open(loader_path: &Path, log: &mut Vec<String>) -> Result<Self> {
+        crate::selection::ensure_single_usb_target()
+            .map_err(|e| EdlError::Session(e.to_string()))?;
         let mode = qcom_driver_mode();
         ltbox_core::live!(log, "[EDL] {}", tr("log_edl_scanning"));
         let port = wait_for_stable_port(mode)?;
@@ -555,6 +584,13 @@ impl EdlSession {
             QcomDriverMode::Userspace => QdlBackend::Usb,
             QcomDriverMode::Kernel => QdlBackend::Serial,
         };
+        crate::selection::ensure_single_usb_target()
+            .map_err(|e| EdlError::Session(e.to_string()))?;
+        if mode == QcomDriverMode::Kernel && find_edl_port()? != port {
+            return Err(EdlError::Session(
+                "EDL port changed before transport setup; retry the operation".into(),
+            ));
+        }
         let rw = match mode {
             QcomDriverMode::Userspace => qdl::setup_target_device(backend, None, None)
                 .map_err(|e| EdlError::Session(format!("Transport setup failed: {e}")))?,
@@ -2553,5 +2589,37 @@ mod tests {
         assert!(has(&raw2, "rawprogram_unsparse0.xml"));
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    #[test]
+    fn edl_ports_merge_duplicates_but_reject_distinct_targets() {
+        assert!(matches!(
+            select_edl_port(&mut vec![]),
+            Err(EdlError::PortNotFound)
+        ));
+        assert_eq!(
+            select_edl_port(&mut vec!["COM3".into(), "COM3".into()]).unwrap(),
+            "COM3"
+        );
+        for ports in [["COM3", "COM4"], ["COM4", "COM3"]] {
+            assert!(matches!(
+                select_edl_port(&mut ports.map(String::from).to_vec()),
+                Err(EdlError::MultipleDevices)
+            ));
+        }
+    }
+    #[test]
+    fn ambiguity_on_initial_stability_probe_is_fatal() {
+        let result = wait_for_stable_port_with(
+            || Err(EdlError::MultipleDevices),
+            |_| panic!("must not wait after ambiguous discovery"),
+            || false,
+            Duration::from_secs(1),
+        );
+        assert!(matches!(result, Err(EdlError::MultipleDevices)));
     }
 }

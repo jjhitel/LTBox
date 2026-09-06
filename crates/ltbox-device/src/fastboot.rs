@@ -13,6 +13,8 @@ pub enum FastbootError {
     Usb(String),
     #[error("Device not found")]
     DeviceNotFound,
+    #[error("Multiple fastboot devices found; disconnect all other devices and try again")]
+    MultipleDevices,
     #[error("Command failed: {0}")]
     CommandFailed(String),
 }
@@ -48,55 +50,116 @@ pub struct FastbootDevice {
     ep_out: Endpoint<Bulk, Out>,
 }
 
+struct FastbootCandidate {
+    device_info: nusb::DeviceInfo,
+    interface_numbers: Vec<u8>,
+}
+
 impl FastbootDevice {
     pub fn open() -> Result<Self> {
         use nusb::MaybeFuture;
 
+        crate::selection::ensure_single_usb_target().map_err(map_target_selection_error)?;
+
         let devices = nusb::list_devices()
             .wait()
-            .map_err(|e| FastbootError::Usb(e.to_string()))?
-            .collect::<Vec<_>>();
-
-        for dev_info in devices {
-            let Ok(device) = dev_info.open().wait() else {
-                continue;
-            };
-            for config in device.configurations() {
-                for iface in config.interfaces() {
-                    for alt in iface.alt_settings() {
-                        if alt.class() != FASTBOOT_USB_CLASS
-                            || alt.subclass() != FASTBOOT_USB_SUBCLASS
-                            || alt.protocol() != FASTBOOT_USB_PROTOCOL
-                        {
-                            continue;
-                        }
-                        let mut in_addr: u8 = 0;
-                        let mut out_addr: u8 = 0;
-                        for ep in alt.endpoints() {
-                            match ep.direction() {
-                                nusb::transfer::Direction::In => in_addr = ep.address(),
-                                nusb::transfer::Direction::Out => out_addr = ep.address(),
+            .map_err(|e| FastbootError::Usb(e.to_string()))?;
+        let mut candidates = Vec::new();
+        for device_info in devices {
+            // Windows whole-device WinUSB bindings have no interface summary.
+            // Descriptor reads may open a handle, but no interface is claimed
+            // until every physical candidate has been identified.
+            let mut interface_numbers = device_info
+                .interfaces()
+                .filter(|iface| {
+                    is_fastboot_interface(iface.class(), iface.subclass(), iface.protocol())
+                })
+                .map(|iface| iface.interface_number())
+                .collect::<Vec<_>>();
+            if interface_numbers.is_empty() {
+                if let Ok(device) = device_info.open().wait() {
+                    for config in device.configurations() {
+                        for iface in config.interfaces() {
+                            if iface.alt_settings().any(|alt| {
+                                is_fastboot_interface(alt.class(), alt.subclass(), alt.protocol())
+                            }) {
+                                interface_numbers.push(iface.interface_number());
                             }
                         }
-                        if in_addr == 0 || out_addr == 0 {
-                            continue;
-                        }
-                        let interface = device
-                            .claim_interface(iface.interface_number())
-                            .wait()
-                            .map_err(|e| FastbootError::Usb(e.to_string()))?;
-                        let ep_in = interface
-                            .endpoint::<Bulk, In>(in_addr)
-                            .map_err(|e| FastbootError::Usb(e.to_string()))?;
-                        let ep_out = interface
-                            .endpoint::<Bulk, Out>(out_addr)
-                            .map_err(|e| FastbootError::Usb(e.to_string()))?;
-                        return Ok(Self {
-                            _interface: interface,
-                            ep_in,
-                            ep_out,
-                        });
                     }
+                } else if is_fastboot_interface(
+                    device_info.class(),
+                    device_info.subclass(),
+                    device_info.protocol(),
+                ) {
+                    // Known but inaccessible candidates must still count.
+                    interface_numbers.push(0);
+                }
+            }
+            if !interface_numbers.is_empty() {
+                candidates.push(FastbootCandidate {
+                    device_info,
+                    interface_numbers,
+                });
+            }
+        }
+
+        claim_unique_candidate(
+            candidates,
+            |candidate| candidate.device_info.id(),
+            Self::open_candidate,
+        )
+        .map(|device| device.ok_or(FastbootError::DeviceNotFound))?
+    }
+
+    fn open_candidate(candidate: FastbootCandidate) -> Result<Self> {
+        use nusb::MaybeFuture;
+
+        let device = candidate
+            .device_info
+            .open()
+            .wait()
+            .map_err(|e| FastbootError::Usb(e.to_string()))?;
+
+        for config in device.configurations() {
+            for iface in config.interfaces() {
+                if !candidate
+                    .interface_numbers
+                    .contains(&iface.interface_number())
+                {
+                    continue;
+                }
+                for alt in iface.alt_settings() {
+                    if !is_fastboot_interface(alt.class(), alt.subclass(), alt.protocol()) {
+                        continue;
+                    }
+                    let mut in_addr: u8 = 0;
+                    let mut out_addr: u8 = 0;
+                    for ep in alt.endpoints() {
+                        match ep.direction() {
+                            nusb::transfer::Direction::In => in_addr = ep.address(),
+                            nusb::transfer::Direction::Out => out_addr = ep.address(),
+                        }
+                    }
+                    if in_addr == 0 || out_addr == 0 {
+                        continue;
+                    }
+                    let interface_number = iface.interface_number();
+                    let interface = device
+                        .claim_interface(interface_number)
+                        .wait()
+                        .map_err(|e| FastbootError::Usb(e.to_string()))?;
+                    let ep_in = interface
+                        .endpoint::<Bulk, In>(in_addr)
+                        .map_err(|e| FastbootError::Usb(e.to_string()))?;
+                    let ep_out = interface
+                        .endpoint::<Bulk, Out>(out_addr)
+                        .map_err(|e| FastbootError::Usb(e.to_string()))?;
+                    return Ok(Self {
+                        _interface: interface,
+                        ep_in,
+                        ep_out,
+                    });
                 }
             }
         }
@@ -280,6 +343,56 @@ impl FastbootDevice {
     }
 }
 
+fn is_fastboot_interface(class: u8, subclass: u8, protocol: u8) -> bool {
+    class == FASTBOOT_USB_CLASS
+        && subclass == FASTBOOT_USB_SUBCLASS
+        && protocol == FASTBOOT_USB_PROTOCOL
+}
+
+fn map_target_selection_error(error: crate::selection::UsbSelectionError) -> FastbootError {
+    match error {
+        crate::selection::UsbSelectionError::MultipleDevices => FastbootError::MultipleDevices,
+        crate::selection::UsbSelectionError::Enumeration(error) => FastbootError::Usb(error),
+    }
+}
+
+fn select_unique_candidate<T, K, I, Key>(candidates: I, key: Key) -> Result<Option<T>>
+where
+    I: IntoIterator<Item = T>,
+    Key: Fn(&T) -> K,
+    K: Eq,
+{
+    let mut selected: Option<(K, T)> = None;
+    for candidate in candidates {
+        let candidate_key = key(&candidate);
+        if let Some((selected_key, _)) = selected.as_ref() {
+            if selected_key == &candidate_key {
+                continue;
+            }
+            return Err(FastbootError::MultipleDevices);
+        }
+        selected = Some((candidate_key, candidate));
+    }
+    Ok(selected.map(|(_, candidate)| candidate))
+}
+
+fn claim_unique_candidate<T, K, I, Key, Claim, R>(
+    candidates: I,
+    key: Key,
+    claim: Claim,
+) -> Result<Option<R>>
+where
+    I: IntoIterator<Item = T>,
+    Key: Fn(&T) -> K,
+    K: Eq,
+    Claim: FnOnce(T) -> Result<R>,
+{
+    let Some(candidate) = select_unique_candidate(candidates, key)? else {
+        return Ok(None);
+    };
+    claim(candidate).map(Some)
+}
+
 /// Normalize a fastboot `current-slot` payload to `_a` / `_b`.
 fn normalize_slot_suffix(slot: &str) -> Option<String> {
     match slot.trim() {
@@ -385,10 +498,120 @@ pub(crate) fn parse_hwboardid_ram_storage(val: &str) -> Option<(String, String)>
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        FastbootVars, apply_getvar_all_line, parse_hwboardid_ram_storage,
-        parse_stored_rollback_line,
-    };
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct TestCandidate {
+        device: u8,
+        fastboot: bool,
+    }
+
+    #[test]
+    fn unique_selector_does_not_claim_when_no_device_is_present() {
+        let mut claims = 0;
+        let result = claim_unique_candidate(
+            Vec::<u8>::new(),
+            |device| *device,
+            |_| {
+                claims += 1;
+                Ok(())
+            },
+        );
+
+        assert_eq!(result.unwrap(), None);
+        assert_eq!(claims, 0);
+    }
+
+    #[test]
+    fn unique_selector_claims_the_only_device_once() {
+        let mut claimed = Vec::new();
+        let result = claim_unique_candidate(
+            [7_u8],
+            |device| *device,
+            |device| {
+                claimed.push(device);
+                Ok(device + 1)
+            },
+        );
+
+        assert_eq!(result.unwrap(), Some(8));
+        assert_eq!(claimed, [7]);
+    }
+
+    #[test]
+    fn unique_selector_rejects_multiple_devices_before_claim_in_either_order() {
+        for candidates in [[1_u8, 2_u8], [2_u8, 1_u8]] {
+            let mut claimed = Vec::new();
+            let result = claim_unique_candidate(
+                candidates,
+                |device| *device,
+                |device| {
+                    claimed.push(device);
+                    Ok(device)
+                },
+            );
+
+            assert!(matches!(result, Err(FastbootError::MultipleDevices)));
+            assert!(claimed.is_empty());
+        }
+    }
+
+    #[test]
+    fn unrelated_usb_devices_are_filtered_before_selection() {
+        let result = select_unique_candidate(
+            [
+                TestCandidate {
+                    device: 1,
+                    fastboot: false,
+                },
+                TestCandidate {
+                    device: 2,
+                    fastboot: true,
+                },
+            ]
+            .into_iter()
+            .filter(|candidate| candidate.fastboot),
+            |candidate| candidate.device,
+        );
+
+        assert_eq!(result.unwrap().map(|candidate| candidate.device), Some(2));
+    }
+
+    #[test]
+    fn alternate_settings_on_one_physical_device_are_not_multiple_devices() {
+        let result = select_unique_candidate(
+            [
+                TestCandidate {
+                    device: 9,
+                    fastboot: true,
+                },
+                TestCandidate {
+                    device: 9,
+                    fastboot: true,
+                },
+            ],
+            |candidate| candidate.device,
+        );
+
+        assert_eq!(result.unwrap().map(|candidate| candidate.device), Some(9));
+    }
+
+    #[test]
+    fn inaccessible_unique_candidate_returns_claim_error_without_fallback() {
+        let result = claim_unique_candidate(
+            [TestCandidate {
+                device: 4,
+                fastboot: true,
+            }],
+            |candidate| candidate.device,
+            |_| Err::<(), _>(FastbootError::Usb("access denied".into())),
+        );
+
+        assert!(matches!(
+            result,
+            Err(FastbootError::Usb(message)) if message == "access denied"
+        ));
+    }
 
     #[test]
     fn bare_hex_parses_as_base16() {

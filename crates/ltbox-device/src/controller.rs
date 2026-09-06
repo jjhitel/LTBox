@@ -105,6 +105,9 @@ pub fn poll_active_slot(
                     }
                 }
             }
+            Err(e @ crate::fastboot::FastbootError::MultipleDevices) => {
+                return Err(ControllerError::SlotResolve(e.to_string()));
+            }
             Err(e) => {
                 last_fastboot_err = tr_args!("slot_err_fastboot_open_failed", error = e);
             }
