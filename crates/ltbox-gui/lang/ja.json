@@ -316,7 +316,6 @@
   "err_task_failed_with_error": "タスクに失敗しました： {error}",
   "err_task_panicked": "タスクがパニックで停止しました。",
   "err_tb323fu_loader_manifest_required": "TB323FU にはマルチイメージローダーマニフェストが必要です。`qsahara_device_programmer.xml` (または暗号化された `.x`) を直接選択するか、選択した .melf ファイルの隣に配置してください ({path})。",
-  "err_unroot_backup_manifest_invalid": "root バックアップマニフェスト {manifest} が無効です： {error}",
   "err_unroot_device_dump_failed": "端末から {label} を読み取れず、バックアップと照合できません。書き込まずに中止します。",
   "err_unroot_fingerprint_mismatch": "バックアップは端末とは異なるファームウェアビルドのものです。端末：{device}、バックアップ：{image}。この端末を root 化したときに作成されたフォルダーを選択してください。",
   "err_unroot_fingerprint_unreadable": "端末のイメージまたはバックアップにビルドフィンガープリントがなく、同じファームウェアか確認できません。書き込まずに中止します。",

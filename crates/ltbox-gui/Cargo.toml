@@ -22,6 +22,7 @@ rfd = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 dirs = { workspace = true }
 fs2 = { workspace = true }
 tracing = { workspace = true }
@@ -47,4 +48,5 @@ winresource = { workspace = true }
 iced_lucide = { workspace = true }
 
 [dev-dependencies]
+avbtool-rs = { workspace = true }
 tempfile = "3"

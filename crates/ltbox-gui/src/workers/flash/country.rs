@@ -28,13 +28,19 @@ pub(crate) fn change_country_worker(
     let _ = std::fs::remove_dir_all(&work_dir);
     std::fs::create_dir_all(&work_dir)
         .map_err(|e| tr_args!("err_country_work_dir_failed", error = e.to_string()))?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let critical_backup = ltbox_core::app_paths::backup_dir_for(&format!("backup_critical_{ts}"));
-    std::fs::create_dir_all(&critical_backup)
+    let critical_backup = crate::backup::create_backup_dir("change_country", &device_model)
         .map_err(|e| tr_args!("err_country_backup_dir_failed", error = e.to_string()))?;
+    // Country partitions do not carry AVB build properties. Capture an
+    // available Android fingerprint before the mode transition, for the
+    // informational manifest only. EDL/Fastboot starts leave it unknown.
+    let backup_fingerprint = if conn.skip_adb() {
+        None
+    } else {
+        ltbox_device::adb::AdbManager::new_if_connected()
+            .and_then(|mut adb| adb.shell("getprop ro.build.fingerprint").ok())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    };
     live!(log, "[Country] {}", phases.marker(2));
     transition_to_edl(conn, &mut log)?;
     let mut session = open_edl_session(&loader, &mut log)?;
@@ -42,6 +48,8 @@ pub(crate) fn change_country_worker(
         &mut session,
         &work_dir,
         &critical_backup,
+        "change_country",
+        backup_fingerprint.as_deref(),
         &device_model,
         None,
         Some(&target_code),

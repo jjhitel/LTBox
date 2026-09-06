@@ -316,7 +316,6 @@
   "err_task_failed_with_error": "Task failed: {error}",
   "err_task_panicked": "Task panicked",
   "err_tb323fu_loader_manifest_required": "TB323FU requires a multi-image loader manifest. Pick `qsahara_device_programmer.xml` (or its encrypted `.x`) directly, or place it next to the chosen `.melf` file ({path}).",
-  "err_unroot_backup_manifest_invalid": "Invalid root backup manifest {manifest}: {error}",
   "err_unroot_device_dump_failed": "Could not read {label} from the device, so the backup cannot be checked against it. Aborting without flashing.",
   "err_unroot_fingerprint_mismatch": "The backup is from a different firmware build than the device. Device: {device}; backup: {image}. Select the folder created when this device was rooted.",
   "err_unroot_fingerprint_unreadable": "No build fingerprint on the device image or the backup, so they cannot be confirmed to be the same firmware. Aborting without flashing.",

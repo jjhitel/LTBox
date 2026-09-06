@@ -17,6 +17,7 @@
 mod icon;
 mod arb;
 mod arb_overlay;
+mod backup;
 #[cfg(feature = "demo")]
 mod demo;
 mod device_name;

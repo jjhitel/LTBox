@@ -18,7 +18,8 @@ pub(crate) struct KonaBessInspectionResult {
 
 struct InspectionPaths {
     work_dir: PathBuf,
-    backup_dir: PathBuf,
+    backup_root: Option<PathBuf>,
+    device_model: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,16 +201,16 @@ fn validate_signing_key(pubkey_sha1: Option<&str>) -> Result<(), String> {
 }
 
 fn persist_backup(vendor_boot: &Path, vbmeta: &Path, backup_dir: &Path) -> Result<(), String> {
-    if let Err(error) = (|| -> std::io::Result<()> {
-        std::fs::create_dir_all(backup_dir)?;
-        std::fs::copy(vendor_boot, backup_dir.join("vendor_boot.img"))?;
-        std::fs::copy(vbmeta, backup_dir.join("vbmeta.img"))?;
-        Ok(())
-    })() {
-        let _ = std::fs::remove_dir_all(backup_dir);
-        return Err(error.to_string());
-    }
+    std::fs::copy(vendor_boot, backup_dir.join("vendor_boot.img"))
+        .map_err(|error| error.to_string())?;
+    std::fs::copy(vbmeta, backup_dir.join("vbmeta.img")).map_err(|error| error.to_string())?;
     Ok(())
+}
+
+fn backup_fingerprint(vendor_boot: &Path) -> Option<String> {
+    ltbox_patch::avb::extract_image_avb_info(vendor_boot)
+        .ok()
+        .and_then(|info| ltbox_patch::avb::build_fingerprint(&info))
 }
 
 fn execute_inspection<B: KonaBessInspectionBackend>(
@@ -247,14 +248,28 @@ fn execute_inspection<B: KonaBessInspectionBackend>(
     // Return Firehose to Sahara so part 2 can open a fresh session after the
     // UI selection pause. Backup creation is last, making it success-only.
     backend.prepare_for_selection(log)?;
-    persist_backup(&vendor_boot, &vbmeta, &paths.backup_dir)?;
+    let backup_dir = paths.backup_root.as_deref().map_or_else(
+        || crate::backup::create_backup_dir("konabess", &paths.device_model),
+        |root| crate::backup::create_backup_dir_in(root, "konabess", &paths.device_model),
+    )?;
+    persist_backup(&vendor_boot, &vbmeta, &backup_dir)?;
+    let fingerprint = backup_fingerprint(&backup_dir.join("vendor_boot.img"));
+    if let Err(error) = crate::backup::write_backup_manifest(
+        &backup_dir,
+        "konabess",
+        &paths.device_model,
+        fingerprint.as_deref(),
+        Some(&slot_suffix),
+    ) {
+        live!(log, "[KonaBess] backup metadata unavailable: {error}");
+    }
 
     Ok((
         KonaBessPrepared {
             work_dir: paths.work_dir.clone(),
             vendor_boot,
             vbmeta,
-            backup_dir: paths.backup_dir.clone(),
+            backup_dir,
             slot_suffix,
             probable_dtb_index,
         },
@@ -277,14 +292,10 @@ pub(crate) fn konabess_inspection_worker(
     let work_dir = ltbox_core::app_paths::work_dir_for("konabess");
     let _ = std::fs::remove_dir_all(&work_dir);
     std::fs::create_dir_all(&work_dir).map_err(|error| error.to_string())?;
-    // Stable name rather than the timestamped `backup_critical_<ts>` the
-    // firmware flashes use: this flow backs up the same two images every
-    // run, so a fresh folder per attempt only accumulates near-identical
-    // copies of stock vendor_boot and vbmeta.
-    let backup_dir = ltbox_core::app_paths::backup_dir_for("backup_konabess");
     let paths = InspectionPaths {
         work_dir: work_dir.clone(),
-        backup_dir,
+        backup_root: None,
+        device_model: device_model.clone(),
     };
     let mut backend = DeviceBackend {
         conn,
@@ -762,7 +773,8 @@ mod tests {
         std::fs::create_dir_all(&work_dir).unwrap();
         InspectionPaths {
             work_dir,
-            backup_dir: root.join("backup_konabess"),
+            backup_root: Some(root.join("backups")),
+            device_model: "test-model".into(),
         }
     }
 
@@ -850,8 +862,14 @@ mod tests {
                 "pause"
             ]
         );
-        assert!(paths.backup_dir.join("vendor_boot.img").is_file());
-        assert!(paths.backup_dir.join("vbmeta.img").is_file());
+        let backup_root = paths.backup_root.as_ref().unwrap();
+        let backup_dir = std::fs::read_dir(backup_root.join("konabess"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .next()
+            .unwrap();
+        assert!(backup_dir.join("vendor_boot.img").is_file());
+        assert!(backup_dir.join("vbmeta.img").is_file());
     }
 
     #[test]
@@ -866,8 +884,61 @@ mod tests {
         let result = execute_inspection(&mut backend, &paths, &phases(), &mut Vec::new());
 
         assert_eq!(result.unwrap_err(), "blocked");
-        assert!(!paths.backup_dir.exists());
+        assert!(!paths.backup_root.as_ref().unwrap().exists());
         assert!(!backend.events.iter().any(|event| event == "classify"));
+    }
+
+    #[test]
+    fn repeated_inspection_runs_create_distinct_backups() {
+        let root = tempfile::tempdir().unwrap();
+        let paths = test_paths(root.path());
+
+        let mut first_backend = FakeBackend {
+            candidate: Some(candidate()),
+            ..FakeBackend::default()
+        };
+        let (first, _) =
+            execute_inspection(&mut first_backend, &paths, &phases(), &mut Vec::new()).unwrap();
+        let first_vendor = std::fs::read(first.backup_dir.join("vendor_boot.img")).unwrap();
+
+        let mut second_backend = FakeBackend::default();
+        let (second, _) =
+            execute_inspection(&mut second_backend, &paths, &phases(), &mut Vec::new()).unwrap();
+
+        assert_ne!(first.backup_dir, second.backup_dir);
+        assert_eq!(
+            std::fs::read(first.backup_dir.join("vendor_boot.img")).unwrap(),
+            first_vendor
+        );
+        assert!(second.backup_dir.join("vendor_boot.img").is_file());
+    }
+
+    #[test]
+    fn failed_backup_copy_preserves_previous_run_and_partial_dump() {
+        let root = tempfile::tempdir().unwrap();
+        let vendor = root.path().join("vendor_boot.img");
+        let vbmeta = root.path().join("vbmeta.img");
+        std::fs::write(&vendor, b"original vendor").unwrap();
+        std::fs::write(&vbmeta, b"original vbmeta").unwrap();
+        let first =
+            crate::backup::create_backup_dir_in(root.path(), "konabess", "TB322FC").unwrap();
+        persist_backup(&vendor, &vbmeta, &first).unwrap();
+        let second =
+            crate::backup::create_backup_dir_in(root.path(), "konabess", "TB322FC").unwrap();
+        std::fs::write(&vendor, b"modified vendor").unwrap();
+        assert!(persist_backup(&vendor, &root.path().join("missing.img"), &second).is_err());
+        assert_eq!(
+            std::fs::read(first.join("vendor_boot.img")).unwrap(),
+            b"original vendor"
+        );
+        assert_eq!(
+            std::fs::read(first.join("vbmeta.img")).unwrap(),
+            b"original vbmeta"
+        );
+        assert_eq!(
+            std::fs::read(second.join("vendor_boot.img")).unwrap(),
+            b"modified vendor"
+        );
     }
 
     #[test]

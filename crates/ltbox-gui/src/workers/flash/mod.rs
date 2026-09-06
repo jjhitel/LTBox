@@ -731,6 +731,8 @@ fn run_country_change(
     session: &mut ltbox_device::edl::EdlSession,
     work_dir: &std::path::Path,
     critical_backup: &std::path::Path,
+    backup_operation: &str,
+    backup_fingerprint: Option<&str>,
     device_model: &str,
     firmware_fingerprint: Option<&str>,
     target_code: Option<&str>,
@@ -844,6 +846,16 @@ fn run_country_change(
             dump_path,
             detected,
         });
+    }
+
+    if let Err(error) = crate::backup::write_backup_manifest(
+        critical_backup,
+        backup_operation,
+        device_model,
+        backup_fingerprint,
+        None,
+    ) {
+        live!(log, "[Backup] Could not record manifest: {error}");
     }
 
     if let Some(phases) = phases {

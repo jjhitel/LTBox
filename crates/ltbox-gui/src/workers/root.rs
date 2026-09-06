@@ -2,6 +2,7 @@
 //! / APatch / GKI), flash them over EDL, and stage the manager APK.
 //! Extracted from the update_root handler.
 
+use crate::backup::{create_backup_dir, write_backup_manifest};
 use crate::{
     ConnectionStatus, Family, LiveLabels, PhaseReporter, Provider, RootMode, VerChoice,
     fingerprint_token_match, install_root_manager_apk, open_edl_session, prepare_tb323fu_efisp,
@@ -9,8 +10,6 @@ use crate::{
     wait_and_install_root_manager_apk,
 };
 use ltbox_core::{i18n::tr, live, tr_args};
-
-use super::root_backup::{ROOT_BACKUP_MANIFEST_NAME, write_root_backup_manifest};
 
 fn fingerprint_matches_detected_model(fingerprint: &str, device_model: &str) -> bool {
     fingerprint_token_match(fingerprint, device_model)
@@ -339,11 +338,10 @@ pub(crate) fn root_worker(
 
             // Phase 4/8 — Read stock AVB-protected root images.
             live!(log, "[Root] {}", phases.marker(4));
-            // Hoisted so Phase 6 can echo the path.
-            // Routed through `app_paths::backup_dir_for`
-            // so AppImage / distro Linux installs don't
-            // try to write next to the executable.
-            let backup_dir = ltbox_core::app_paths::backup_dir_for(&format!("backup_{base_name}"));
+            // Hoisted so Phase 6 can echo the path. The directory is reserved
+            // only after every required dump has been verified, immediately
+            // before the first patch/write operation.
+            let backup_dir: std::path::PathBuf;
             // Set inside the dump block from the dumped root image's
             // fingerprint; carried to Phase 5 to skip AVB + vbmeta.
             let is_tb323fu;
@@ -457,48 +455,53 @@ pub(crate) fn root_worker(
                 }
                 // Stock-image safety net for Unroot, captured
                 // before the irreversible patch + flash. A copy
-                // failure must abort the run.
-                std::fs::create_dir_all(&backup_dir).map_err(|e| {
+                // failure must abort the run. Reserve a fresh directory for
+                // every root operation so no previous run can be overwritten.
+                let actual_backup_dir = create_backup_dir("root", &device_model).map_err(|e| {
                     tr_args!(
                         "err_root_backup_dir_failed",
-                        path = backup_dir.display(),
+                        path = "backup/root",
                         error = e
                     )
                 })?;
-                std::fs::copy(&dumped_root_image, backup_dir.join(root_image_name)).map_err(
-                    |e| {
+                std::fs::copy(&dumped_root_image, actual_backup_dir.join(root_image_name))
+                    .map_err(|e| {
                         tr_args!(
                             "err_root_backup_copy_failed",
                             image = root_image_name,
                             error = e
                         )
-                    },
-                )?;
-                if vbmeta_backed_up {
-                    std::fs::copy(&dumped_vbmeta, backup_dir.join("vbmeta.img")).map_err(|e| {
-                        tr_args!(
-                            "err_root_backup_copy_failed",
-                            image = "vbmeta.img",
-                            error = e
-                        )
                     })?;
+                if vbmeta_backed_up {
+                    std::fs::copy(&dumped_vbmeta, actual_backup_dir.join("vbmeta.img")).map_err(
+                        |e| {
+                            tr_args!(
+                                "err_root_backup_copy_failed",
+                                image = "vbmeta.img",
+                                error = e
+                            )
+                        },
+                    )?;
                 }
-                write_root_backup_manifest(&backup_dir, base_name, vbmeta_backed_up).map_err(
-                    |e| {
-                        tr_args!(
-                            "err_root_backup_copy_failed",
-                            image = ROOT_BACKUP_MANIFEST_NAME,
-                            error = e
-                        )
-                    },
-                )?;
+                // The manifest is descriptive metadata only. A failure to
+                // record it must not turn a valid stock-image backup into a
+                // failed root run.
+                if let Err(error) = write_backup_manifest(
+                    &actual_backup_dir,
+                    "root",
+                    &device_model,
+                    Some(root_image_fingerprint.as_str()),
+                    Some(slot_suffix.as_str()),
+                ) {
+                    live!(log, "[Root] backup manifest write skipped: {error}");
+                }
                 if vbmeta_backed_up {
                     live!(
                         log,
                         "[Root] {} {} + vbmeta.img → {}",
                         ll.root_backup_copy_prefix,
                         root_image_name,
-                        backup_dir.display()
+                        actual_backup_dir.display()
                     );
                 } else {
                     live!(
@@ -506,9 +509,10 @@ pub(crate) fn root_worker(
                         "[Root] {} {} → {}",
                         ll.root_backup_copy_prefix,
                         root_image_name,
-                        backup_dir.display()
+                        actual_backup_dir.display()
                     );
                 }
+                backup_dir = actual_backup_dir;
                 // Bounce to Sahara — otherwise the second
                 // session's sahara_run times out because
                 // the device is still in Firehose.
@@ -588,14 +592,12 @@ pub(crate) fn root_worker(
             }
             // Surface the backup folder before the reset
             // so the user doesn't have to scroll.
-            if backup_dir.exists() {
-                live!(
-                    log,
-                    "[Root] {} {}",
-                    ll.backup_saved_prefix,
-                    backup_dir.display()
-                );
-            }
+            live!(
+                log,
+                "[Root] {} {}",
+                ll.backup_saved_prefix,
+                backup_dir.display()
+            );
             // Phase 7/8 — Reboot to Android.
             live!(log, "[Root] {}", phases.marker(7));
             session.reset_tolerant(&mut log);

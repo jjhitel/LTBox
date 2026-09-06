@@ -10,9 +10,7 @@ use ltbox_core::{i18n::tr, live, tr_args};
 
 use std::path::{Path, PathBuf};
 
-use super::root_backup::{
-    BackupContents, BackupRootTarget, ROOT_BACKUP_MANIFEST_NAME, resolve_backup_contents,
-};
+use super::root_backup::{BackupContents, BackupRootTarget, resolve_backup_contents};
 
 pub(crate) fn unroot_worker(
     folder: String,
@@ -35,13 +33,7 @@ pub(crate) fn unroot_worker(
 
     live!(log, "[Unroot] {}", phases.marker(1));
 
-    let backup = resolve_backup_contents(dir, unroot_type).map_err(|error| {
-        tr_args!(
-            "err_unroot_backup_manifest_invalid",
-            manifest = ROOT_BACKUP_MANIFEST_NAME,
-            error = error
-        )
-    })?;
+    let backup = resolve_backup_contents(dir, unroot_type, &device_model)?;
     let root_target = backup.root_target;
     let root_image_name = root_target.filename();
     let base_part = root_target.partition_base();
@@ -79,7 +71,7 @@ pub(crate) fn unroot_worker(
     live!(log, "[Unroot] {}", restored_label);
 
     // Slot resolution must succeed —
-    // unroot writes the manifest-resolved root target +
+    // unroot writes the filename-resolved root target +
     // vbmeta_<slot> from the user's
     // backup folder. Defaulting to `_a`
     // when the device was on `_b`

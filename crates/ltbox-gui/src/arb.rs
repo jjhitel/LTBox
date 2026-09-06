@@ -4,8 +4,7 @@
 use crate::*;
 
 /// Format a unix timestamp (seconds) as `YYYY-MM-DD HH:MM:SS UTC`.
-/// Pure stdlib — chrono is intentionally not pulled into the GUI just
-/// for one popup label. Uses Howard Hinnant's civil-from-days
+/// Pure stdlib, independent of the local-time backup naming. Uses Howard Hinnant's civil-from-days
 /// algorithm so the proleptic Gregorian conversion stays correct
 /// across leap years and century boundaries without a calendar table.
 pub(crate) fn format_unix_timestamp_utc(ts: u64) -> String {

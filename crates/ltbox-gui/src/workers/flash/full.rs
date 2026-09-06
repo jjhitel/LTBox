@@ -1628,13 +1628,7 @@ pub(crate) fn flash_worker(
             ));
         }
         // Keep original region partitions for manual restore.
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let critical_backup =
-            ltbox_core::app_paths::backup_dir_for(&format!("backup_critical_{ts}"));
-        std::fs::create_dir_all(&critical_backup)
+        let critical_backup = crate::backup::create_backup_dir("flash_firmware", &device_model)
             .map_err(|e| tr_args!("err_country_backup_dir_failed", error = e.to_string()))?;
         // Stash the bootloader's `getvar all` (incl. serialno) next to the
         // backed-up partitions — revives + supersedes v2's `sn.txt`. Empty on
@@ -1653,6 +1647,8 @@ pub(crate) fn flash_worker(
             &mut session,
             &work_dir,
             &critical_backup,
+            "flash_firmware",
+            firmware_fingerprint.as_deref(),
             &device_model,
             firmware_fingerprint.as_deref(),
             target_code,

@@ -316,7 +316,6 @@
   "err_task_failed_with_error": "작업 실패: {error}",
   "err_task_panicked": "작업이 패닉으로 중단되었습니다.",
   "err_tb323fu_loader_manifest_required": "TB323FU는 다중 이미지 로더 매니페스트가 필요합니다. `qsahara_device_programmer.xml`(또는 암호화된 `.x`)을 직접 선택하거나, 선택한 .melf 파일 옆에 두세요({path}).",
-  "err_unroot_backup_manifest_invalid": "루팅 백업 매니페스트 {manifest}이(가) 올바르지 않습니다: {error}",
   "err_unroot_device_dump_failed": "기기에서 {label} 파티션을 읽지 못해 백업과 대조할 수 없습니다. 플래싱하지 않고 중단합니다.",
   "err_unroot_fingerprint_mismatch": "백업 펌웨어 빌드가 현재 기기와 다릅니다. 기기: {device}; 백업: {image}. 이 기기를 루팅할 때 생성한 폴더를 선택하세요.",
   "err_unroot_fingerprint_unreadable": "기기 이미지 또는 백업에 빌드 지문이 없어 같은 펌웨어인지 확인할 수 없습니다. 플래싱하지 않고 중단합니다.",

@@ -316,7 +316,6 @@
   "err_task_failed_with_error": "任务失败：{error}",
   "err_task_panicked": "任务因 panic 停止。",
   "err_tb323fu_loader_manifest_required": "TB323FU 需要多镜像加载器清单。请直接选择 `qsahara_device_programmer.xml`（或其加密 `.x`），或将它放在所选 .melf 文件旁边（{path}）。",
-  "err_unroot_backup_manifest_invalid": "Root 备份清单 {manifest} 无效：{error}",
   "err_unroot_device_dump_failed": "无法从设备读取 {label}，因此无法与备份核对。已中止，未进行刷写。",
   "err_unroot_fingerprint_mismatch": "备份来自与设备不同的固件版本。设备：{device}；备份：{image}。请选择此设备获取 root 时创建的文件夹。",
   "err_unroot_fingerprint_unreadable": "设备镜像或备份缺少构建指纹，无法确认是否为同一固件。已中止，未进行刷写。",

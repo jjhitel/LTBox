@@ -63,16 +63,9 @@ pub fn auto_output_dir_for(slug: &str) -> PathBuf {
     auto_output_root().join("outputs").join(slug)
 }
 
-/// Root directory for stock-image backups.
+/// Root directory for per-operation device snapshots.
 pub fn backup_root() -> PathBuf {
-    auto_output_root().join("backups")
-}
-
-/// Directory for stock-image backups dumped during root + critical flows.
-/// `subdir` is the per-flow leaf (e.g. `backup_init_boot`,
-/// `backup_critical_<ts>`).
-pub fn backup_dir_for(subdir: &str) -> PathBuf {
-    backup_root().join(subdir)
+    auto_output_root().join("backup")
 }
 
 /// Per-flow exec-time scratch directory. Caller is responsible for
@@ -132,7 +125,7 @@ pub fn temp_files_size() -> u64 {
 /// Remove every temporary file the Settings "clean temporary files" action
 /// targets — `work/` scratch + `outputs/` auto-output dirs — and report
 /// `(removed_roots, freed_bytes)`. The persistent `adb/` key dir and all
-/// `backups/` dumps are left in place. Symlinked roots are skipped (never
+/// `backup/` and legacy `backups/` dumps are left in place. Symlinked roots are skipped (never
 /// followed), so the sweep can't escape the LTBox tree. Best-effort: a failed
 /// delete is not counted.
 pub fn clean_temp_files_reporting() -> (usize, u64) {
@@ -391,10 +384,10 @@ mod tests {
         let Some(exe_parent) = exe_parent else {
             return;
         };
-        let dir = backup_dir_for("backup_init_boot");
+        let dir = backup_root();
         assert!(
             !dir.starts_with(&exe_parent),
-            "backup_dir_for landed under exe parent: {} ⊂ {}",
+            "backup_root landed under exe parent: {} ⊂ {}",
             dir.display(),
             exe_parent.display(),
         );
@@ -438,10 +431,7 @@ mod tests {
             auto_output_dir_for("patch_arb"),
             expected.join("outputs").join("patch_arb")
         );
-        assert_eq!(
-            backup_dir_for("backup_init_boot"),
-            expected.join("backups").join("backup_init_boot")
-        );
+        assert_eq!(backup_root(), expected.join("backup"));
         assert_eq!(adb_key_path(), expected.join("adb").join("adbkey"));
     }
 
