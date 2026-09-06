@@ -364,20 +364,29 @@ impl App {
                 self.t("btn_retry")
             };
             actions = actions.push(
-                m3_filled_button(install_label.to_string()).on_press(Message::InstallSelfUpdate),
+                m3_filled_button(install_label.to_string()).on_press_maybe(
+                    self.can_install_self_update()
+                        .then_some(Message::InstallSelfUpdate),
+                ),
             );
         }
 
-        let content = column![
-            title,
-            version,
-            state_body,
-            widget::rule::horizontal(1),
-            actions,
-        ]
-        .spacing(14)
-        .padding(DIRECT_UPDATE_DIALOG_PADDING)
-        .width(DIRECT_UPDATE_DIALOG_WIDTH);
+        let mut content = column![title, version, state_body];
+        if let Some(reason) = self.self_update_blocked_reason() {
+            content = content.push(
+                text(reason)
+                    .size(theme::text_size::BODY_MEDIUM)
+                    .style(muted_style)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                    .width(Length::Fill),
+            );
+        }
+        let content = content
+            .push(widget::rule::horizontal(1))
+            .push(actions)
+            .spacing(14)
+            .padding(DIRECT_UPDATE_DIALOG_PADDING)
+            .width(DIRECT_UPDATE_DIALOG_WIDTH);
         m3_dialog(content.into())
     }
 

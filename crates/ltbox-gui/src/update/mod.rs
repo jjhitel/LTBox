@@ -12,6 +12,7 @@ mod flash;
 mod konabess;
 mod reboot;
 mod root;
+mod self_update_gate;
 mod settings;
 mod sys;
 mod unroot;
@@ -31,6 +32,9 @@ impl App {
     }
 
     pub(crate) fn update(&mut self, msg: Message) -> Task<Message> {
+        if self.direct_update_state.is_active() && self_update_gate::blocks_message(&msg) {
+            return Task::none();
+        }
         #[cfg(feature = "demo")]
         if demo::blocks_device_action(self, &msg) {
             return Task::none();
@@ -1029,6 +1033,10 @@ impl App {
                 self.update_available = result;
             }
             Message::OpenUpdate => {
+                // A queued sidebar click must not reset Updating/Restarting to Ready.
+                if self.direct_update_state.is_active() {
+                    return Task::none();
+                }
                 let source = ltbox_core::install_source::install_source();
                 match source {
                     ltbox_core::install_source::InstallSource::Direct => {
@@ -1046,10 +1054,7 @@ impl App {
                 }
             }
             Message::InstallSelfUpdate => {
-                if self.update_dialog_source
-                    != Some(ltbox_core::install_source::InstallSource::Direct)
-                    || self.direct_update_state.is_active()
-                {
+                if !self.can_install_self_update() {
                     return Task::none();
                 }
                 let Some(release) = self.update_available.as_ref() else {
@@ -1073,9 +1078,32 @@ impl App {
                     Message::SelfUpdateFinished,
                 );
             }
-            Message::SelfUpdateFinished(result) => match result {
-                Ok(()) => {
-                    self.direct_update_state = DirectUpdateState::Restarting;
+            Message::SelfUpdateFinished(result) => {
+                if self.direct_update_state != DirectUpdateState::Updating {
+                    return Task::none();
+                }
+                match result {
+                    Ok(()) => {
+                        self.direct_update_state = DirectUpdateState::Restarting;
+                        return Task::perform(
+                            async {
+                                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                            },
+                            |_| Message::ExitAfterUpdate,
+                        );
+                    }
+                    Err(error) => {
+                        self.direct_update_state = DirectUpdateState::Failed(error);
+                    }
+                }
+            }
+            Message::ExitAfterUpdate => {
+                if self.direct_update_state != DirectUpdateState::Restarting {
+                    return Task::none();
+                }
+                if !self.can_exit_after_self_update() {
+                    // Defensive: keep processing completion messages until the
+                    // existing operation has released the device/resources.
                     return Task::perform(
                         async {
                             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
@@ -1083,11 +1111,8 @@ impl App {
                         |_| Message::ExitAfterUpdate,
                     );
                 }
-                Err(error) => {
-                    self.direct_update_state = DirectUpdateState::Failed(error);
-                }
-            },
-            Message::ExitAfterUpdate => return iced::exit(),
+                return iced::exit();
+            }
             Message::OpenUpdateReleasePage => self.open_available_release_page(),
             Message::InstallDrivers => {
                 if self.installing_drivers {

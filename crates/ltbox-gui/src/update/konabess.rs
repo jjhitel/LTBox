@@ -235,6 +235,13 @@ impl App {
                 self.current_op_step = 2;
                 let probable_dtb_index = result.prepared.probable_dtb_index;
                 self.konabess.prepared = Some(result.prepared);
+                if self.direct_update_state.is_active() {
+                    // Defensive overlap: finish the existing inspection's EDL
+                    // cleanup instead of retaining a table the update modal
+                    // cannot let the user apply or cancel. CancelDone releases
+                    // the busy reservation before the updater may exit.
+                    return self.cancel_konabess_inspection();
+                }
                 self.konabess
                     .apply_inspection_result(result.candidates, probable_dtb_index);
                 self.konabess.step = 1;
@@ -370,6 +377,40 @@ mod tests {
             probable_dtb_index,
             work_dir,
         }
+    }
+
+    #[test]
+    fn self_update_waits_for_late_inspection_cleanup_before_exiting() {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = app_ready_for_inspection_result();
+        let prepared = prepared(root.path(), None);
+        let work_dir = prepared.work_dir.clone();
+        app.busy = true;
+        app.busy_view = Some(View::KonaBess);
+        app.direct_update_state = DirectUpdateState::Updating;
+
+        // Drop the cancellation task without contacting hardware. Its completion
+        // is injected below, after the updater reports success.
+        assert_eq!(
+            app.update(Message::KonaBess(KonaBessMsg::KonaBessInspectionReady(
+                KonaBessInspectionResult {
+                    prepared,
+                    candidates: vec![],
+                    log: vec![]
+                }
+            )))
+            .units(),
+            1
+        );
+        assert!(app.busy);
+        assert!(!app.konabess.target_popup_open);
+        drop(app.update(Message::SelfUpdateFinished(Ok(()))));
+        assert!(!app.can_exit_after_self_update());
+        drop(app.update(Message::KonaBess(KonaBessMsg::KonaBessCancelDone(vec![]))));
+        assert!(!app.busy);
+        assert!(app.konabess.prepared.is_none());
+        assert!(!work_dir.exists());
+        assert!(app.can_exit_after_self_update());
     }
 
     #[test]
