@@ -5,7 +5,7 @@
 
 use crate::{
     ConnectionStatus, CountryPatchProgress, FirmwareIdentity, LiveLabels, PhaseReporter,
-    WorkflowConfig, active_slot_suffix, build_tb323fu_arb_overlays, efisp_asset_suffix,
+    WorkflowConfig, active_slot_suffix, build_testkey_arb_overlays, efisp_asset_suffix,
     find_firmware_loader, fingerprint_token_match, is_rollback_protected_model, open_edl_session,
     read_device_rollback_index_via_edl, transition_to_edl,
 };
@@ -77,6 +77,40 @@ fn lenovo_firmware_device_policy(
         ltbox_patch::key_map::KeyClass::Lenovo => LenovoFirmwareDevicePolicy::KeepLenovo,
         ltbox_patch::key_map::KeyClass::Testkey => LenovoFirmwareDevicePolicy::ResignTestkey,
     }
+}
+
+fn effective_flash_rollback_mode(
+    mode: ltbox_patch::rollback::RollbackMode,
+    target_is_tb323fu: bool,
+    xiaoxin_pro13_flash: bool,
+) -> ltbox_patch::rollback::RollbackMode {
+    use ltbox_patch::rollback::RollbackMode;
+    if xiaoxin_pro13_flash || (target_is_tb323fu && mode == RollbackMode::On) {
+        RollbackMode::Auto
+    } else {
+        mode
+    }
+}
+
+/// Never lose a known stored floor when also reading fallback image indices.
+/// Unclassified Fastboot layouts retain the existing conservative aggregate.
+fn manual_device_floors(
+    edl: Option<(u64, u64)>,
+    fastboot: Option<ltbox_patch::rollback::FastbootRollbackFloors>,
+    aggregate: Option<u64>,
+) -> Option<ltbox_patch::rollback::RollbackIndices> {
+    let stored = fastboot
+        .map(|f| (f.boot_index, f.vbmeta_system_index))
+        .or_else(|| aggregate.map(|index| (index, index)));
+    let (boot, vbmeta_system) = match (edl, stored) {
+        (Some((b, v)), Some((sb, sv))) => (b.max(sb), v.max(sv)),
+        (Some(floors), None) | (None, Some(floors)) => floors,
+        (None, None) => return None,
+    };
+    Some(ltbox_patch::rollback::RollbackIndices {
+        boot,
+        vbmeta_system,
+    })
 }
 
 /// Supported Lenovo SKUs, matched as fingerprint tokens to recover the device
@@ -1032,6 +1066,7 @@ fn run_country_change(
 
 mod country;
 mod full;
+mod manual;
 mod simple;
 
 pub(crate) use country::change_country_worker;
@@ -1081,6 +1116,66 @@ mod tests {
         assert_eq!(
             country_partitions_for("", Some("Lenovo/TB390FU/TB390FU:15/build")),
             &["proinfo", "persist"][..]
+        );
+    }
+
+    #[test]
+    fn manual_mode_survives_tb323fu_but_never_enables_xiaoxin_index_edits() {
+        use ltbox_patch::rollback::RollbackMode::{Auto, Manual, Off, On};
+        assert_eq!(
+            super::effective_flash_rollback_mode(Manual, true, false),
+            Manual
+        );
+        assert_eq!(super::effective_flash_rollback_mode(On, true, false), Auto);
+        assert_eq!(super::effective_flash_rollback_mode(Off, true, false), Off);
+        for mode in [On, Auto, Manual, Off] {
+            for model in ["TB376FC", "TB390FU"] {
+                let restricted = super::xiaoxin_pro13_token(model).is_some();
+                assert_eq!(
+                    super::effective_flash_rollback_mode(mode, false, restricted),
+                    Auto
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn manual_floors_preserve_each_known_stored_minimum() {
+        use ltbox_patch::rollback::{FastbootRollbackFloors, RollbackIndices};
+        let fastboot = Some(FastbootRollbackFloors {
+            boot_location: 3,
+            boot_index: 100,
+            vbmeta_system_location: 2,
+            vbmeta_system_index: 20,
+        });
+        assert_eq!(
+            super::manual_device_floors(None, fastboot, Some(100)),
+            Some(RollbackIndices {
+                boot: 100,
+                vbmeta_system: 20
+            })
+        );
+        assert_eq!(
+            super::manual_device_floors(Some((90, 30)), fastboot, Some(100)),
+            Some(RollbackIndices {
+                boot: 100,
+                vbmeta_system: 30
+            })
+        );
+        assert_eq!(super::manual_device_floors(None, None, None), None);
+        assert_eq!(
+            super::manual_device_floors(None, None, Some(99)),
+            Some(RollbackIndices {
+                boot: 99,
+                vbmeta_system: 99
+            })
+        );
+        assert_eq!(
+            super::manual_device_floors(Some((0, 0)), None, None),
+            Some(RollbackIndices {
+                boot: 0,
+                vbmeta_system: 0
+            })
         );
     }
 

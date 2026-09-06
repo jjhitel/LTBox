@@ -47,4 +47,5 @@ winresource = { workspace = true }
 iced_lucide = { workspace = true }
 
 [dev-dependencies]
+avbtool-rs = { workspace = true }
 tempfile = "3"
